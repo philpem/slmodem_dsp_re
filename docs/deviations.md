@@ -4159,14 +4159,24 @@ not scaled, and for Bell 103 that is any call of 1..17 samples.
 
 ---
 
-## D134 🐛 `initTxSequence` reads a fourth byte it does not own
+## D134 🐛 `initTxSequence` DWORD flag access
 
-*Task #98 sweep, from fix list §7.24. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
+*Task #98 sweep, from fix list §7.24. **Bounds defect: UNPROVED.** The access-width difference is measured.*
 
-**`initTxSequence` reads a fourth byte it does not own (finding F66).** The
-original tests `*(int *)cm & 0x80008` — a single 32-bit read across a
-three-byte flag structure, correct only by accident of layout. The
-reconstruction writes it as the two byte tests it plainly is.
+The object uses `testl $0x80008,(cm)` at `0x759d7`, reading four bytes to test
+`b0` bit 3 and `b2` bit 3. Reproduction mode preserves that DWORD access.
+The normal build retains the two byte tests; no modem behavior change is
+claimed.
+
+F66 originally inferred a three-byte allocation boundary from the three named
+flag bytes. The complete `v8_cm` owns `b3` at `+3` and fields through `+0x2f`.
+`V8Create` takes the configured menu pointer, and the runtime supplies it from
+a `0x88`-byte allocation. These complete owners do not support the earlier
+out-of-bounds claim. A smaller valid owner at this call has not been established.
+
+The DWORD expression records the period compiler's access and alias model;
+it does not prove the original cast spelling or a portable C representation.
+Menu and sequence capture ages remain separate reconstruction residuals.
 
 ---
 
@@ -5687,7 +5697,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 ## D293 🐛 Two local arrays are filled by six loops and read by nothing
 
-*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `reconstructed` -- the loops are written in all three states (audit wave, `studyUrefHandler` run 44 -> 96, LCS 843 -> 883); they are dead stores the period compiler keeps; the frame is still 16 bytes short of the object's with them.*
 
 **Finding F1444.** Dead stores the compiler kept because the locals are arrays.
 
@@ -5780,6 +5790,16 @@ The two functions are otherwise the same shape over the same table, which is wha
 **1603's verdict is superseded and its analysis is not.** Every number in it was re-derived and confirmed; what changed is the conclusion that the whole function had to stay out, when only one store did.
 
 ======================================================================
+
+**Reconstruction QA update (F12128).** The earlier BUG-mode flat-zero substitute
+has been removed. Reproduction now emits the original SAR1 and table lookup;
+the normal SAR13 repair remains. Test-only scoped relocation binding supplies
+the same original reference backing without modifying production objects or
+their three-entry tables. A separate synthetic backing fixture tests all three
+addresses and rejects flat-zero, SAR13 and off-by-one controls. Its supplied
+memory values are not historical daemon results or defined ISO C semantics.
+Current period mid/outer addresses may be mapped BSS; historical unmapped-hole
+observations above must not be quoted as current fixture evidence.
 
 ## D301 🐛 `FSE_decision_4pt` weights the in-phase error twice the quadrature one, so it is not a nearest-point decision
 
@@ -7436,11 +7456,23 @@ case.
 same stale register, since `%edx` is not touched between outer iterations
 either.
 
-**Not reproduced, and not behind `DSPLIB_REPRODUCE_BUGS`** — there is nothing
-to reproduce. The object's value on that path is a property of its caller's
-register state, not of its own code, so there is no behaviour a differential
-test could compare against. `src/dsp/fpm_iir.c` writes the sample back
-unchanged, which is what the source plainly said before the compiler lost it.
+**Fixed-build guard, with the original source path retained under
+`DSPLIB_REPRODUCE_BUGS`.** The normal scalar helper returns its input when
+`sections <= 0`; its block caller consequently leaves those samples unchanged
+and does not access coefficients or history. This also prevents a negative
+short section count from wrapping through a large number of sections.
+
+The reconstruction build retains the distinct output carrier, assigned only
+inside the section loop, and the original short countdown. Its zero-section
+result remains dependent on uninitialised state: recovering the instruction
+structure does not provide a defined value for that path. The earlier claim
+that this absence of a differential oracle ruled out a build guard was too
+strong. The normal-build contract is checked separately by
+`make check-iir-sections`, including zero and negative section counts, untouched
+block samples and a positive-section history update. Negative section counts
+are defensive input handling; no reachable modem history is established for
+them. The period differential fixture continues to exclude the original's
+undefined zero-section result.
 
 **And `t_fpm_iir` deliberately does not drive `sections == 0`.** Comparing two
 arbitrary choices would be a check that passes or fails on register weather.

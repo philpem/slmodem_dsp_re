@@ -16,7 +16,7 @@
  *
  * THE QUALITY-LATCH CHAIN is driven through a SYNTHETIC modem object --
  * two small allocations shaped exactly like the chain
- * `vmi_b->link->int_0014` walks (an object with a pointer at the
+ * `vmi_b->link->modem` walks (an object with a pointer at the
  * modulation's own OBJ offset, pointing to a block with a `short` at the
  * modulation's own latch offset) -- rather than a real V17RX/V27RX/V29RX
  * instance, since building one of those is a different agent's closure.
@@ -50,36 +50,36 @@ extern class1_state_fn ref_class1_state_functions[19];
  * copy (tools/testvisible.py).
  */
 extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8);
+		       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		       int *word7, int *word8);
 extern int _send_silence_state(struct fax_class1 *ctx, const short *rx,
-			       short *tx, int word3, int word4,
-			       int *rx_count, int *tx_count, int word7,
+			       short *tx, unsigned char *word3, const unsigned char *word4,
+			       int *rx_count, int *tx_count, int *word7,
 			       int *word8);
 extern int _recieve_silence_state(struct fax_class1 *ctx, const short *rx,
-				  short *tx, int word3, int word4,
-				  int *rx_count, int *tx_count, int word7,
+				  short *tx, unsigned char *word3, const unsigned char *word4,
+				  int *rx_count, int *tx_count, int *word7,
 				  int *word8);
 
 extern int ref_fax_class1_progress(struct fax_class1 *ctx, short *rx,
-	short *tx, int word3, int word4, int *rx_count, int *tx_count,
+	short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
 	int *word7, int *word8);
 
 extern int ref__idle_state(struct fax_class1 *ctx, const short *rx,
-	short *tx, int word3, int word4, int *rx_count, int *tx_count,
-	int word7, int *word8);
+	short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+	int *word7, int *word8);
 extern int ref__send_silence_state(struct fax_class1 *ctx, const short *rx,
-	short *tx, int word3, int word4, int *rx_count, int *tx_count,
-	int word7, int *word8);
+	short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+	int *word7, int *word8);
 extern int ref__recieve_silence_state(struct fax_class1 *ctx,
-	const short *rx, short *tx, int word3, int word4, int *rx_count,
-	int *tx_count, int word7, int *word8);
+	const short *rx, short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+	int *tx_count, int *word7, int *word8);
 extern int ref__t30_silence_before_tx_state(struct fax_class1 *ctx,
-	const short *rx, short *tx, int word3, int word4, int *rx_count,
-	int *tx_count, int word7, int *word8);
+	const short *rx, short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+	int *tx_count, int *word7, int *word8);
 extern int ref__tx_silence_before_scrm_ones(struct fax_class1 *ctx,
-	const short *rx, short *tx, int word3, int word4, int *rx_count,
-	int *tx_count, int word7, int *word8);
+	const short *rx, short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+	int *tx_count, int *word7, int *word8);
 
 /* ------------------------------------------------------------------- */
 
@@ -132,7 +132,7 @@ make_vmi_with_modem(void *modem)
 
 	memset(vmi, 0, sizeof(*vmi));
 	memset(link, 0, sizeof(*link));
-	link->int_0014 = (int)(long)modem;
+	link->modem = modem;
 	vmi->link = link;
 	return vmi;
 }

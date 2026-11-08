@@ -415,7 +415,7 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 
 	oa.prefilter.coeff = ob.prefilter.coeff = V34TimingPrefilterCoeff;
 	oa.prefilter.shift = ob.prefilter.shift = 14;
-	oa.tx_scale = ob.tx_scale = 0x4000;
+	oa.tx.tx_scale = ob.tx.tx_scale = 0x4000;
 	/*
 	 * The bulk-delay ring and its two cursors -- `txmit` indexes it with
 	 * them unchecked, so these three are seeded rather than filled.  That
@@ -427,11 +427,11 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 	oa.bulk_tail = ob.bulk_tail = 17;
 
 	/* A scrambler register that is neither zero nor all ones. */
-	oa.tx_scr_sr = ob.tx_scr_sr = 0x2f6b3d51;
-	oa.prev_quadrant = ob.prev_quadrant = 2;
-	oa.cur_quadrant = ob.cur_quadrant = 1;
-	oa.seg_symcount = ob.seg_symcount = symcnt;
-	oa.tx_flags = ob.tx_flags = tx_flags;
+	oa.tx.tx_scr_sr = ob.tx.tx_scr_sr = 0x2f6b3d51;
+	oa.tx.prev_quadrant = ob.tx.prev_quadrant = 2;
+	oa.tx.cur_quadrant = ob.tx.cur_quadrant = 1;
+	oa.tx.seg_symcount = ob.tx.seg_symcount = symcnt;
+	oa.tx.tx_flags = ob.tx.tx_flags = tx_flags;
 
 	oa.p3548 = vp[0];    ob.p3548 = vp[1];
 	oa.pac3c = (_tagModemParameters *)cfgbuf[0]; ob.pac3c = (_tagModemParameters *)cfgbuf[1];
@@ -545,16 +545,16 @@ static void
 check_idle(short constel, short c6_before, short c8_before, int cc_before,
 	   long t)
 {
-	int q = oa.cur_quadrant;
-	int pt = oa.txpoint.word;
+	int q = oa.tx.cur_quadrant;
+	int pt = oa.tx.txpoint.word;
 
-	diff_eq_int("idle leaves prev_quadrant alone %ld", oa.prev_quadrant, c6_before, t);
+	diff_eq_int("idle leaves prev_quadrant alone %ld", oa.tx.prev_quadrant, c6_before, t);
 	if (constel != (short)0x89b0 && constel != (short)0x8990) {
-		diff_eq_int("no-constel point re %ld", oa.txpoint.c[0], 0, t);
-		diff_eq_int("no-constel point im %ld", oa.txpoint.c[1], 0, t);
-		diff_eq_int("no-constel leaves cur_quadrant %ld", oa.cur_quadrant,
+		diff_eq_int("no-constel point re %ld", oa.tx.txpoint.c[0], 0, t);
+		diff_eq_int("no-constel point im %ld", oa.tx.txpoint.c[1], 0, t);
+		diff_eq_int("no-constel leaves cur_quadrant %ld", oa.tx.cur_quadrant,
 			    c8_before, t);
-		diff_eq_int("no-constel leaves the scrambler %ld", oa.tx_scr_sr,
+		diff_eq_int("no-constel leaves the scrambler %ld", oa.tx.tx_scr_sr,
 			    cc_before, t);
 		return;
 	}
@@ -631,7 +631,7 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			diff_eq_int("high state arms %ld",
 				    (long)(ra->flags & V34_RX_FLAG_TRN_WATCH)
 				    != 0, 1, tag);
-			diff_eq_int("arming zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("arming zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
 		}
 		diff_eq_int("the arming arm leaves the state %ld",
@@ -646,7 +646,7 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s3_adv++;
 			diff_eq_int("case 3 advances to 4 %ld",
 				    oa.v90_receiver, 4, tag);
-			diff_eq_int("case 3 zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("case 3 zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
 		}
 		break;
@@ -656,7 +656,7 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s6_adv++;
 			diff_eq_int("case 6 advances to 7 %ld",
 				    oa.v90_receiver, 7, tag);
-			diff_eq_int("case 6 zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("case 6 zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
 		}
 		break;
@@ -666,11 +666,11 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s4_adv++;
 			diff_eq_int("case 4 advances to 5 %ld",
 				    oa.v90_receiver, 5, tag);
-			diff_eq_int("case 4 zeroes prev_quadrant %ld", oa.prev_quadrant, 0,
+			diff_eq_int("case 4 zeroes prev_quadrant %ld", oa.tx.prev_quadrant, 0,
 				    tag);
-			diff_eq_int("case 4 zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("case 4 zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
-			diff_eq_int("case 4 zeroes tx_scr_sr %ld", oa.tx_scr_sr, 0,
+			diff_eq_int("case 4 zeroes tx_scr_sr %ld", oa.tx.tx_scr_sr, 0,
 				    tag);
 		}
 		break;
@@ -680,11 +680,11 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s7_adv++;
 			diff_eq_int("case 7 advances to 8 %ld",
 				    oa.v90_receiver, 8, tag);
-			diff_eq_int("case 7 zeroes prev_quadrant %ld", oa.prev_quadrant, 0,
+			diff_eq_int("case 7 zeroes prev_quadrant %ld", oa.tx.prev_quadrant, 0,
 				    tag);
-			diff_eq_int("case 7 zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("case 7 zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
-			diff_eq_int("case 7 zeroes tx_scr_sr %ld", oa.tx_scr_sr, 0,
+			diff_eq_int("case 7 zeroes tx_scr_sr %ld", oa.tx.tx_scr_sr, 0,
 				    tag);
 		}
 		break;
@@ -765,8 +765,8 @@ run(short constel, int iters)
 		int df = (before_flags & V34_RX_FLAG_DATA) != 0;
 		int armed = (before_flags & V34_RX_FLAG_TRN_WATCH) != 0;
 		int before_state = oa.v90_receiver;
-		short before_c6 = oa.prev_quadrant, before_c8 = oa.cur_quadrant;
-		int before_cc = oa.tx_scr_sr;
+		short before_c6 = oa.tx.prev_quadrant, before_c8 = oa.tx.cur_quadrant;
+		int before_cc = oa.tx.tx_scr_sr;
 
 		memcpy(&snap, &oa, sizeof(snap));
 		memcpy(snap_shp, shp_a, sizeof(snap_shp));
@@ -836,13 +836,13 @@ step_rrn(int silence)
 static void
 check_idle_rrn(short constel, int cc_before, long t)
 {
-	int q = oa.cur_quadrant;
-	int pt = oa.txpoint.word;
+	int q = oa.tx.cur_quadrant;
+	int pt = oa.tx.txpoint.word;
 
-	diff_eq_int("silence idle advances the quadrant %ld", oa.prev_quadrant,
-		    oa.cur_quadrant, t);
+	diff_eq_int("silence idle advances the quadrant %ld", oa.tx.prev_quadrant,
+		    oa.tx.cur_quadrant, t);
 	diff_eq_int("silence idle clocks the scrambler %ld",
-		    oa.tx_scr_sr != cc_before, 1, t);
+		    oa.tx.tx_scr_sr != cc_before, 1, t);
 	diff_eq_int("silence idle quadrant in range %ld",
 		    q >= 0 && q <= 3, 1, t);
 	if (q < 0 || q > 3)
@@ -877,7 +877,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 				diff_eq_int("state 11 advances to 12 %ld",
 					    oa.v90_receiver, 12, tag);
 				diff_eq_int("state 11 zeroes seg_symcount %ld",
-					    oa.seg_symcount, 0, tag);
+					    oa.tx.seg_symcount, 0, tag);
 			}
 			break;
 		case 12:
@@ -887,11 +887,11 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 				diff_eq_int("state 12 advances to 13 %ld",
 					    oa.v90_receiver, 13, tag);
 				diff_eq_int("state 12 zeroes prev_quadrant %ld",
-					    oa.prev_quadrant, 0, tag);
+					    oa.tx.prev_quadrant, 0, tag);
 				diff_eq_int("state 12 zeroes seg_symcount %ld",
-					    oa.seg_symcount, 0, tag);
+					    oa.tx.seg_symcount, 0, tag);
 				diff_eq_int("state 12 zeroes tx_scr_sr %ld",
-					    oa.tx_scr_sr, 0, tag);
+					    oa.tx.tx_scr_sr, 0, tag);
 			}
 			break;
 		case 13:
@@ -932,7 +932,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			n_s15_adv++;
 			diff_eq_int("state 15 advances to 16 %ld",
 				    oa.v90_receiver, 16, tag);
-			diff_eq_int("state 15 zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("state 15 zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
 		}
 		break;
@@ -942,11 +942,11 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			n_s16_adv++;
 			diff_eq_int("state 16 advances to 17 %ld",
 				    oa.v90_receiver, 17, tag);
-			diff_eq_int("state 16 zeroes prev_quadrant %ld", oa.prev_quadrant, 0,
+			diff_eq_int("state 16 zeroes prev_quadrant %ld", oa.tx.prev_quadrant, 0,
 				    tag);
-			diff_eq_int("state 16 zeroes seg_symcount %ld", oa.seg_symcount, 0,
+			diff_eq_int("state 16 zeroes seg_symcount %ld", oa.tx.seg_symcount, 0,
 				    tag);
-			diff_eq_int("state 16 zeroes tx_scr_sr %ld", oa.tx_scr_sr, 0,
+			diff_eq_int("state 16 zeroes tx_scr_sr %ld", oa.tx.tx_scr_sr, 0,
 				    tag);
 		}
 		break;
@@ -961,10 +961,10 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			diff_eq_int("state 18 goes to the idle state %ld",
 				    oa.v90_receiver, 19, tag);
 			diff_eq_int("state 18 lifts the freeze %ld",
-				    (long)(oa.tx_flags & V34_EC_FROZEN), 0, tag);
+				    (long)(oa.tx.tx_flags & V34_EC_FROZEN), 0, tag);
 			diff_eq_int("state 18 leaves the rest of tx_flags %ld",
 				    (long)(unsigned short)
-				    (oa.tx_flags ^ before_f25c2),
+				    (oa.tx.tx_flags ^ before_f25c2),
 				    (long)(before_f25c2 & V34_EC_FROZEN), tag);
 			diff_eq_int("state 18 clears the SAS detector %ld",
 				    (long)(cfg[CFG_FLAGS03] & CFG_SAS_DETECT),
@@ -993,7 +993,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			 * disagree here.
 			 */
 			diff_eq_int("state 18 leaves tx_flags alone %ld",
-				    (long)(unsigned short)oa.tx_flags,
+				    (long)(unsigned short)oa.tx.tx_flags,
 				    (long)(unsigned short)before_f25c2, tag);
 			diff_eq_int("state 18 leaves the SAS detector %ld",
 				    (long)(cfg[CFG_FLAGS03] & CFG_SAS_DETECT)
@@ -1017,7 +1017,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 		 * check above.
 		 */
 		diff_eq_int("state 20 sets the freeze %ld",
-			    (long)(oa.tx_flags & V34_EC_FROZEN) != 0, 1, tag);
+			    (long)(oa.tx.tx_flags & V34_EC_FROZEN) != 0, 1, tag);
 		if ((before_f25c2 & V34_EC_FROZEN) == 0)
 			n_s20_freeze++;
 		if (oa.v90_receiver != 20) {
@@ -1047,9 +1047,9 @@ run_rrn(int silence, short constel, int iters)
 
 	for (it = 0; it < iters; it++) {
 		int before_state = oa.v90_receiver;
-		short before_c6 = oa.prev_quadrant;
-		short before_f25c2 = oa.tx_flags;
-		int before_cc = oa.tx_scr_sr;
+		short before_c6 = oa.tx.prev_quadrant;
+		short before_f25c2 = oa.tx.tx_flags;
+		int before_cc = oa.tx.tx_scr_sr;
 		int before_sas =
 		    ((const unsigned char *)oa.pac3c)[CFG_FLAGS03]
 		    & CFG_SAS_DETECT;
@@ -1299,17 +1299,17 @@ main(void)
 				      0x7000u + (unsigned)c);
 				run(constels[c], 6);
 				if (gpc == 0) {
-					cc0 = oa.tx_scr_sr;
-					c80 = oa.cur_quadrant;
-					pt0 = oa.txpoint.word;
+					cc0 = oa.tx.tx_scr_sr;
+					c80 = oa.tx.cur_quadrant;
+					pt0 = oa.tx.txpoint.word;
 				} else {
 					diff_eq_int("gpc does not move tx_scr_sr "
-						    "%ld", oa.tx_scr_sr, cc0, c);
+						    "%ld", oa.tx.tx_scr_sr, cc0, c);
 					diff_eq_int("gpc does not move cur_quadrant "
-						    "%ld", oa.cur_quadrant, c80, c);
+						    "%ld", oa.tx.cur_quadrant, c80, c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
-						    oa.txpoint.word,
+						    oa.tx.txpoint.word,
 						    pt0, c);
 				}
 			}
@@ -1457,20 +1457,20 @@ main(void)
 				set_sas(1);
 				run_rrn(1, constels[c], 6);
 				if (gpc == 0) {
-					cc0 = oa.tx_scr_sr;
-					c80 = oa.cur_quadrant;
-					c60 = oa.prev_quadrant;
-					pt0 = oa.txpoint.word;
+					cc0 = oa.tx.tx_scr_sr;
+					c80 = oa.tx.cur_quadrant;
+					c60 = oa.tx.prev_quadrant;
+					pt0 = oa.tx.txpoint.word;
 				} else {
 					diff_eq_int("gpc does not move tx_scr_sr "
-						    "%ld", oa.tx_scr_sr, cc0, c);
+						    "%ld", oa.tx.tx_scr_sr, cc0, c);
 					diff_eq_int("gpc does not move cur_quadrant "
-						    "%ld", oa.cur_quadrant, c80, c);
+						    "%ld", oa.tx.cur_quadrant, c80, c);
 					diff_eq_int("gpc does not move prev_quadrant "
-						    "%ld", oa.prev_quadrant, c60, c);
+						    "%ld", oa.tx.prev_quadrant, c60, c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
-						    oa.txpoint.word, pt0, c);
+						    oa.tx.txpoint.word, pt0, c);
 				}
 			}
 		}
@@ -1500,9 +1500,9 @@ main(void)
 		set_sas(1);
 		who = "v90Phase34";
 		run(0x1234, 1);
-		cc5 = oa.tx_scr_sr;
-		c65 = oa.prev_quadrant;
-		pt5 = oa.txpoint.word;
+		cc5 = oa.tx.tx_scr_sr;
+		c65 = oa.tx.prev_quadrant;
+		pt5 = oa.tx.txpoint.word;
 
 		setup(1, 1, 19, 0x1234, 0x1234, 1, &CFG_RUN, 0, 0xc001u);
 		set_sas(1);
@@ -1512,12 +1512,12 @@ main(void)
 		diff_eq_int("case 5 leaves the scrambler on an unknown "
 			    "constellation %ld", cc5, 0x2f6b3d51, 0);
 		diff_eq_int("state 19 clocks it %ld",
-			    oa.tx_scr_sr != 0x2f6b3d51, 1, 0);
+			    oa.tx.tx_scr_sr != 0x2f6b3d51, 1, 0);
 		diff_eq_int("the two transmit different points %ld",
-			    oa.txpoint.word != pt5, 1, 0);
+			    oa.tx.txpoint.word != pt5, 1, 0);
 		diff_eq_int("case 5 leaves prev_quadrant at its seed %ld", c65, 2, 0);
-		diff_eq_int("state 19 advances prev_quadrant %ld", oa.prev_quadrant,
-			    oa.cur_quadrant, 0);
+		diff_eq_int("state 19 advances prev_quadrant %ld", oa.tx.prev_quadrant,
+			    oa.tx.cur_quadrant, 0);
 	}
 	rc |= diff_end();
 

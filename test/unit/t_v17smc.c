@@ -256,6 +256,50 @@ run_init(const char *label, int use_cfg, short c0, short c1)
 	return diff_end();
 }
 
+/*
+ * Synthetic component fidelity probe, not a modem lifecycle claim. With
+ * nbits=15, the first sum is 2<<15 = 65536, before the native WORD
+ * truncation. All shifts have nonnegative operands and counts below 31.
+ * EncodeDif and Transition indices are both 2; MOD indices are 0 in the
+ * blob and 2 without truncation, all within their actual arrays. Updated
+ * quadrant 1 selects rotations 7 versus 4, exposing bit 15 in the output.
+ */
+static int
+run_tcm_word_boundary(void)
+{
+	typedef unsigned char word_state[SMC_SIZE];
+	word_state a, b;
+	struct fpm_smc_ring oa, ob;
+	unsigned short input_a = 0, input_b = 0;
+	short ring_a[2] = { 0x5a5a, 0x5a5a };
+	short ring_b[2] = { 0x5a5a, 0x5a5a };
+	typedef short word_ring[2];
+
+	diff_begin("synthetic TCM unsigned-word boundary, nbits 15");
+	memset(a, 0, sizeof(a));
+	put_s(a, OFF_NBITS, 15);
+	put_s(a, OFF_TRELLIS, 2);
+	put_s(a, OFF_QUAD, 2);
+	memcpy(b, a, sizeof(a));
+	memset(&oa, 0, sizeof(oa));
+	oa.sym = ring_a;
+	oa.len = 2;
+	ob = oa;
+	ob.sym = ring_b;
+	ref_SMCv17_encoder_tcm(a, &oa, &input_a, 1);
+	SMCv17_encoder_tcm(b, &ob, &input_b, 1);
+	diff_eq_obj("whole synthetic coder", word_state, b, a, 0);
+	diff_eq_obj("whole synthetic output ring", word_ring, ring_b, ring_a, 0);
+	diff_eq_int("input word", input_b, input_a, 0);
+	diff_eq_int("write index", ob.widx, oa.widx, 0);
+	diff_eq_int("ring length", ob.len, oa.len, 0);
+	diff_eq_int("native narrowed symbol", (unsigned short)ring_a[0], 0x8000, 0);
+	diff_eq_int("native next quadrant", get_s(a, OFF_QUAD), 1, 0);
+	diff_eq_int("native next trellis", get_s(a, OFF_TRELLIS), 2, 0);
+	diff_eq_int("native next transition", get_s(a, OFF_PREV), 2, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -321,6 +365,8 @@ main(void)
 	rc |= run_init("init, NULL cfg", 0, 0, 0);
 	rc |= run_init("init, explicit cfg", 1, 7, -3);
 	rc |= run_init("init, explicit cfg, other values", 1, -1, 12345);
+
+	rc |= run_tcm_word_boundary();
 
 	return rc;
 }

@@ -1,0 +1,1 @@
+-Wl,--wrap=dsplibs_debug_printf -Wl,--wrap=ref_dsplibs_debug_printf

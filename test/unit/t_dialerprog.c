@@ -457,6 +457,77 @@ run_getnext(void)
 	return diff_end();
 }
 
+/* Both case pairs and both guards, through constructor-created components. */
+static int
+run_getnext_abcd(void)
+{
+	static const char letters[] = "ABCDabcd";
+	unsigned letter;
+	int tone, blocked;
+	int cases = 0, accepted = 0, rejected = 0;
+
+	if (GetNextDigitAndReturnNextState == 0) {
+		fprintf(stderr, "t_dialerprog: direct ABCD guard sweep skipped; "
+			"parser symbol absent in this compiler tier\n");
+		return 0;
+	}
+
+	diff_begin("GetNextDigit: ABCD case pairs and guards");
+	for (letter = 0; letter < sizeof(letters) - 1; letter++)
+	for (tone = 0; tone <= 1; tone++)
+	for (blocked = 0; blocked <= 1; blocked++) {
+		struct dialer a, b;
+		struct call ca, cb;
+		char text[4];
+		int ra, rb, take_letter = tone && !blocked;
+		long tag = (long)letter * 4 + tone * 2 + blocked;
+
+		text[0] = tone ? 'T' : 'P';
+		text[1] = letters[letter];
+		text[2] = '5';
+		text[3] = '\0';
+		memset(&a, 0, sizeof(a)); memset(&b, 0, sizeof(b));
+		memset(&ca, 0, sizeof(ca)); memset(&cb, 0, sizeof(cb));
+		ca.self = &ca; cb.self = &cb;
+		ca.modem = cb.modem = (void *)0xD1A1u;
+		/* Modifier validation tolerates the refused letter; it is copied. */
+		params(1, tone, blocked, 2, 10);
+		harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&ca);
+		ra = ref_DialerCreate(&a, text, (void *)0xD1A1u);
+		harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&cb);
+		rb = DialerCreate(&b, text, (void *)0xD1A1u);
+		diff_eq_int("reference constructor accepted", ra, 0, tag);
+		diff_eq_int("constructor accepted", rb, 0, tag);
+		diff_eq_int("reference configured mode", a.cfg.tone_or_pulse, tone, tag);
+		diff_eq_int("configured mode", b.cfg.tone_or_pulse, tone, tag);
+		diff_eq_int("reference configured letter guard", a.cfg.abcd_permitted, blocked, tag);
+		diff_eq_int("configured letter guard", b.cfg.abcd_permitted, blocked, tag);
+
+		ra = ref_GetNextDigitAndReturnNextState(&a);
+		rb = GetNextDigitAndReturnNextState(&b);
+		diff_eq_int("reference digit state", ra, 1, tag);
+		diff_eq_int("digit state", rb, 1, tag);
+		diff_eq_int("reference selected row", a.row,
+			    take_letter ? (letters[letter] | 0x20) - 'a' : 1, tag);
+		diff_eq_int("selected row", b.row,
+			    take_letter ? (letters[letter] | 0x20) - 'a' : 1, tag);
+		diff_eq_int("reference selected column", a.col, take_letter ? 3 : 1, tag);
+		diff_eq_int("selected column", b.col, take_letter ? 3 : 1, tag);
+		diff_eq_int("reference consumed position", a.pos, take_letter ? 1 : 2, tag);
+		diff_eq_int("consumed position", b.pos, take_letter ? 1 : 2, tag);
+		diff_eq_obj("dialer after case/guard selection", struct dialer, &b, &a, tag);
+		cases++;
+		if (take_letter) accepted++;
+		else rejected++;
+	}
+	diff_eq_int("case/guard configurations", cases, 32, 0);
+	diff_eq_int("letter paths taken", accepted, 8, 0);
+	diff_eq_int("letter paths rejected", rejected, 24, 0);
+	fprintf(stderr, "t_dialerprog: ABCD guard sweep %d configurations, "
+		"%d letters accepted, %d skipped to digit 5\n", cases, accepted, rejected);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -765,6 +836,7 @@ main(void)
 	rc |= diff_end();
 
 	rc |= run_getnext();
+	rc |= run_getnext_abcd();
 
 	return rc;
 }

@@ -209,6 +209,19 @@ V92ConvolutionEncoder::reset(int m)
  * The indices are closed: the residues are 0..3 so `subsetLabelTable` is
  * indexed 0..15, and its sixteen values are all 0..7 so `8 * a + b` is 0..63.
  * Nothing a caller can pass reaches outside either table.
+ *
+ * `a` and `b` are DECLARED and then ASSIGNED, not declared with initialisers.
+ * The object's `process` carries a PC32 call to this function (240 bytes, 74
+ * instructions), so `inverseMap` was out of line at that call site.  The
+ * frontend cost of this body decides that: the initialised declarations
+ * measure 98 insns against `max-inline-insns-auto` = 100 and O3 inlines it,
+ * while this declaration-then-assignment form measures 102 and keeps the
+ * call.  The difference is in the frontend estimate only -- the emitted
+ * `inverseMap` body is byte-identical either way (440 bytes, grade 0 EXACT),
+ * so this is a source-structure witness, not a codegen change.  Other
+ * spellings (a pointer local, a separate index local) also cross the
+ * threshold and emit the same body; the object fixes the cost, not which of
+ * them the author wrote.
  */
 int
 V92ConvolutionEncoder::inverseMap(int *in)
@@ -217,8 +230,10 @@ V92ConvolutionEncoder::inverseMap(int *in)
 	int r1 = ((in[1] + 2) % 4 + 4) % 4;
 	int r2 = ((in[2] + 2) % 4 + 4) % 4;
 	int r3 = ((in[3] + 2) % 4 + 4) % 4;
-	int a = subsetLabelTable[r0 + 4 * r1];
-	int b = subsetLabelTable[r2 + 4 * r3];
+	int a, b;
+
+	a = subsetLabelTable[r0 + 4 * r1];
+	b = subsetLabelTable[r2 + 4 * r3];
 
 	return cosetMapping4D[8 * a + b];
 }
@@ -241,10 +256,11 @@ V92ConvolutionEncoder::inverseMap(int *in)
  * The repeated common state assignment preserves the original default tail;
  * it writes the same value again on a valid reset-built history.
  *
- * This previously measured common-tail form reproduces the original process
- * with automatic inlining disabled. Retained O3 still inlines inverseMap and
- * eliminates/moves the duplicate state stores after the output read. Those
- * byte gaps remain open; no per-file option or attribute is introduced.
+ * The common-tail form reproduces the original `process` exactly once
+ * `inverseMap` stays out of line: the object keeps a sibling call to it
+ * (PC32, 240 bytes, 74 instructions), and `inverseMap`'s declared-then-
+ * assigned locals take its frontend cost past `max-inline-insns-auto`.  No
+ * per-file option or attribute is introduced.
  * tools/recovery_v92_boundary_adoption.py checks the native no-table-read
  * default boundary, full-TU collateral and the separate static-table layout.
  *

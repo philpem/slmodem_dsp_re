@@ -49,9 +49,10 @@
  * assignments compiles to, and it is the pattern CLAUDE.md says to settle per
  * site rather than by preference.
  *
- * The typed views reproduce the byte accesses and SETcc/shift writers.
- * Packing is measured under the period GCC/x86 layout; byte views preserve
- * the complete report values for callers.
+ * The bitfield views reproduce those byte accesses, including the three
+ * SETcc results assigned to bits 3, 4 and 5.  Their allocation is measured
+ * under the period GCC/x86 layout; the byte views retain the report's byte
+ * values and let callers inspect the complete bytes.
  *
  * All eight bits of +0x14 are written, so the caller's value there does not
  * survive.  Only bit 0 of +0x15 is, so the caller's other seven bits DO.

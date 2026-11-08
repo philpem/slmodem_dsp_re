@@ -79,20 +79,27 @@ SetEncoderV17(void *modem, short which, short arg)
 /*
  * SMCv17_init -- .text 0x0a0a60, 87 bytes.  See v17data.h for what this
  * confirms about the five neutral fields it clears.
+ *
+ * THE CFG-NULL ARM HAS ITS OWN memcpy.  The object duplicates the whole
+ * tail, and its null arm loads the constant table as an absolute memory
+ * operand (`mov SMCv17_CFG,%edx`, R_386_32); assigning `cfg = SMCV17_CFG`
+ * first leaves the addresses in a PHI and costs a `lea` plus a load.  The
+ * clears are in the object's order -- state, quad, prev, trellis, r10, not
+ * the field order.
  */
 void
 SMCv17_init(void *smc, const short *cfg)
 {
 	struct v17_smc *statep = (struct v17_smc *)smc;
 
-	if (cfg == NULL)
-		cfg = SMCv17_CFG;
-
-	memcpy(&statep->mode, cfg, sizeof(short[2]));
-	statep->quad = 0;
+	if (cfg != NULL)
+		memcpy(&statep->mode, cfg, sizeof(short[2]));
+	else
+		memcpy(&statep->mode, SMCv17_CFG, sizeof(short[2]));
 	statep->state = 0;
-	statep->trellis = 0;
+	statep->quad = 0;
 	statep->prev = 0;
+	statep->trellis = 0;
 	statep->r10 = 0;
 }
 

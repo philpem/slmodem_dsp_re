@@ -38,10 +38,9 @@
  * + 0x04, + 0x08, 6 and 4; V.17's are + 0x08, + 0x14, 0x30 and 9.  Finding
  * F9253.
  *
- * The parameter block is read ONCE before the gate and re-read at the top of
- * every loop iteration; the object hoists the first iteration's read out of
- * the loop (0x0a46bf and 0x0a475e reach the head at 0x0a46ea, and the back
- * edge at 0x0a46e7 reloads), which is loop rotation of exactly this source.
+ * The first dispatch uses the owner read before the gate, refreshed after
+ * FIFO_write when that arm runs. Later dispatches refresh it on the back
+ * edge. The callback receives one budget pointer captured before the loop.
  */
 int
 V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
@@ -50,6 +49,7 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	int result;
 	unsigned short taken;
 	short budget;
+	short *budget_ptr;
 	short total;
 
 	prm = ((struct v29_tx_root *)modem)->params;
@@ -57,26 +57,30 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	((struct v29_tx_root *)modem)->result.byte.flags &=
 		(unsigned char)~V29TX_RESULT_B1_BIT1;
 
-	if (prm->int_0008 == 0)
+	if (prm->int_0008 == 0) {
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
 					prm->fifo,
 				in, *count);
-	else
+		prm = ((struct v29_tx_root *)modem)->params;
+	} else
 		taken = *count;
 
 	budget = V29TX_MODEM_BUDGET;
 	total = 0;
+	budget_ptr = &budget;
 	do {
 		short got;
 
-		prm = ((struct v29_tx_root *)modem)->params;
 		got = prm->handler
-					(modem, in, out, &budget);
+					(modem, in, out, budget_ptr);
 
 		out += got;
 		total = (short)(total + got);
-	} while (budget > 0);
+		if (budget <= 0)
+			break;
+		prm = ((struct v29_tx_root *)modem)->params;
+	} while (1);
 
 	if (*count != taken) {
 		((struct v29_tx_root *)modem)->result.byte.flags |=
@@ -112,24 +116,38 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
  * The register is a short in a block this tree has not modelled (see
  * V29TX_OBJ_SCRAM in v29data.h); it is read once, stepped n times and
  * written back once, exactly as the object does.
+ *
+ * FOUR SOURCE FACTS WERE READ OFF THE COUNTER, and each is visible.
+ * The increment is IN THE CONDITION -- `for (i = n; i-- != 0; )` -- because
+ * the object tests the OLD value (`lea -1(%esi),%ecx; movzwl %cx,%esi;
+ * inc %cx; jne`), where `i != 0; i--` gives a plain `test %esi,%esi` and
+ * two fewer instructions.  There is no `srp` pointer local: the object keeps
+ * the BLOCK base in %ebp and addresses +0x18 twice (`movswl 0x18(%ebp)` and
+ * `mov %bx,0x18(%ebp)`), so the source names the offset at both sites; a
+ * `short *srp` costs a `lea` and moves the base.  And the feedback is
+ * computed and DECLARED BEFORE `lsb`, from `(sr & 1)` written inline:
+ * `((sr << 6) & 0x80) ^ ((sr & 1) << 7)`.  That order is what lands the
+ * feedback term in %eax, where `and $0x80,%eax` has the short encoding the
+ * object uses (`and $0x80,%edx` is one byte longer); with `lsb` declared
+ * first GCC allocates the other way and the function is BYTES.  Finding
+ * F11430.
  */
 void
 GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n)
 {
 	void *blk = *(void **)(void *)((unsigned char *)modem
 				       + V29TX_OBJ_SCRAM);
-	short *srp = (short *)(void *)((unsigned char *)blk + V29SCRAM_SR);
-	int sr = *srp;
+	int sr = *(short *)(void *)((unsigned char *)blk + V29SCRAM_SR);
 	unsigned short i;
 
-	for (i = n; i != 0; i--) {
+	for (i = n; i-- != 0; ) {
+		int fb = ((sr << 6) & 0x80) ^ ((sr & 1) << 7);
 		int lsb = sr & 1;
-		int fb = ((sr << 6) & 0x80) ^ (lsb << 7);
 
 		sr = (int)(((unsigned)(sr | fb) >> 1) & 0x7f);
 		*out++ = (unsigned short)(lsb ? 0xb : 0);
 	}
-	*srp = (short)sr;
+	*(short *)(void *)((unsigned char *)blk + V29SCRAM_SR) = (short)sr;
 }
 
 /*
@@ -195,11 +213,15 @@ TxNextStateV29(void *modem)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
 	short state = prm->state;
+	struct sgd_gen_cfg gen;
+	struct sgd_control_req req;
 
 	switch (state) {
 	case V29TX_STATE_START:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_START\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		prm->countdown = 0x30;
 		prm->handler =
 			TxHdxQuietV29;
@@ -209,16 +231,16 @@ TxNextStateV29(void *modem)
 		break;
 
 	case V29TX_STATE_QUIET:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_QUIET\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
+			req = SGD_CTL;
 			gen.data_word = 0x4f;
 			gen.word_syms = 2;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -233,8 +255,10 @@ TxNextStateV29(void *modem)
 		break;
 
 	case V29TX_STATE_ALT:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_ALT\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		prm->countdown = 0x180;
 		prm->handler =
 			TxHdxEQCondV29;
@@ -245,17 +269,16 @@ TxNextStateV29(void *modem)
 		break;
 
 	case V29TX_STATE_EQCOND:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_EQCOND\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		{
-			struct sgd_gen_cfg gen;
-			struct sgd_control_req req;
 
-			gen.data_word = (unsigned short)
-				V29TX_PATTERN_SCR1[prm->rate];
+			req = SGD_CTL;
+			gen.data_word = V29TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
-			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
 					prm->sgd, &req);
 		}
@@ -271,8 +294,10 @@ TxNextStateV29(void *modem)
 		break;
 
 	case V29TX_STATE_SCR1:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_SCR1\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		prm->countdown = 1;
 		prm->handler =
 			TxHdxDataV29;
@@ -283,8 +308,10 @@ TxNextStateV29(void *modem)
 		return;
 
 	case V29TX_STATE_DATA:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_DATA\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		prm->countdown = 0;
 		prm->handler =
 			TxHdxIdleV29;
@@ -295,8 +322,10 @@ TxNextStateV29(void *modem)
 		return;
 
 	case V29TX_STATE_IDLE:
-		if (DSPLIB_DEBUG_ON())
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("V29TX_STATE_IDLE\n");
+			prm = ((struct v29_tx_root *)modem)->params;
+		}
 		prm->countdown = 0;
 		prm->handler =
 			TxHdxStartV29;
@@ -315,7 +344,7 @@ TxNextStateV29(void *modem)
 			((((struct v29_tx_root *)modem)->result.byte.flags
 			  | V29TX_RESULT_B1_BIT1)
 			 & ~V29TX_RESULT_B1_BIT0);
-		break;
+		return;
 	}
 
 	((struct v29_tx_root *)modem)->result.byte.flags &=
@@ -379,55 +408,60 @@ short
 TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	unsigned short req;
 	unsigned short taken;
-	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 0;
 
 	if (prm->countdown != 0) {
-		short which = prm->rate;
+		int which = prm->rate;
 
 		prm->countdown = 0;
 
-		if (which == V29_RATE_7200)
+		switch (which) {
+		case V29_RATE_7200:
 			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DATA_RATE_7200;
-		else if (which == V29_RATE_9600)
+			break;
+		case V29_RATE_9600:
 			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DATA_RATE_9600;
-		else
+			break;
+		default:
 			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DEFAULT;
+		}
 	}
 
-	req = (unsigned short)*budget;
 	taken = (unsigned short)
 		FIFO_read((struct fax_fifo *)prm->fifo,
-			  in, req);
+			  in, (unsigned short)*budget);
 
-	if (req <= taken) {
-		ScrambleDataV29(modem, in, taken);
-		nsamples = (short)ModDataV29(modem, in, out, taken);
+	if ((unsigned short)*budget > taken) {
+		if (((struct v29_tx_root *)modem)->params->int_0008 != 0) {
+			unsigned short nsamples;
+
+			*budget = (short)
+				((unsigned short)*budget - taken);
+			ScrambleDataV29(modem, in, taken);
+			nsamples = ModDataV29(modem, in, out, taken);
+			TxNextStateV29(modem);
+			return nsamples;
+		}
+		taken = (unsigned short)*budget;
+		((struct v29_tx_root *)modem)->result.byte.flags |=
+			V29TX_RESULT_B1_BIT1;
+		((struct v29_tx_root *)modem)->result.byte.status =
+			V29TX_STATUS_UNDERRUN;
+	}
+
+	ScrambleDataV29(modem, in, taken);
+	{
+		short nsamples = (short)
+			ModDataV29(modem, in, out, taken);
+
 		*budget = (short)((unsigned short)*budget - taken);
 		return nsamples;
 	}
-
-	if (prm->int_0008 != 0) {
-		*budget = (short)(req - taken);
-		ScrambleDataV29(modem, in, taken);
-		nsamples = (short)ModDataV29(modem, in, out, taken);
-		TxNextStateV29(modem);
-		return nsamples;
-	}
-
-	((struct v29_tx_root *)modem)->result.byte.flags |= V29TX_RESULT_B1_BIT1;
-	((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_UNDERRUN;
-	ScrambleDataV29(modem, in, req);
-	nsamples = (short)ModDataV29(modem, in, out, req);
-	*budget = (short)((unsigned short)*budget - req);
-
-	return nsamples;
 }
 
 /*
@@ -442,21 +476,19 @@ short
 TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV29(modem, in, n);
@@ -469,13 +501,12 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 /*
  * TxHdxEQCondV29 -- .text 0x0a4d30, 237 bytes.
  *
- * THE LFSR RECURRENCE IS GenEQTrnSequenceV29's OWN (v29data.h), WRITTEN OUT
- * AGAIN RATHER THAN CALLED -- no `call` in this whole loop, confirmed with
- * `dis.py`.  GenEQTrnSequenceV29 has no internal referrer anywhere in the
- * object (CLAUDE.md's fax-scope note), so the two are independent copies of
- * one algorithm and not caller and callee.  The register this copy reaches
- * through is V29SCRAM_SR at the SAME offset GenEQTrnSequenceV29's own
- * accessor uses -- V29TX_OBJ_SCRAM and V29TX_OBJ_PARAMS are one block, both
+ * The native body emits GenEQTrnSequenceV29's recurrence without a call.
+ * That alone does not distinguish duplication from automatic inlining. Keep
+ * the recurrence local here: inlining the current generator reloads the owner
+ * after publishing countdown, whereas the native handler retains its owner.
+ * Both reach the same signed WORD register at V29SCRAM_SR through the block
+ * at V29TX_OBJ_SCRAM. V29TX_OBJ_SCRAM and V29TX_OBJ_PARAMS are one block, both
  * 0x20, confirmed by this function reaching V29SCRAM_SR (0x18) through the
  * SAME pointer TxNextStateV29 reaches V29TXP_STATE (0x14) through.
  *
@@ -486,36 +517,35 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
+	struct v29_tx_params *prm;
 	unsigned short n;
-	short reg;
+	int reg;
 	unsigned short i;
+	unsigned short *point;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
+	prm = ((struct v29_tx_root *)modem)->params;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	reg = prm->scram_sr;
-	for (i = 0; i < n; i++) {
-		unsigned short x = (unsigned short)reg;
-		int bit0 = x & 1;
+	point = in;
+	for (i = n; i-- != 0; ) {
+		int feedback = ((reg << 6) & 0x80) ^ ((reg & 1) << 7);
+		int bit0 = reg & 1;
 
-		x = (unsigned short)((((x << 6) & 0x80) ^ (bit0 << 7)) | x);
-		reg = (short)((x >> 1) & V29_TRAIN_LFSR_MASK);
-
-		in[i] = (unsigned short)(bit0 ? V29_TRAIN_POINT_16 : 0);
+		reg = (int)(((unsigned)(reg | feedback) >> 1) & V29_TRAIN_LFSR_MASK);
+		*point++ = (unsigned short)(bit0 ? V29_TRAIN_POINT_16 : 0);
 	}
-	prm->scram_sr = reg;
+	prm->scram_sr = (short)reg;
 
 	nsamples = (short)ModDataV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -537,21 +567,19 @@ short
 TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	nsamples = (short)ModDataV29(modem, in, out, n);
@@ -572,21 +600,19 @@ short
 TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v29_tx_params *prm = ((struct v29_tx_root *)modem)->params;
-	short remaining;
 	unsigned short n;
 	short nsamples;
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = prm->countdown;
-	if (remaining <= 0) {
+	if (prm->countdown <= 0) {
 		TxNextStateV29(modem);
 		return 0;
 	}
 
-	n = (remaining <= (unsigned short)*budget) ? (unsigned short)remaining
-					   : (unsigned short)*budget;
-	prm->countdown = (short)(remaining - n);
+	n = (prm->countdown > (unsigned short)*budget) ? (unsigned short)*budget
+					   : (unsigned short)prm->countdown;
+	prm->countdown = (short)(prm->countdown - n);
 
 	nsamples = (short)TxNoCarrierV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);

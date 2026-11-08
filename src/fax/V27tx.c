@@ -30,8 +30,8 @@
  * and an `sgd`), and the private DSP block (the symbol ring, the scrambler,
  * the symbol coder and the pulse shaper).  Same four-part shape as
  * `V29TX_create`; see its own comment in v29.c for the codegen-level notes
- * (`fresh`'s two roles, the rate re-read seventeen times over, `aux`'s
- * `(void *)(long)` cast) that hold here without change.
+ * (`fresh`'s two roles, the repeated rate reads and `aux` propagation)
+ * that hold here without change.
  *
  * THE SYMBOL RING ALLOCATES ONLY `sym`.  Unlike V.29's private ring (its own
  * struct, `i`/`q` both `sysdep_malloc`'d), V.27ter's ring is a
@@ -50,6 +50,11 @@
  * `V27TX_CFG` itself) -- V.27ter's own caller-adjustable output gain, which
  * V.29's `V29TX_create` does not have at the identical field.
  */
+typedef char v27tx_cfg_aux_offset[(sizeof(void *) != 4 ||
+ __builtin_offsetof(struct v27tx_cfg, aux) == 0x1c) ? 1 : -1];
+typedef char v27tx_cfg_period_size[(sizeof(void *) != 4 ||
+ sizeof(struct v27tx_cfg) == 0x20) ? 1 : -1];
+
 void *
 V27TX_create(void *modem, const struct v27tx_cfg *params)
 {
@@ -63,14 +68,13 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
 
-		modem = sysdep_malloc(0x2c);
+		modem = sysdep_malloc(sizeof(struct v27_tx));
 		((struct v27_tx *)modem)->source = 0;
 		((struct v27_tx *)modem)->tx = 0;
 		fresh = 1;
-	} else {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("\n");
 	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\n");
 
 	if (params != 0)
 		((struct v27_tx *)modem)->cfg = *params;
@@ -112,14 +116,18 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 	prm->train_long = (short)
 		((&((struct v27_tx *)modem)->cfg)->int_0018 == 0);
 
-	if ((&((struct v27_tx *)modem)->cfg)->bitrate == 2400) {
+	switch ((&((struct v27_tx *)modem)->cfg)->bitrate) {
+	case 2400:
 		prm->rate = 0;
-	} else if ((&((struct v27_tx *)modem)->cfg)->bitrate == 4800) {
+		break;
+	case 4800:
 		prm->rate = 1;
-	} else {
+		break;
+	default:
 		prm->rate = 1;
 		((struct v27_tx *)modem)->result.byte.flags |= V27TX_RESULT_B1_BIT1;
 		((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_DEFAULT;
+		break;
 	}
 
 	/* ---- the FIFO --------------------------------------------------- */
@@ -218,7 +226,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		pcfg.coeff_i = V27TX_PPS_IFILT[rate];
 		pcfg.coeff_q = V27TX_PPS_QFILT[rate];
 		pcfg.coeffs = V27TX_PPS_FILT_LEN[rate];
-		pcfg.aux = (void *)(long)(&((struct v27_tx *)modem)->cfg)->int_001c;
+		pcfg.aux = (&((struct v27_tx *)modem)->cfg)->aux;
 
 		FPM_PPS_init(&tx->pps,
 			    &pcfg, fresh);

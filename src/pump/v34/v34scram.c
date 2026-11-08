@@ -104,10 +104,11 @@ scrambleGPC(void *objp, short nbits)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_scrambler *s = &obj->scrambler;
 	unsigned in = scram_input(obj);
-	unsigned w0, w1, w2, w3 = s->w[3];
+	unsigned w0, w1, w2, w3;
 
 	w0 = (in << 16) | (s->w[0] >> 16);
 	s->w[0] = w0;
+	w3 = s->w[3];
 	w1 = (w3 << 2) | (s->w[1] >> 16);
 	s->w[1] = w1;
 	w2 = (w3 << 7) | (s->w[2] >> 16);

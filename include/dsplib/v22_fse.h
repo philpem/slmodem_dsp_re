@@ -325,7 +325,7 @@ void V22_FSE_init(struct v22_fse *state, const struct v22_fse_cfg *cfg,
  * @brief Release the V.22 equaliser's seven buffers, in the reverse of the order V22_FSE_init() allocated them.
  * @param state  The equaliser state to tear down.
  */
-void V22_FSE_free(struct v22_fse *state);
+void V22_FSE_free(struct v22_fse *state, int unused);
 
 /**
  * @brief The V.22 equaliser's diagnostic hook. Always returns zero and reads nothing.

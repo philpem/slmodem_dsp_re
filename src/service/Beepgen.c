@@ -492,22 +492,28 @@ zFLTUTL_Linear2Float(short *src, float *dst, int n, float gain)
 /*
  * Mean-removed average power over a float buffer.  The tail multiplies by
  * 1/n where the short flavour divides -- both are the object's spellings.
+ * `one` is assigned AFTER the mean in the object's schedule: the constant is
+ * pushed with `fld1` there and kept on the x87 stack across the second loop,
+ * where a literal `1.0f` in the return expression becomes a `.rodata` load
+ * and `fdivr` at the end.
  */
 float
 fComputeRMSValueFloatBuf(unsigned int n, float *buf)
 {
 	float sum = 0.0f, acc = 0.0f, mean;
+	float one;
 	unsigned int i;
 
 	for (i = 0; i < n; i++)
 		sum += buf[i];
 	mean = sum / (float)n;
+	one = 1.0f;
 	for (i = 0; i < n; i++) {
 		float d = buf[i] - mean;
 
 		acc += d * d;
 	}
-	return acc * (1.0f / (float)n);
+	return acc * (one / (float)n);
 }
 
 /*
@@ -598,11 +604,12 @@ FindCorrelation(short *pattern, short *sig, unsigned int *posp,
 	unsigned int pos = *posp;
 	unsigned int end = len - 1000;
 	unsigned int i, k;
-	int ret = 1;
+	int ret;
 	float corrbuf[20];
 
 	if (end > pos + 20)
 		end = pos + 20;
+	ret = 1;
 	if (pos != end) {
 		ret = 0;
 		k = 0;

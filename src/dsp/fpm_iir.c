@@ -25,6 +25,14 @@ short
 FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 {
 	short acc_in = x;
+	/* The return carrier is assigned only inside the section loop. */
+	short output;
+
+#ifndef DSPLIB_REPRODUCE_BUGS
+	/* An empty or invalid cascade leaves the input unchanged. */
+	if (sections <= 0)
+		return x;
+#endif
 
 	while (sections--) {
 		int w1 = state[0];
@@ -54,30 +62,28 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 		*state++ = (short)w;
 
 		/* The section output becomes the next section's input. */
-		acc_in = (short)((short)ff + ((*coeff++ * w) >> 14));
+		output = (short)((short)ff + ((*coeff++ * w) >> 14));
+		acc_in = output;
 
 	}
 
-	return (short)acc_in;
+	return output;
 }
 
 /*
  * FPM_iir_filt_block -- .text 0x0a8b10, 287 bytes.
  *
  * FPM_iir_filt over a block, in place.  It is the SATURATING direct form II
- * engine applied `count` times, not a second filter: the object's inner loop
- * is FPM_iir_filt's body instruction for instruction -- the same 0x2000
- * rounding on the two recursive terms, the same truncation on the two
- * feedforward ones, and the same asymmetric clamp to -0x7fff.  GCC inlines the
- * call at -O3 within the translation unit, so the object shows no `call` here
- * and FPM_iir_filt keeps its own symbol regardless (compare finding F7940) --
- * and our build inlines it too, which was checked rather than assumed.
+ * engine applied `count` times. Its inner arithmetic matches the scalar
+ * filter: the same recursive rounding, feedforward narrowing and asymmetric
+ * clamp. Arithmetic identity alone does not establish that the original
+ * block called the scalar helper and relied on compiler inlining.
  *
- * Code generation remains non-exact. The scalar helper's short countdown,
- * coefficient/history cursor boundaries and feedforward narrowing are retained
- * from the original graph. This block inlines those changes too; use
- * byteident.py on the complete translation unit for the current comparison.
- * Finding F8166 records the earlier reconstruction's residual.
+ * The reference saves the initial coefficient/history pointers before the
+ * outer guard, restores those snapshots for each sample, and advances the
+ * sample cursor before the section loop. The explicit body below preserves
+ * those consumed parameter cursors. Passing independent by-value cursors to
+ * the scalar helper does not recover that ownership graph. F12122.
  *
  * `sections - 1` is hoisted out of the outer loop by the compiler, and the
  * inner counter is decremented as a 16-bit value and tested against -1, the
@@ -85,21 +91,69 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
  * the object re-narrows it with `cwtl` after each increment and compares 16
  * bits against `count`.
  *
- * NOTHING HERE IS TESTED AT `sections == 0`, on purpose.  The object's write-
+ * THE REPRODUCTION DIFFERENTIAL DOES NOT DRIVE `sections == 0`. The write-
  * back at 0x0a8c19 stores `%dx`, which on that path is never assigned -- the
  * inner loop is guarded by `cmpw $0xffff` at 0x0a8b66 and the register carries
  * in whatever the caller left.  Any value our compiler puts there is as
  * defensible as the object's, so a differential check on that input would be
- * comparing two arbitrary choices.  Deviation D393.
+ * comparing two arbitrary choices. Normal-build contract tests separately
+ * check that the guarded repair leaves samples unchanged. Deviation D393.
  */
 void
 FPM_iir_filt_block(short *samples, const short *coeff, short *state,
 		   short sections, short count)
 {
+	const short *initial_coeff = coeff;
+	short *initial_state = state;
 	short i;
 
-	for (i = 0; i < count; i++)
-		samples[i] = FPM_iir_filt(samples[i], coeff, state, sections);
+	for (i = 0; i < count; i++) {
+		short acc_in = *samples++;
+		short output;
+		short left = sections;
+
+		coeff = initial_coeff;
+		state = initial_state;
+#ifndef DSPLIB_REPRODUCE_BUGS
+		if (sections <= 0) {
+			samples[-1] = acc_in;
+			continue;
+		}
+#endif
+		while (left--) {
+			int w1 = state[0];
+			int w2;
+			int acc;
+			int ff;
+			int w;
+
+			acc = acc_in + ((*coeff++ * w1 + 0x2000) >> 14);
+			ff = (*coeff++ * w1) >> 14;
+
+			w2 = state[1];
+			*state++ = (short)w2;		/* shift the delay line */
+
+			acc += (*coeff++ * w2 + 0x2000) >> 14;
+			ff += (*coeff++ * w2) >> 14;
+			ff = (short)ff;
+
+			/* Saturate only here, and asymmetrically -- see the note above. */
+			if (acc > 0x7fff)
+				w = 0x7fff;
+			else if (acc <= -0x8000)
+				w = -0x7fff;
+			else
+				w = (short)acc;
+
+			*state++ = (short)w;
+
+			/* The section output becomes the next section's input. */
+			output = (short)((short)ff + ((*coeff++ * w) >> 14));
+			acc_in = output;
+		}
+
+		samples[-1] = output;
+	}
 }
 
 /*
@@ -134,44 +188,43 @@ void
 FPM_iir_filt_II(short *samples, const short *coeff, short *state,
 		short sections, short count)
 {
-	int i;
+	const short *initial_coeff = coeff;
+	short *initial_state = state;
+	short i;
 
 	for (i = 0; i < count; i++) {
-		const short *c = coeff;
-		short *s = state;
+		coeff = initial_coeff;
+		state = initial_state;
 		int acc = samples[i];
-		int j;
+		short j = sections;
 
-		/*
-		 * Counted down from sections-1 and tested against -1, as a
-		 * 16-bit value.  Written out rather than as `j < sections`
-		 * because a negative `sections` behaves differently: the
-		 * original runs 65535 sections and walks off the state array,
-		 * and a `j > 0` loop would quietly do nothing instead.
-		 */
-		for (j = (short)(sections - 1); j != -1; j = (short)(j - 1)) {
-			int num, den, x1;
+		/* The short countdown wraps: -1 processes 65535 sections.
+		 * A positive-only guard would change the reference behaviour. */
+		while (j--) {
+			int num, den, x1, coeff2;
 
 			/* Numerator: b0*x[n] + b2*x[n-2] + b1*x[n-1] */
-			num = c[0] * acc + c[1] * s[0];
-			x1 = s[1];
-			s[0] = (short)x1;	/* x[n-2] <- x[n-1] */
-			s[1] = (short)acc;	/* x[n-1] <- x[n]   */
-			num += c[2] * x1;
+			num = coeff[0] * acc + coeff[1] * state[0];
+			x1 = state[1];
+			state[0] = (short)x1;	/* x[n-2] <- x[n-1] */
+			/* Read before state[1] can overwrite an aliased coefficient. */
+			coeff2 = coeff[2];
+			state[1] = (short)acc;	/* x[n-1] <- x[n]   */
+			num += coeff2 * x1;
 			num >>= 14;
 
 			/* Denominator: a2*y[n-2] + a1*y[n-1] */
-			den = c[3] * s[2];
-			x1 = s[3];
-			s[2] = (short)x1;	/* y[n-2] <- y[n-1] */
-			den += c[4] * x1;
+			den = coeff[3] * state[2];
+			x1 = state[3];
+			state[2] = (short)x1;	/* y[n-2] <- y[n-1] */
+			den += coeff[4] * x1;
 			den >>= 14;
 
 			acc = (short)(num - den);
-			s[3] = (short)acc;	/* y[n-1] <- y[n]   */
+			state[3] = (short)acc;	/* y[n-1] <- y[n]   */
 
-			c += FPM_IIR_II_COEFF_PER_SECTION;
-			s += FPM_IIR_II_STATE_PER_SECTION;
+			coeff += FPM_IIR_II_COEFF_PER_SECTION;
+			state += FPM_IIR_II_STATE_PER_SECTION;
 		}
 
 		samples[i] = (short)acc;

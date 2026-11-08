@@ -513,9 +513,9 @@ V90Demapper::hardDecision(short in)
 		 * lower index wins a tie.
 		 */
 		err = (short)__builtin_abs(constellation[rbsFramePosition]
-					   [code] - mag);
+					   [code] - in);
 		alt = (short)__builtin_abs(constellation[rbsFramePosition]
-					   [code + 1] - mag);
+					   [code + 1] - in);
 		if (alt < err) {
 			level = constellation[rbsFramePosition][code + 1];
 			err = alt;
@@ -843,22 +843,21 @@ V90Demapper::resetNoSpectral(V90MappingParams *mapp)
 			short k = 0;
 
 			for (j = 0; j < constellationSize[i]; j++) {
-				unsigned char c = mapp->constellation[i][j];
 
-				if (adiDetector->linMapp[i][c] >
-				    adiDetector->linMappAlt[i][c]) {
+				if (adiDetector->linMapp[i][mapp->constellation[i][j]] >
+				    adiDetector->linMappAlt[i][mapp->constellation[i][j]]) {
 					constellation[i][k] =
-					    adiDetector->linMapp[i][c];
+					    adiDetector->linMapp[i][mapp->constellation[i][j]];
 					k++;
 					constellation[i][k] =
-					    adiDetector->linMappAlt[i][c];
+					    adiDetector->linMappAlt[i][mapp->constellation[i][j]];
 					k++;
 				} else {
 					constellation[i][k] =
-					    adiDetector->linMappAlt[i][c];
+					    adiDetector->linMappAlt[i][mapp->constellation[i][j]];
 					k++;
 					constellation[i][k] =
-					    adiDetector->linMapp[i][c];
+					    adiDetector->linMapp[i][mapp->constellation[i][j]];
 					k++;
 				}
 			}

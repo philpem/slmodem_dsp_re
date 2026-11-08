@@ -92,11 +92,9 @@
 static int
 dilCeiling(unsigned char n, float reciprocal)
 {
-	float scaled = (float)(short)n * reciprocal;
-
-	if (scaled > 0.0f)
-		return (int)(scaled + 0.99999999);
-	return (int)scaled;
+	if ((float)(short)n * reciprocal > 0.0f)
+		return (int)((float)(short)n * reciprocal + 0.99999999);
+	return (int)((float)(short)n * reciprocal);
 }
 
 /*
@@ -110,10 +108,11 @@ static void
 dilPackSeven(short *bits, int at, int value)
 {
 	int i;
+	short *dst = bits + at;
 
 	for (i = 0; i < 7; i++, value >>= 1)
-		bits[at + i] = (short)(value & 1);
-	bits[at + 7] = 0;
+		dst[i] = (short)(value & 1);
+	dst[7] = 0;
 }
 
 /*

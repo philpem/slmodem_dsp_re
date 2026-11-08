@@ -1332,7 +1332,7 @@ static void evaluator_boundary(void)
    s, (double)e->meanErrorEnergyCurrent, (double)e->blockErrorEnergyRms,
    e->blockErrorEnergySum, e->blockSampleCount, e->mmxMode, e->state,
    ((V90Demapper *)dm[s])->sampleCount, base[s],
-   e->linearEquMmxCoefsAligned[150], e->array_d8Aligned[150],
+   e->linearEquMmxCoefsHighAligned[150], e->linearEquMmxCoefsLowAligned[150],
    (double)e->linearEquMmxConversionFactor, e->linearEquMmxOutputConversionFactor);
   /* Caller sequence at .text 1d850: jd lookahead, ADI, noise, rates mask,
    * alternate mapping, linMapp, linMappAlt, altRbsFlag, byte_280c,

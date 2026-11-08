@@ -3,7 +3,11 @@
 
 Supported dispatches use CMP/JA fallthrough or a uniquely guarded taken JBE
 edge, with an unmodified 32-bit index. One narrowly decoded flag-preserving
-MOV may intervene. Refusal is an unsupported proof, not unequal code.
+MOV may intervene. A 16-bit CMP/JA followed by an exact same-register MOVZX
+also bounds the resulting 32-bit index. SETcc is admitted only in its exact
+unprefixed register-byte encoding, in both frame models, because it reads the
+flags and writes one byte register; memory and prefixed forms still need an
+alias proof. Refusal is an unsupported proof, not unequal code.
 """
 import argparse
 import io
@@ -68,20 +72,26 @@ def section_direct_edges(path, section):
     return edges
 
 
-def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
+def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), context=None):
     """Track one entry-allocated frame and untouched callee-save slots in CFG.
 
-    This accepts ordinary register saves and aligned fullword scratch access. All
-    paths start at the sized ABI entry, keep the same frame depth at joins,
+    This accepts ordinary register saves and aligned fullword scratch access.
+    All paths start at the sized ABI entry, keep the same frame depth at joins,
     restore each saved register from its own unchanged slot, and deallocate
-    the frame before RET. Incoming loads cannot alias a saved slot. Outgoing
-    words are disjoint from all saves; direct relocated calls obey the i386
-    callee-save/stack-return ABI, as in the pushed-frame proof. No frame address
-    may escape. Scratch reads require a pre-dispatch write and initialization
-    on every CFG path; their values remain unknown, including across calls.
-    The unsigned adjacent dispatch guard independently bounds its selector.
-    Pending save identities are tracked through CFG, not inferred from lexical
-    instruction order. CWTL modifies only EAX.
+    the frame before RET. A store of a callee-save register is a SAVE only
+    while that register still holds its entry value; a computed-value store
+    cannot become a restore source. Pending save identities are tracked
+    through CFG, not inferred from lexical instruction order.
+
+    Incoming loads cannot alias a saved slot. Frame words outside the save
+    protocol retain their store sites and may not overlap a save. Scratch
+    reads require a pre-dispatch write and initialization on every CFG path;
+    their values remain unknown, including across calls. The unsigned
+    adjacent dispatch guard independently bounds its selector. Direct
+    relocated calls obey the i386 callee-save/stack-return ABI. A private
+    frame address requires the independent private_frame_effects proof for
+    its extent, call contract, masked reads and capability cleanup. No other
+    frame address may escape. CWTL modifies only EAX.
     """
     first = rows[0]
     frame_match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', first[3])
@@ -106,7 +116,10 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
         return aliases.get(target[1]) if target else None
     def base(mnemonic):
         return mnemonic[:-1] if mnemonic[-1:] in ('b','w','l') and mnemonic[:-1] in supported else mnemonic
-    stack_ops = {}; slots = {}; saved = set(); written = set(); outgoing = set()
+    stack_ops = {}; slots = {}; saved = set(); written = set()
+    # Frame words outside the save protocol retain every store site for the
+    # private-record alias proof and their offset for scratch initialization.
+    outgoing = {}
     local_reads = set(); predispatch_writes = set()
     for address, raw, mnemonic, operands in rows:
         original_mnemonic = mnemonic
@@ -115,6 +128,11 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             require(address in calls, 'unproved fixed-frame ABI call')
             stack_ops[address] = ('call',)
             continue
+        # SETcc has no implicit register or flag write: it READS the flags and
+        # writes one byte register.  Admit only the exact unprefixed i386
+        # register-byte encoding, as the pushed-ABI prover already does; the
+        # ModRM /0 form excludes the memory and prefixed encodings, which need
+        # an alias/stack-extent proof this model does not carry.
         setcc = mnemonic.startswith('set')
         if setcc:
             byte_registers = ('al','cl','dl','bl','ah','ch','dh','bh')
@@ -137,14 +155,18 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
                     'reallocated fixed frame')
             stack_ops[address] = ('allocate' if mnemonic == 'sub' else 'release',)
             continue
+        if context is not None and (mnemonic=='lea' or original_mnemonic=='testb'):
+            # Exact decoding, bounds, dominance and capability cleanup are
+            # checked by private_frame_effects before this frame can pass.
+            stack_ops[address] = ('private',)
+            continue
         store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
         if store and address < dispatch and store[1] not in saved and store[1] not in written:
             offset = int(store[2] or '0', 16); register = store[1]
             require(mnemonic == 'mov' and offset % 4 == 0 and offset + 4 <= frame,
                     'saved slot extent/form')
-            require(address < dispatch and offset not in slots and register not in saved,
+            require(offset not in slots and register not in saved,
                     'saved slot duplicate/clobber')
-            require(register not in written, 'saved register modified before save')
             slots[offset] = register; saved.add(register)
             stack_ops[address] = ('save', offset, register)
             continue
@@ -153,7 +175,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             offset = int(outgoing_store[1] or '0', 16)
             require(original_mnemonic in ('mov','movl') and offset % 4 == 0 and offset + 4 <= frame,
                     'fixed-frame outgoing extent/form')
-            outgoing.add(offset)
+            outgoing.setdefault(offset, set()).add(address)
             if address < dispatch: predispatch_writes.add(offset)
             stack_ops[address] = ('outgoing', offset)
             continue
@@ -176,11 +198,27 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
             stack_ops[address] = ('argument', register)
             if register in callee: written.add(register)
     require(saved, 'fixed frame without supported saved registers')
-    require(not outgoing.intersection(slots), 'fixed-frame outgoing/save overlap')
+    require(not set(outgoing).intersection(slots), 'fixed-frame outgoing/save overlap')
     require(not local_reads.intersection(slots), 'fixed-frame local/save overlap')
     require(local_reads <= predispatch_writes, 'fixed-frame local without predispatch write')
     require(written <= saved, 'unsaved fixed-frame callee-register write')
     by_address = {row[0]: i for i, row in enumerate(rows)}
+    private = None
+    if any(op[0]=='private' for op in stack_ops.values()):
+        from callee_effects import private_frame_effects
+        graph = {}
+        for i,(address,raw,mnemonic,operands) in enumerate(rows):
+            if mnemonic=='ret': edges=[]
+            elif mnemonic=='jmp' and operands.startswith('*'): edges=list(destinations)
+            elif mnemonic.startswith('j'):
+                target=re.match(r'^([0-9a-f]+)\s',operands)
+                require(target is not None,'private-frame branch decoding')
+                edges=[int(target[1],16)]
+                if mnemonic!='jmp': edges.append(address+len(raw))
+            else: edges=[address+len(raw)]
+            require(all(edge in by_address for edge in edges),'private-frame successor extent')
+            graph[address]=edges
+        private=private_frame_effects(context[0],context[1],rows,frame,slots,outgoing,calls,graph,context[2],context[3],context[4])
     pending = [(first[0], (False, frozenset(), frozenset(), frozenset(), frozenset(saved)))]; seen = {}
     returns = 0
     while pending:
@@ -247,7 +285,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset()):
     return {'bytes': frame, 'saved_slots': sorted(slots.items()),
             'reachable_instructions': len(seen), 'returns': returns,
             'direct_abi_calls': len(calls), 'outgoing_slots': sorted(outgoing),
-            'unknown_local_slots': sorted(local_reads)}
+            'unknown_local_slots': sorted(local_reads), 'private_record': private}
 
 
 def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
@@ -395,12 +433,16 @@ def prove_pushed_abi_frame(rows, dispatch, destinations, calls):
 
 
 
-def prove(path, name):
+def prove(path, name, link=None, manifest=None):
     """Return one fully proved table's ordered destinations and provenance.
 
     The ABI boundary is entry at the unique sized function symbol. Arbitrary
     jumps from unrelated code into its interior are outside this proof. Known
     direct/table edges and ELF relocations into the guarded sequence refuse it.
+
+    `link` and `manifest` are the recovered-order partial link and its ordered
+    input manifest. They are consulted only when this ELF leaves the private-
+    frame callee undefined; a defined callee is always proved from this ELF.
     """
     elf = ELFFile(io.BytesIO(Path(path).read_bytes()))
     require(elf.elfclass == 32 and elf.little_endian and
@@ -446,11 +488,15 @@ def prove(path, name):
     cmp_row, guard, jump = rows[index - 2:index + 1]
     corridor = None
     taken_guard = False
+    extension = None
     # A JBE taken edge may dispatch across a default/return block. The unique
     # direct edge into the dispatch must be this guard; nothing may enter the
     # comparison/guard interior. This establishes dominance without treating
     # the intervening default block as part of the protected corridor.
-    if guard[2] != 'ja':
+    if (index >= 3 and rows[index - 1][2] == 'movzwl' and
+            rows[index - 2][2] == 'ja'):
+        cmp_row, guard, extension, jump = rows[index - 3:index + 1]
+    elif guard[2] != 'ja':
         candidates = [(i, row) for i, row in enumerate(rows[:index])
                       if row[2] == 'jbe' and
                       re.match(r'^([0-9a-f]+)\s', row[3]) and
@@ -458,20 +504,59 @@ def prove(path, name):
         require(len(candidates) == 1, 'missing unique taken-edge guard')
         guard_index, guard = candidates[0]
         require(guard_index >= 2, 'missing taken-edge comparison')
-        cmp_row, corridor = rows[guard_index - 2:guard_index]
+        if rows[guard_index - 1][2] == 'cmp':
+            # Comparison immediately adjacent to the taken guard. The index
+            # has already been formed before it (a common shape is a SUB that
+            # rebases a switch selector), and the taken edge lands on the
+            # single indirect jump, so no instruction executes between the
+            # comparison and the dispatch and the index cannot be reloaded or
+            # clobbered. The earlier instruction is index formation, not a
+            # corridor, and must not be read as one.
+            cmp_row = rows[guard_index - 1]
+            corridor = None
+        else:
+            cmp_row, corridor = rows[guard_index - 2:guard_index]
         require(rows[0][2] == 'sub' and stack_writes, 'taken-edge fixed frame required')
         require(rows[index - 1][2] in ('ret','jmp') and
                 not rows[index - 1][3].startswith('*'),
                 'taken-edge dispatch has fallthrough predecessor')
         taken_guard = True
     elif cmp_row[2] != 'cmp':
-        require(pushed_abi and index >= 3, 'missing adjacent guard')
+        require(index >= 3, 'missing adjacent guard')
         corridor = cmp_row
         cmp_row = rows[index - 3]
-    match = re.fullmatch(r'\$0x([0-9a-f]+),%(e(?:ax|bx|cx|dx|si|di|bp|sp))', cmp_row[3])
-    require(cmp_row[2] == 'cmp' and match is not None, 'unsigned immediate/register guard')
-    count = int(match[1], 16) + 1
-    register = match[2]
+    if extension is not None:
+        # The unsigned 16-bit comparison constrains only the low half. The
+        # exact zero-extension below then erases every untested upper bit.
+        # No intervening instruction or alternate entry may bypass either
+        # operation: the existing protected corridor includes the extension.
+        registers = ('eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi')
+        words = ('ax', 'cx', 'dx', 'bx', 'sp', 'bp', 'si', 'di')
+        match = re.fullmatch(r'\$0x([0-9a-f]+),%(ax|cx|dx|bx|bp|si|di)', cmp_row[3])
+        require(cmp_row[2] == 'cmp' and match is not None,
+                'unsigned immediate/word-register guard')
+        bound = int(match[1], 16)
+        code = words.index(match[2])
+        register = registers[code]
+        raw = cmp_row[1]
+        short_cmp = (len(raw) == 4 and raw[:3] == bytes((0x66, 0x83, 0xf8 + code))
+                     and raw[3] < 0x80 and raw[3] == bound)
+        word_cmp = (len(raw) == 5 and raw[:3] == bytes((0x66, 0x81, 0xf8 + code))
+                    and int.from_bytes(raw[3:], 'little') == bound)
+        accumulator_cmp = (code == 0 and len(raw) == 4 and raw[:2] == b'\x66\x3d'
+                           and int.from_bytes(raw[2:], 'little') == bound)
+        require(short_cmp or word_cmp or accumulator_cmp,
+                'unsupported word-guard encoding')
+        require(extension[1] == bytes((0x0f, 0xb7, 0xc0 + 9 * code)) and
+                extension[3] == '%' + words[code] + ',%' + register,
+                'word-guard index zero-extension')
+        count = bound + 1
+    else:
+        match = re.fullmatch(r'\$0x([0-9a-f]+),%(e(?:ax|bx|cx|dx|si|di|bp|sp))', cmp_row[3])
+        require(cmp_row[2] == 'cmp' and match is not None, 'unsigned immediate/register guard')
+        count = int(match[1], 16) + 1
+        register = match[2]
+    dispatch_register = register
     if corridor is not None:
         raw = corridor[1]
         if taken_guard:
@@ -484,16 +569,34 @@ def prove(path, name):
                     raw[1] & 0xc0 == 0x80 and raw[1] & 7 != 4,
                     'unsupported taken-edge guard corridor')
         else:
-            # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
-            # frame proof below separately owns the incoming-argument offset.
-            operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
-            require(corridor[2] == 'mov' and operand is not None and
-                    operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
-                    raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
-                    'unsupported guard corridor')
+            # One unprefixed MOV r32,r32 that copies the compared index is a
+            # flag-preserving corridor: it alters neither EFLAGS nor the index,
+            # and nothing else may sit between the comparison and the guard.
+            # The dispatch may then use either the compared register or its
+            # exact copy; both hold the same untested index here.
+            copy = re.fullmatch(r'%(e(?:ax|bx|cx|dx|si|di|bp)),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
+            if copy is not None:
+                registers = ('eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi')
+                require(not pushed_abi and corridor[2] == 'mov' and
+                        len(raw) == 2 and raw[0] == 0x89 and raw[1] & 0xc0 == 0xc0 and
+                        registers[(raw[1] >> 3) & 7] == copy[1] and
+                        registers[raw[1] & 7] == copy[2],
+                        'unsupported guard corridor encoding')
+                require(copy[1] == register, 'guard corridor copies a different register')
+                require(copy[2] != register, 'guard corridor clobbers the compared register')
+                if re.fullmatch(r'\*0x[0-9a-f]+\(,%' + copy[2] + r',4\)', jump[3]):
+                    dispatch_register = copy[2]
+            else:
+                # One unprefixed MOV disp8/disp32(%esp),r32 preserves EFLAGS. The
+                # frame proof below separately owns the incoming-argument offset.
+                operand = re.fullmatch(r'(0x[0-9a-f]+)\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', corridor[3])
+                require(corridor[2] == 'mov' and operand is not None and
+                        operand[2] != register and len(raw) in (4,7) and raw[0] == 0x8b and
+                        raw[1] & 0xc7 == (0x44 if len(raw)==4 else 0x84) and raw[2] == 0x24,
+                        'unsupported guard corridor')
     require(1 <= count <= 256, 'table entry bound')
     require(guard[2] == ('jbe' if taken_guard else 'ja'), 'unsigned dispatch guard')
-    match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + register + r',4\)', jump[3])
+    match = re.fullmatch(r'\*0x([0-9a-f]+)\(,%' + dispatch_register + r',4\)', jump[3])
     require(jump[2] == 'jmp' and match is not None, 'absolute index/scale dispatch')
     if taken_guard:
         protected = (set(range(cmp_row[0] + 1, guard[0] + len(guard[1]))) |
@@ -567,8 +670,12 @@ def prove(path, name):
                 indexed_word_load=(row[2] in ('movswl','movzwl') and len(raw)==8 and
                                    raw[:2] in (b'\x0f\xbf',b'\x0f\xb7') and raw[2]&0xc7==0x84 and
                                    raw[3]&7!=4 and raw[3]>>3&7!=4 and offset==4)
+                indexed_long_load=(row[2]=='mov' and len(raw)==7 and raw[0]==0x8b and
+                                   raw[1]&0xc7==0x04 and raw[2]&7==0x05 and
+                                   raw[2]>>3&7!=4 and offset==len(raw)-4)
                 require(r['r_info_type']==1 and
-                        (immediate_store or absolute_compare or indexed_word_load),
+                        (immediate_store or absolute_compare or indexed_word_load or
+                         indexed_long_load),
                         'unsupported ABI data relocation field')
         require(all(row[0] in calls for row in rows if row[2]=='call'),
                 'unrelocated ABI call')
@@ -621,7 +728,9 @@ def prove(path, name):
         stack_proof = prove_pushed_abi_frame(rows, jump[0], [start+d for d in destinations], calls)
     else:
         stack_proof = prove_fixed_stack_frame(rows, jump[0],
-                                              [start+d for d in destinations], calls) if stack_writes else None
+                                              [start+d for d in destinations], calls, (str(path),name,
+                                              [(table_id,o) for o in range(table_start,table_end,4)],
+                                              link, manifest)) if stack_writes else None
     for sec, relocation, symbol in relocations:
         if relocation['r_info_type'] in (1, 2) and symbol['st_shndx'] == section_id:
             raw = sections[sec].data()[relocation['r_offset']:relocation['r_offset'] + 4]

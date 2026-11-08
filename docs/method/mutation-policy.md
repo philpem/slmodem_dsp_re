@@ -16,8 +16,8 @@ the later deprecation instruction.
 `make refs` validates citations and its own citation-parser controls. It does
 not read mutation suites or invoke anchor/snapshot tooling. The old
 `make mutation-snapshot` target and mutation-specific CI self-test step are
-removed. Historical mutation records and legacy tools remain available for
-provenance; they are not maintained or represented as current coverage.
+removed. The legacy runners and suites have been removed. Historical records remain
+available in Git for provenance; they are not current coverage.
 
 Reconstruction acceptance remains unchanged: Gentoo GCC 3.4.2-r2 differential
 comparisons against the blob, exact failure semantics, explicit test counts,

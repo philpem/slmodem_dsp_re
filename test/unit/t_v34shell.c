@@ -219,6 +219,377 @@ check_count_bound(void)
 	return bad;
 }
 
+/*
+ * A reset/configured demapper component history, not a negotiated call or
+ * waveform claim.  The complete owner is zeroed as VPcmV34Create does;
+ * preinitdigital produces the trellis/cost/state/history reset.  Configure
+ * the receive shell with initdigital's 2400-baud, 14400-bps operands.  Its
+ * twelve coefficient shorts at +0xe84 retain v34modeminit's zero values.
+ *
+ * Zero complex input preserves zero state parameters.  For this wrap=1
+ * configuration all sixteen traceback codes map their +/-1 coordinate pairs
+ * through kLookup to grid[264]==0, so every shell sub-index and table index
+ * is zero.  No manually seeded path costs, trellis, parameters or counters
+ * are needed.  The real role-selected descrambler remains installed.
+ */
+extern const short scale2400[28];
+extern const short ref_scale2400[28];
+
+static int
+shell_reset_history(void)
+{
+	static struct {
+		unsigned before;
+		struct v34_object obj;
+		unsigned after;
+	} a, b;
+	static struct v34_shell sa, sb;
+	struct v34_shell *ra = (struct v34_shell *)&a.obj;
+	struct v34_shell *rb = (struct v34_shell *)&b.obj;
+	short divisor_a = (short)(scale2400[19] >> 1);
+	short divisor_b = (short)(ref_scale2400[19] >> 1);
+	int n;
+
+	diff_begin("v34 demap reset/configured history");
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.before = b.before = 0x13579bdf;
+	a.after = b.after = 0x2468ace0;
+	a.obj.role = b.obj.role = 0x65;
+	preinitdigital(&a.obj);
+	ref_preinitdigital(&b.obj);
+	initV34((char *)&a.obj + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		(const short *)((char *)&a.obj + 0xe84), divisor_a);
+	ref_initV34((char *)&b.obj + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		    (const short *)((char *)&b.obj + 0xe84), divisor_b);
+
+	diff_eq_int("component owner extent", sizeof(a.obj), 0xac4c, 0);
+	diff_eq_int("component input owner", (char *)&a.obj.receiver.target_re
+		    - (char *)&a.obj, 0x474, 0);
+	diff_eq_int("component output owner", (char *)&a.obj.receiver.dp.point
+		    - (char *)&a.obj, 0x470, 0);
+	diff_eq_int("component native divisor", divisor_a, 456, 0);
+	diff_eq_int("component reference divisor", divisor_b, 456, 0);
+	diff_eq_int("component reset index", ra->state_idx, 0, 0);
+	diff_eq_int("component configured count", ra->count, 14, 0);
+	diff_eq_int("component configured span", ra->span, 12, 0);
+	diff_eq_int("component configured subframe limit",
+		    ra->subframe_limit, 24, 0);
+	diff_eq_int("component configured frame count", ra->frame_count, 12, 0);
+	diff_eq_int("component configured frame limit", ra->frame_limit, 14, 0);
+	diff_eq_int("component configured index width", ra->idx_width, 1, 0);
+	diff_eq_int("component configured cost shift", ra->cost_shift, 10, 0);
+	diff_eq_int("component reset latch", ra->latched, 0, 0);
+
+	for (n = 0; n < 176; n++) {
+		int x, y;
+
+		/* Native decoderv34 uses these distinct adjacent packed points. */
+		a.obj.receiver.target_re = b.obj.receiver.target_re = 0;
+		a.obj.receiver.target_im = b.obj.receiver.target_im = 0;
+		x = demapFrame(&a.obj, &a.obj.receiver.target_re,
+			       &a.obj.receiver.dp.point, (short)n);
+		y = ref_demapFrame(&b.obj, &b.obj.receiver.target_re,
+				   &b.obj.receiver.dp.point, (short)n);
+		diff_eq_int("component return", x, y, n);
+		diff_eq_int("component parity return", y, n & 1, n);
+		diff_eq_int("component advancing state", ra->state_idx,
+			    ((n + 1) / 2) & 31, n);
+		diff_eq_int("component warmup latch", rb->latched, n >= 167, n);
+		if (n < 71)
+			diff_eq_int("component no early emission",
+				    a.obj.descrambler.count, 0, n);
+		if (n == 71)
+			diff_eq_int("component first emission progressed",
+				    b.obj.descrambler.count > 0, 1, n);
+
+		/* Check each pointer's owner before normalizing its snapshot. */
+		diff_eq_int("component coefficient owner", ra->coeff ==
+			    (const short *)((char *)&a.obj + 0xe84), 1, n);
+		diff_eq_int("component reference coefficient owner", rb->coeff ==
+			    (const short *)((char *)&b.obj + 0xe84), 1, n);
+		diff_eq_int("component code table", ra->conv == Convolve16, 1, n);
+		diff_eq_int("component reference code table",
+			    rb->conv == ref_Convolve16, 1, n);
+		diff_eq_int("component reset callback", ra->scramble ==
+			    (v34_scramble_fn)descrambleGPA, 1, n);
+		diff_eq_int("component reference reset callback", rb->scramble ==
+			    (v34_scramble_fn)ref_descrambleGPA, 1, n);
+		sa = *ra;
+		sb = *rb;
+		sa.coeff = sb.coeff = 0;
+		sa.conv = sb.conv = 0;
+		sa.put_bits = sb.put_bits = 0;
+		diff_eq_obj("component shell after symbol", struct v34_shell,
+			    &sa, &sb, n);
+		diff_eq_int("component head guard", a.before, 0x13579bdf, n);
+		diff_eq_int("component reference head guard", b.before, 0x13579bdf, n);
+		diff_eq_int("component tail guard", a.after, 0x2468ace0, n);
+		diff_eq_int("component reference tail guard", b.after, 0x2468ace0, n);
+	}
+	diff_eq_int("component final state", ra->state_idx, 24, 0);
+	diff_eq_int("component final subframe count", ra->subframe_count, 16, 0);
+	diff_eq_int("component final frame count", ra->frame_count, 1, 0);
+	diff_eq_int("component final latch", ra->latched, 1, 0);
+	diff_eq_int("component final descrambler count",
+		    a.obj.descrambler.count, 16, 0);
+	diff_eq_int("component retains reset data gate", a.obj.data_enable, 0, 0);
+	diff_eq_int("component no data publication", a.obj.rx_n, 0, 0);
+	return diff_end();
+}
+
+/*
+ * Synthetic fidelity probe: the prior cost vector below has no proved
+ * producer history.  Reset/configuration and the two input symbols use
+ * actual component methods; this is not a negotiated-call history.
+ */
+static int
+shell_branch_carry_probe(void)
+{
+	static struct v34_object a, b;
+	struct v34_shell *sa = (struct v34_shell *)&a;
+	struct v34_shell *sb = (struct v34_shell *)&b;
+	int i, x, y;
+
+	diff_begin("v34 demap synthetic branch carry");
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.role = b.role = 0x65;
+	preinitdigital(&a);
+	ref_preinitdigital(&b);
+	initV34((char *)&a + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		(const short *)((char *)&a + 0xe84), scale2400[19] >> 1);
+	ref_initV34((char *)&b + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		    (const short *)((char *)&b + 0xe84), ref_scale2400[19] >> 1);
+	diff_eq_int("synthetic native divisor", sb->divisor, 456, 0);
+	diff_eq_int("synthetic native shift", sb->cost_shift, 10, 0);
+	diff_eq_int("synthetic native invert", sb->invert, 1, 0);
+	diff_eq_int("synthetic native reset index", sb->state_idx, 0, 0);
+
+	/* Produce the first parameter pair through the actual even method. */
+	a.receiver.target_re = b.receiver.target_re = 100;
+	a.receiver.target_im = b.receiver.target_im = 200;
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 0);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 0);
+	diff_eq_int("synthetic even return", x, y, 0);
+	diff_eq_int("synthetic native even path", y, 0, 0);
+	diff_eq_int("synthetic first parameter produced", sb->state[0].par[0], 100, 0);
+	diff_eq_int("synthetic second parameter produced", sb->state[0].par[1], 200, 0);
+
+	/*
+	 * Deliberately planted prior costs, not a negotiated/receiver history.
+	 * All sums are below 33871; squares are at most 856 * 856, without overflow.
+	 * First state chooses branch 2; the next has no candidate below 0x7fff.
+	 */
+	for (i = 0; i < 16; i++)
+		sa->cost[i] = sb->cost[i] = 32767;
+	sa->cost[4] = sb->cost[4] = 32267;
+	a.receiver.target_re = b.receiver.target_re = 300;
+	a.receiver.target_im = b.receiver.target_im = 400;
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 1);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 1);
+	diff_eq_int("synthetic odd return", x, y, 1);
+	diff_eq_int("synthetic native odd path", y, 1, 1);
+	diff_eq_int("synthetic native improving state", sb->trellis[0], 0x040c, 0);
+	diff_eq_int("synthetic native carried state", sb->trellis[1], 0x0404, 1);
+	diff_eq_int("synthetic first state agrees", sa->trellis[0], sb->trellis[0], 0);
+	diff_eq_int("synthetic carried branch word", sa->trellis[1], sb->trellis[1], 1);
+	diff_eq_obj("synthetic trellis", unsigned short[512], sa->trellis, sb->trellis, 1);
+	diff_eq_obj("synthetic normalized costs", short[16], sa->cost, sb->cost, 1);
+	diff_eq_int("synthetic winning seed", sa->state[0].seed, sb->state[0].seed, 1);
+	diff_eq_int("synthetic output real", a.receiver.dp.iir2.i, b.receiver.dp.iir2.i, 1);
+	diff_eq_int("synthetic output imaginary", a.receiver.dp.iir2.q, b.receiver.dp.iir2.q, 1);
+	printf("SYNTHETIC OBSERVATION: trellis[0]=%04x/%04x trellis[1]=%04x/%04x\n",
+	       sa->trellis[0], sb->trellis[0], sa->trellis[1], sb->trellis[1]);
+	return diff_end();
+}
+
+static int limit_case(int synthetic)
+{
+	static struct v34_object a, b;
+	static struct v34_shell aa, bb;
+	struct v34_shell *sa = (struct v34_shell *)&a;
+	struct v34_shell *sb = (struct v34_shell *)&b;
+	int x, y;
+
+	diff_begin(synthetic ? "v34 limit: synthetic high WORD"
+		   : "v34 limit: initialized control");
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.role = b.role = 0x65;
+	preinitdigital(&a);
+	ref_preinitdigital(&b);
+	initV34((char *)&a + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		(const short *)((char *)&a + 0xe84), scale2400[19] >> 1);
+	ref_initV34((char *)&b + V34_SHELL_FIELDS, 2400, 14400, 1, 0,
+		    (const short *)((char *)&b + 0xe84), ref_scale2400[19] >> 1);
+	diff_eq_int("limit owner extent", sizeof(a), 0xac4c, synthetic);
+	diff_eq_int("limit field offset", (char *)&sa->subframe_limit - (char *)sa,
+		    0xa02, synthetic);
+	diff_eq_int("limit field width", sizeof(sa->subframe_limit), 2, synthetic);
+	diff_eq_int("frame limit offset", (char *)&sa->frame_limit - (char *)sa,
+		    0xa40, synthetic);
+	diff_eq_int("initialized native limit", sb->subframe_limit, 24, synthetic);
+	diff_eq_int("initialized native frame limit", sb->frame_limit, 14, synthetic);
+	diff_eq_int("initialized native count", sb->subframe_count, 0, synthetic);
+	diff_eq_int("initialized native frame", sb->frame_count, 12, synthetic);
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 0);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 0);
+	diff_eq_int("limit even return", x, y, synthetic);
+	diff_eq_int("limit native even return", y, 0, synthetic);
+
+	/*
+	 * The ONLY planted history in the synthetic case.  No identified
+	 * initializer can produce it: initV34's limits are 24/28/30/32.
+	 * A negotiated-call or waveform history is not claimed.
+	 */
+	if (synthetic)
+		sa->subframe_limit = sb->subframe_limit = (short)0x8000;
+	diff_eq_int("limit physical WORD", (unsigned short)sa->subframe_limit,
+		    synthetic ? 0x8000 : 24, synthetic);
+	diff_eq_int("native limit physical WORD", (unsigned short)sb->subframe_limit,
+		    synthetic ? 0x8000 : 24, synthetic);
+	x = demapFrame(&a, &a.receiver.target_re, &a.receiver.dp.point, 1);
+	y = ref_demapFrame(&b, &b.receiver.target_re, &b.receiver.dp.point, 1);
+	diff_eq_int("limit odd return", x, y, synthetic);
+	diff_eq_int("limit native odd return", y, 1, synthetic);
+	diff_eq_int("native limit count transition", sb->subframe_count, 1, synthetic);
+	diff_eq_int("native limit frame preserved", sb->frame_count, 12, synthetic);
+	diff_eq_int("limit count matches native", sa->subframe_count,
+		    sb->subframe_count, synthetic);
+	diff_eq_int("limit frame matches native", sa->frame_count,
+		    sb->frame_count, synthetic);
+	diff_eq_int("limit invert matches native", sa->invert, sb->invert, synthetic);
+	diff_eq_int("limit state index matches native", sa->state_idx,
+		    sb->state_idx, synthetic);
+	diff_eq_int("limit coefficient owner", sa->coeff ==
+		    (const short *)((char *)&a + 0xe84), 1, synthetic);
+	diff_eq_int("reference limit coefficient owner", sb->coeff ==
+		    (const short *)((char *)&b + 0xe84), 1, synthetic);
+	diff_eq_int("limit code table", sa->conv == Convolve16, 1, synthetic);
+	diff_eq_int("reference limit code table", sb->conv == ref_Convolve16, 1, synthetic);
+	diff_eq_int("limit callback", sa->scramble ==
+		    (v34_scramble_fn)descrambleGPA, 1, synthetic);
+	diff_eq_int("reference limit callback", sb->scramble ==
+		    (v34_scramble_fn)ref_descrambleGPA, 1, synthetic);
+	aa = *sa;
+	bb = *sb;
+	aa.coeff = bb.coeff = 0;
+	aa.conv = bb.conv = 0;
+	aa.put_bits = bb.put_bits = 0;
+	diff_eq_obj("limit shell after two points", struct v34_shell,
+		    &aa, &bb, synthetic);
+	printf("LIMIT OBSERVATION %s: count=%d/%d frame=%d/%d\n",
+	       synthetic ? "synthetic" : "control", sa->subframe_count,
+	       sb->subframe_count, sa->frame_count, sb->frame_count);
+	return diff_end();
+}
+
+
+/*
+ * Instrumented component protocol: actual reset/configuration and two frame
+ * reads, with a passive wrapper around the installed scrambler.  The wrapper
+ * observes the callback-entry field then delegates the real algorithm; this
+ * does not claim a negotiated/waveform history or a default payload bug.
+ */
+static struct v34_object publication_owner_a,publication_owner_b,publication_snap_a[2],publication_snap_b[2],publication_norm_a,publication_norm_b;
+static const short publication_coeff[12]={0};
+static v34_scramble_fn publication_delegate_a,publication_delegate_b;
+struct publication_observation { short field,arg,result; int root_ok; };
+static struct publication_observation publication_trace_a[16],publication_trace_b[16];
+static int publication_trace_n_a,publication_trace_n_b,publication_observing;
+static struct v34_shell *publication_tx(void *o) { return (struct v34_shell *)((char *)o+V34_SHELL_TX); }
+static short publication_tap_a(void *o,short n)
+{
+ int k=publication_trace_n_a++; short r;
+ if(k<16) {publication_trace_a[k].field=((struct v34_object *)o)->scrambler.nbits;publication_trace_a[k].arg=n;publication_trace_a[k].root_ok=o==&publication_owner_a;}
+ r=publication_delegate_a(o,n); if(k<16)publication_trace_a[k].result=r;return r;
+}
+static short publication_tap_b(void *o,short n)
+{
+ int k=publication_trace_n_b++; short r;
+ if(k<16) {publication_trace_b[k].field=((struct v34_object *)o)->scrambler.nbits;publication_trace_b[k].arg=n;publication_trace_b[k].root_ok=o==&publication_owner_b;}
+ r=publication_delegate_b(o,n); if(k<16)publication_trace_b[k].result=r;return r;
+}
+static void publication_setup(void)
+{
+ memset(&publication_owner_a,0,sizeof(publication_owner_a));memset(&publication_owner_b,0,sizeof(publication_owner_b));publication_owner_a.role=publication_owner_b.role=0x65;
+ preinitdigital(&publication_owner_a);ref_preinitdigital(&publication_owner_b);
+ initV34((char *)publication_tx(&publication_owner_a)+V34_SHELL_FIELDS,2800,9600,1,0,publication_coeff,128);
+ ref_initV34((char *)publication_tx(&publication_owner_b)+V34_SHELL_FIELDS,2800,9600,1,0,publication_coeff,128);
+}
+static void publication_normalise(struct v34_object *out,const struct v34_object *in)
+{
+ const struct v34_shell *rin=(const struct v34_shell *)in;
+ const struct v34_shell *tin=(const struct v34_shell *)((const char *)in+V34_SHELL_TX);
+ int ref=in==&publication_owner_b;struct v34_shell *rx,*t;
+ v34_scramble_fn expected=publication_observing?(ref?publication_tap_b:publication_tap_a):(ref?ref_scrambleGPC:scrambleGPC);
+ diff_eq_int("snapshot RX table identity",rin->conv==(ref?ref_Convolve16:Convolve16),1,ref);
+ diff_eq_int("snapshot RX callback identity",rin->put_bits==(v34_putbits_fn)(ref?ref_descrambleGPA:descrambleGPA),1,ref);
+ diff_eq_int("snapshot TX table identity",tin->conv==(ref?ref_Convolve16:Convolve16),1,ref);
+ diff_eq_int("snapshot TX callback identity",tin->scramble==expected,1,ref);
+ diff_eq_int("snapshot coefficient identity",tin->coeff==publication_coeff,1,ref);
+ *out=*in;rx=(struct v34_shell *)out;t=publication_tx(out);
+ rx->conv=0;rx->put_bits=0;t->conv=0;t->scramble=0;
+}
+static int publication_unwrapped(void)
+{
+ int i;publication_observing=0;diff_begin("getFrame publication: real-callback baseline");publication_setup();
+ diff_eq_int("complete owner",sizeof(publication_owner_a),0xac4c,0);
+ diff_eq_int("scrambler position offset",(char *)&publication_owner_a.scrambler.nbits-(char *)&publication_owner_a,0x2a64,0);
+ diff_eq_int("TX position offset",(char *)&publication_tx(&publication_owner_a)->bitpos-(char *)&publication_owner_a,0x2a64,0);
+ diff_eq_int("position width",sizeof(publication_owner_a.scrambler.nbits),2,0);
+ diff_eq_int("installed source callback",publication_tx(&publication_owner_a)->scramble==scrambleGPC,1,0);
+ diff_eq_int("installed reference callback",publication_tx(&publication_owner_b)->scramble==ref_scrambleGPC,1,0);
+ diff_eq_int("source coefficient owner",publication_tx(&publication_owner_a)->coeff==publication_coeff,1,0);
+ diff_eq_int("reference coefficient owner",publication_tx(&publication_owner_b)->coeff==publication_coeff,1,0);
+ diff_eq_int("source convolution table",publication_tx(&publication_owner_a)->conv==Convolve16,1,0);
+ diff_eq_int("reference convolution table",publication_tx(&publication_owner_b)->conv==ref_Convolve16,1,0);
+ diff_eq_int("idle source input",publication_owner_a.data_enable,0,0);diff_eq_int("idle reference input",publication_owner_b.data_enable,0,0);
+ diff_eq_int("initial position",publication_owner_b.scrambler.nbits,32,0);
+ diff_eq_int("initial span",publication_tx(&publication_owner_b)->span,14,0);diff_eq_int("initial remainder",publication_tx(&publication_owner_b)->remainder,6,0);
+ diff_eq_int("initial repeated width",publication_tx(&publication_owner_b)->idx_width,0,0);diff_eq_int("initial wide width",publication_tx(&publication_owner_b)->wide_bits,16,0);
+ diff_eq_int("initial alternate width",publication_tx(&publication_owner_b)->wide_bits_alt,15,0);
+ for(i=0;i<2;i++) {
+  getFrame(&publication_owner_a);ref_getFrame(&publication_owner_b);
+  diff_eq_int("native position transition",publication_owner_b.scrambler.nbits,i?6:11,i);
+  diff_eq_int("source position transition",publication_owner_a.scrambler.nbits,i?6:11,i);
+  diff_eq_int("native accumulator transition",publication_tx(&publication_owner_b)->wide_accum,i?12:6,i);
+  diff_eq_int("source accumulator transition",publication_tx(&publication_owner_a)->wide_accum,i?12:6,i);
+  publication_normalise(&publication_snap_a[i],&publication_owner_a);publication_normalise(&publication_snap_b[i],&publication_owner_b);
+  diff_eq_obj("unwrapped complete owner",struct v34_object,&publication_snap_a[i],&publication_snap_b[i],i);
+ }
+ return diff_end();
+}
+static int publication_observed(void)
+{
+ static const short args[5]={32,16,18,26,16};static const short results[5]={16,0,2,10,0};int i;
+ diff_begin("getFrame publication: passive callback observer");publication_setup();publication_observing=1;
+ publication_delegate_a=publication_tx(&publication_owner_a)->scramble;publication_delegate_b=publication_tx(&publication_owner_b)->scramble;
+ diff_eq_int("source delegate identity",publication_delegate_a==scrambleGPC,1,0);
+ diff_eq_int("reference delegate identity",publication_delegate_b==ref_scrambleGPC,1,0);
+ publication_trace_n_a=publication_trace_n_b=0;memset(publication_trace_a,0,sizeof(publication_trace_a));memset(publication_trace_b,0,sizeof(publication_trace_b));
+ publication_tx(&publication_owner_a)->scramble=publication_tap_a;publication_tx(&publication_owner_b)->scramble=publication_tap_b;
+ for(i=0;i<2;i++) {
+  getFrame(&publication_owner_a);ref_getFrame(&publication_owner_b);publication_normalise(&publication_norm_a,&publication_owner_a);publication_normalise(&publication_norm_b,&publication_owner_b);
+  diff_eq_obj("observer source noninterference",struct v34_object,&publication_norm_a,&publication_snap_a[i],i);
+  diff_eq_obj("observer reference noninterference",struct v34_object,&publication_norm_b,&publication_snap_b[i],i);
+  diff_eq_obj("publication_observed complete owner",struct v34_object,&publication_norm_a,&publication_norm_b,i);
+  diff_eq_int("publication_observed source callback retained",publication_tx(&publication_owner_a)->scramble==publication_tap_a,1,i);
+  diff_eq_int("publication_observed reference callback retained",publication_tx(&publication_owner_b)->scramble==publication_tap_b,1,i);
+ }
+ diff_eq_int("source callback count",publication_trace_n_a,5,0);diff_eq_int("reference callback count",publication_trace_n_b,5,0);
+ for(i=0;i<5;i++) {
+  diff_eq_int("source callback root",publication_trace_a[i].root_ok,1,i);diff_eq_int("reference callback root",publication_trace_b[i].root_ok,1,i);
+  diff_eq_int("source callback argument",publication_trace_a[i].arg,args[i],i);diff_eq_int("reference callback argument",publication_trace_b[i].arg,args[i],i);
+  diff_eq_int("source delegated return",publication_trace_a[i].result,results[i],i);diff_eq_int("reference delegated return",publication_trace_b[i].result,results[i],i);
+  diff_eq_int("native entry publication",publication_trace_b[i].field,args[i],i);
+  diff_eq_int("callback entry field matches native",publication_trace_a[i].field,publication_trace_b[i].field,i);
+  printf("CALLBACK %d arg=%d/%d field=%d/%d return=%d/%d\n",i,publication_trace_a[i].arg,publication_trace_b[i].arg,publication_trace_a[i].field,publication_trace_b[i].field,publication_trace_a[i].result,publication_trace_b[i].result);
+ }
+ return diff_end();
+}
+
 int
 main(void)
 {
@@ -669,6 +1040,13 @@ main(void)
 		}
 	}
 	rc |= diff_end();
+
+	rc |= shell_reset_history();
+	rc |= shell_branch_carry_probe();
+	rc |= limit_case(0);
+	rc |= limit_case(1);
+	rc |= publication_unwrapped();
+	rc |= publication_observed();
 
 	diff_begin("v34 lsbMask");
 	{
@@ -1255,7 +1633,7 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.tx_scale = ob.tx_scale = 0x4000;
+			oa.tx.tx_scale = ob.tx.tx_scale = 0x4000;
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
@@ -1285,7 +1663,7 @@ main(void)
 			 * training counter instead of the data path, and
 			 * `latched` is what lets that counter run at all.
 			 */
-			oa.tx_flags = ob.tx_flags = (short)(nle ? 0x4000 : 0);
+			oa.tx.tx_flags = ob.tx.tx_flags = (short)(nle ? 0x4000 : 0);
 			((struct v34_shell *)&oa)->latched = 1;
 			((struct v34_shell *)&ob)->latched = 1;
 
@@ -1448,7 +1826,7 @@ mv_next:		;
 			 * rather than this sharing one: two inputs driven
 			 * from one variable cannot be told apart.
 			 */
-			oa.tx_flags = ob.tx_flags =
+			oa.tx.tx_flags = ob.tx.tx_flags =
 				(short)(((c >> 9) & 1) ? 0x4000 : 0);
 
 			ca->baud = cb->baud = bauds[c & 3];

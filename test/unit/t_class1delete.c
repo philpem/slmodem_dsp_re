@@ -55,11 +55,11 @@ extern struct fpm_tone *ref_FPM_TONE_create(struct fpm_tone *state,
 					    const struct fpm_tone_cfg *cfg);
 
 extern int ref__t30_silence_before_tx_state(struct fax_class1 *ctx,
-	const short *rx, short *tx, int word3, int word4, int *rx_count,
-	int *tx_count, int word7, int *word8);
+	const short *rx, short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+	int *tx_count, int *word7, int *word8);
 extern int ref__tx_silence_before_scrm_ones(struct fax_class1 *ctx,
-	const short *rx, short *tx, int word3, int word4, int *rx_count,
-	int *tx_count, int word7, int *word8);
+	const short *rx, short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+	int *tx_count, int *word7, int *word8);
 
 static int marker;
 

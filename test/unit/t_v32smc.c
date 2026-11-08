@@ -193,6 +193,49 @@ run_tcm(const char *label, short nbits, short trellis, short prev, short quad,
 	return diff_end();
 }
 
+/*
+ * Synthetic component fidelity probe, not a modem lifecycle claim. With
+ * nbits=15, the first sum is 2<<15 = 65536, before the native WORD
+ * truncation. All shifts have nonnegative operands and counts below 31.
+ * EncodeDif and Transition indices are both 2; MOD indices are 0 in the
+ * blob and 2 without truncation, all within their actual arrays. Updated
+ * quadrant 1 selects rotations 7 versus 4, exposing bit 15 in the output.
+ */
+static int
+run_tcm_word_boundary(void)
+{
+	struct v32_smc a, b;
+	struct v32_symout oa, ob;
+	short input_a = 0, input_b = 0;
+	short ring_a[2] = { 0x5a5a, 0x5a5a };
+	short ring_b[2] = { 0x5a5a, 0x5a5a };
+	typedef short word_ring[2];
+
+	diff_begin("synthetic TCM unsigned-word boundary, nbits 15");
+	memset(&a, 0, sizeof(a));
+	a.uncoded_bits = 15;
+	a.trellis_diff_state = 2;
+	a.quad = 2;
+	b = a;
+	memset(&oa, 0, sizeof(oa));
+	oa.buf = ring_a;
+	oa.limit = 2;
+	ob = oa;
+	ob.buf = ring_b;
+	ref_SMCv32_encoder_tcm(&a, &oa, &input_a, 1);
+	SMCv32_encoder_tcm(&b, &ob, &input_b, 1);
+	diff_eq_obj("whole synthetic coder", struct v32_smc, &b, &a, 0);
+	diff_eq_obj("whole synthetic output ring", word_ring, ring_b, ring_a, 0);
+	diff_eq_int("input word", input_b, input_a, 0);
+	diff_eq_int("write index", ob.widx, oa.widx, 0);
+	diff_eq_int("ring length", ob.limit, oa.limit, 0);
+	diff_eq_int("native narrowed symbol", (unsigned short)ring_a[0], 0x8000, 0);
+	diff_eq_int("native next quadrant", a.quad, 1, 0);
+	diff_eq_int("native next trellis", a.trellis_diff_state, 2, 0);
+	diff_eq_int("native next transition", a.trellis_state, 2, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -258,6 +301,8 @@ main(void)
 	rc |= run_tcm("tcm, nbits 3", 3, 1, 4, 3, 40);
 	rc |= run_tcm("tcm, nbits 5", 5, 2, 1, 1, 40);
 	rc |= run_tcm("tcm, nbits 6, ring 5", 6, 3, 3, 2, 5);
+
+	rc |= run_tcm_word_boundary();
 
 	return rc;
 }

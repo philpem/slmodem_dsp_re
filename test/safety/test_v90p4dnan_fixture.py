@@ -1,7 +1,7 @@
 """Observer controls on the actual modern binary; NOT an exemption validator.
 
-Run with make J=1 -j1 safety-p4dnan-gcc14. A red baseline is never a
-mutation catch: require the exact baseline plus named additional diagnostics.
+Run with make J=1 -j1 safety-p4dnan-gcc14. The expected red baseline is fixed; each injected fault must add its named
+diagnostic without changing the original failure.
 This control is bounded to the measured GCC 14 ILP32 fixture profile.
 """
 import os

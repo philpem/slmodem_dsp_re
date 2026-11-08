@@ -449,8 +449,8 @@ void _init_transmitter(struct fax_class1 *ctx, int rate_code);
  * `silence_blocks`. `*word8` is always cleared to 0.
  */
 int _tx_silence_before_scrm_ones(struct fax_class1 *ctx, const short *rx,
-				 short *tx, int word3, int word4,
-				 int *rx_count, int *tx_count, int word7,
+				 short *tx, unsigned char *word3, const unsigned char *word4,
+				 int *rx_count, int *tx_count, int *word7,
 				 int *word8);
 
 /**
@@ -463,8 +463,8 @@ int _tx_silence_before_scrm_ones(struct fax_class1 *ctx, const short *rx,
  * `countdown += CLASS1_BLOCK_SAMPLES` unconditionally at the end.
  */
 int _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
-				 short *tx, int word3, int word4,
-				 int *rx_count, int *tx_count, int word7,
+				 short *tx, unsigned char *word3, const unsigned char *word4,
+				 int *rx_count, int *tx_count, int *word7,
 				 int *word8);
 
 /**
@@ -486,8 +486,8 @@ int _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
  * @param word8     Unread.
  */
 int _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
-				short *tx, int word3, int word4,
-				int *rx_count, int *tx_count, int word7,
+				short *tx, unsigned char *word3, const unsigned char *word4,
+				int *rx_count, int *tx_count, int *word7,
 				int *word8);
 
 /*
@@ -512,8 +512,8 @@ int _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
  * always; `*tx_count` is never written on any path.
  */
 int _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx,
-			    short *tx, int word3, int word4, int *rx_count,
-			    int *tx_count, int word7, int *word8);
+			    short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+			    int *tx_count, int *word7, int *word8);
 
 /**
  * @brief SEND_HDLC_BETWEEN_BUFFER_STATE (3). `.text` 0x0009e810, 433 bytes.
@@ -529,8 +529,8 @@ int _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx,
  * #FAX_CLASS1_ERROR_ON_HOOK.
  */
 int _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
-				    short *tx, int word3, int word4,
-				    int *rx_count, int *tx_count, int word7,
+				    short *tx, unsigned char *word3, const unsigned char *word4,
+				    int *rx_count, int *tx_count, int *word7,
 				    int *word8);
 
 /**
@@ -542,8 +542,8 @@ int _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
  * idle with #FAX_CLASS1_OK_NO_CARRIER. Always emits a block of silence.
  */
 int cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx,
-		int word3, int word4, int *rx_count, int *tx_count,
-		int word7, int *word8);
+		unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		int *word7, int *word8);
 
 /*
  * ------------------------------------------------------------------
@@ -578,8 +578,8 @@ int cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx,
  * (`*word8 != 0`) aborts to idle.
  */
 int _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
-				     short *tx, int word3, int word4,
-				     int *rx_count, int *tx_count, int word7,
+				     short *tx, unsigned char *word3, const unsigned char *word4,
+				     int *rx_count, int *tx_count, int *word7,
 				     int *word8);
 
 /**
@@ -596,8 +596,8 @@ int _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * aborts to idle. Emits a block of silence.
  */
 int _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			int word3, int word4, int *rx_count, int *tx_count,
-			int word7, int *word8);
+			unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+			int *word7, int *word8);
 
 /**
  * @brief HDLC_RECEIVE_BETWEEN_BUFFERS_STATE (6). `.text` 0x0009dbc0, 566 bytes.
@@ -610,9 +610,9 @@ int _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * abort aborts to idle. Emits a block of silence.
  */
 int _hdlc_receive_between_buffers_state(struct fax_class1 *ctx,
-					const short *rx, short *tx, int word3,
-					int word4, int *rx_count,
-					int *tx_count, int word7,
+					const short *rx, short *tx, unsigned char *word3,
+					const unsigned char *word4, int *rx_count,
+					int *tx_count, int *word7,
 					int *word8);
 
 /**
@@ -625,8 +625,8 @@ int _hdlc_receive_between_buffers_state(struct fax_class1 *ctx,
  * 5-second overall timeout moves to idle with #FAX_CLASS1_ERROR_NO_CARRIER.
  */
 int _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			int word3, int word4, int *rx_count, int *tx_count,
-			int word7, int *word8);
+			unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+			int *word7, int *word8);
 
 /*
  * ------------------------------------------------------------------
@@ -656,8 +656,8 @@ int _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * (`*rx_count` samples, not a fixed block).
  */
 int _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx,
-			   short *tx, int word3, int word4, int *rx_count,
-			   int *tx_count, int word7, int *word8);
+			   short *tx, unsigned char *word3, const unsigned char *word4, int *rx_count,
+			   int *tx_count, int *word7, int *word8);
 
 /**
  * @brief RX_DATA_STATE (13). `.text` 0x0009cda0, 433 bytes.
@@ -670,8 +670,8 @@ int _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * as _rx_look_carrier_state(). Emits silence for the whole received block.
  */
 int _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		   int word3, int word4, int *rx_count, int *tx_count,
-		   int word7, int *word8);
+		   unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		   int *word7, int *word8);
 
 /**
  * @brief TX_NULLS_STATE (11). `.text` 0x0009d040, 435 bytes.
@@ -685,8 +685,8 @@ int _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * (`tx_fifo->size - tx_fifo->count - 1`) in `*word8` at the end.
  */
 int _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		    int word3, int word4, int *rx_count, int *tx_count,
-		    int word7, int *word8);
+		    unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		    int *word7, int *word8);
 /**
  * @brief TX_SCRAMBLED_ONES_STATE (9). `.text` 0x0009d200, 681 bytes.
  *
@@ -720,8 +720,8 @@ int _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * transliterated verbatim.
  */
 int _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx,
-			     short *tx, int unused_dst, int src,
-			     int *rx_count, int *tx_count, int unused_out_count,
+			     short *tx, unsigned char *unused_dst, const unsigned char *src,
+			     int *rx_count, int *tx_count, int *unused_out_count,
 			     int *tx_data_count);
 
 /**
@@ -735,7 +735,7 @@ int _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx,
  * FIFO is only logged. Reports remaining FIFO room in `*word8` at the end.
  */
 int _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		   int word3, int word4, int *rx_count, int *tx_count,
-		   int word7, int *word8);
+		   unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		   int *word7, int *word8);
 
 #endif /* DSPLIB_CLASS1TX_H */

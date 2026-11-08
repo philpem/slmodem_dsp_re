@@ -1,3 +1,7 @@
+> **Historical mutation evidence:** this log preserves results from the removed
+> mutation system. Mentions of suites, anchors or mutation runs describe past
+> measurements only and do not prescribe current maintenance.
+
 # Refinement: what actually closes the last bytes
 
 For experiment planning, source/flag interactions and stopping/reframing a
@@ -5,7 +9,42 @@ stalled search, first read [experiment-design.md](experiment-design.md).
 This page supplies the individual levers; that workflow prevents a locally
 successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
-possible source/flag combinations have been excluded.
+possible source/flag combinations have been excluded. Unique authorship is not
+an acceptance gate: several natural source spellings can satisfy the same
+complete native constraints. Prefer a clear supported spelling, report the
+ambiguity, and retain the full differential and code-generation obligations.
+
+Before reusing a closure, identify the observation it actually establishes.
+Equal projected instruction counts do not establish dataflow equivalence;
+an exact out-of-line body does not fix its frontend inline cost; a refused
+table proof does not establish a source defect; and the worst emitted copy
+is distinct from the body selected in a particular partial link. See the
+[proof-boundary review](../apparatus-unblock-review.md) for measured controls
+and the remaining proof obligations. Keep diagnostic and production flags
+separate when locating the compiler pass responsible for a difference.
+
+## Screen beyond the historical candidate filter
+
+Inventory every residual function and every defining copy before applying a
+size or source-family filter. A filter used for one experiment is not the
+remaining-work boundary. Likewise, a detector that nominates physical
+backedges says nothing about functions outside that detector's domain.
+Report both denominators and inspect helper and tail-call closures before
+calling an operation missing.
+
+Shared calls can expose a source-lifetime discrepancy. In `_init_receiver`,
+the original's three modulation-specific request buffers survive to one
+common `FAXVMI_control` call. Branch-local request objects and three copies
+of the control path obscure that structure. Keep the typed requests alive
+in the enclosing scope, initialise the selected request and control template
+in the witnessed order, then join the common rate and control path. Dispatch
+after the call using the saved modulation value, as the original does;
+rereading the configuration would introduce a different value source.
+
+This is a supported partial recovery, not a byte-identity claim. Check the
+complete translation unit, the exact-name set and period component histories
+before retaining it. Neither a smaller size gap nor a green differential
+test alone establishes the original source structure.
 
 ## The translation unit is the recovery boundary
 
@@ -1125,6 +1164,71 @@ remain explicitly synthetic; an actual protocol history into ready PCM is still
 unproved. The report records current period validation and full-TU/300-object
 effects, the escalation's added evidence and the next native-backed target.
 
+## Reconcile independent recoveries before refreshing a floor (2026-11-08)
+
+The November 8 integration combines two independently developed histories.
+Audit the named protected sets from both, including stale historical entries;
+an aggregate gain does not explain a missing function. Preserve source-backed
+recoveries, trace losses, and test supported combinations before deciding which
+source to retain. Do not silently lower a floor or weaken the classifier.
+
+`V90MP::evaluateCRC` is the concrete coupled repair. Holding the complete merged
+TU fixed, moving the loop increment to the `for` header leaves SIZE8; using
+`abs(d)` alone leaves SIZE16. Together they recover EXACT651, with the other
+15 emitted copies unchanged. The baseline is SIZE15. The native branchless
+absolute-value graph supports the arithmetic choice; the exact combination
+does not identify unique original syntax.
+
+`V92Jd` retains its single low-byte lookahead capture. Placing the bit-0 source
+assignment before bit 1 recovers both EXACT211 constructors; the compiler still
+emits the native bit-1-before-bit-0 publication order. All other 19 copies are
+unchanged. A scope-only control is neutral; reversing source order with either
+scope recovers both constructors. This supersedes the older constructor SIZE
+status below. Machine publication order does not force source statement order.
+Do not attribute the improvement to an inherited scratch cursor without the
+corresponding compiler trace.
+
+The V.21 control merge supplies a smaller control. Explicit early locals and
+the direct assignments emit the same native three-load-before-two-store epoch.
+Restoring the direct source form recovers EXACT94; the separate status body
+and its later request observation remain unchanged. Preserve the witnessed
+observation boundary, rather than treating one source spelling as mandatory.
+
+One real upstream loss is retained explicitly: `V92Modulator` C2 is BYTES7
+instead of EXACT734. A current-input cross identifies `Queue::write`'s existing
+`isFull()` predicate as the cause. Reverting only that predicate restores the
+constructor but loses the native EXACT85 queue writer and worsens `progress`
+from BYTES55 to BYTES70. Both complete source bodies reproduce this header
+effect. Retain the supported queue implementation and investigate the coupled
+constructor recovery next; do not restore the older expression solely to protect
+its bystander. The specific scratch/renaming cause still requires compiler dumps.
+This supersedes the historical Queue no-adoption status recorded later here.
+
+Two other floor entries were classifier migration errors. Fresh upstream
+objects for `V90Jd` C1 and `recivedRt` are identical to their merged counterparts;
+the upstream classifier accepts REGALLOC where the stricter integrated one
+refuses it. Preserve those NONMATCH results and record the correction rather
+than weakening the register proof or describing them as new source regressions.
+
+The integration checkpoint explicitly refreshes the named floor to 1,231 EXACT,
+1,266 matched and 1,234 link-selected EXACT functions across 1,852 names.
+The [review ledger](../evidence/master-integration-20261108.json) preserves every
+lost historical membership, its cause and reopening condition. The two maximum-
+upstream getters retain REGALLOC with bodies unchanged from the local parent;
+`dp_vpcm_exit` retains the upstream-reviewed REGALLOC result after the source
+order correction. Its former displacement entry is archived in that ledger
+because the refreshed matched floor now protects the actual REGALLOC result.
+The retained constructor tradeoff remains NONMATCH. This is an explicit source
+review, not a classifier relaxation or an unreported net-count replacement.
+The refreshed detector still rejects a known lost getter match.
+
+The integration also exposed apparatus closure defects: frozen graph helpers
+must include new lazy classifier dependencies, and host-side fixture preparation
+must read the same `.ldcontext` declarations as the link stage. The full default
+test list uses newlines; space-only substring selection silently omitted both
+context objects. Keep the failure evidence, repair apparatus, and rerun the
+period gate without changing the oracle or source to accommodate it.
+
 ## Resolving an owner declaration after an alias-contract recovery
 
 Seek independent original type evidence first: matching original headers or
@@ -1385,6 +1489,17 @@ finding and never generalised**, and were swept up afterwards (7813). Their
 measurements are as real as the rest and their yield in a refinement pass is
 unknown, which is the one thing to hold in mind when a brief quotes them.
 
+**17 and 18 are the newest and their scope is stated with them**: both come
+from one 116-byte V.8 function (2026-10-19), 17's domain is two cells and 18's
+is four, and neither has been swept across the tree. 17 did convert a SIZE
+function to grade-1 ACCEPT, so it is worth trying first on any small
+pointer-walk loop whose size is short by a few instructions.
+
+**14 carries a measured null as well as a success:** the `V34.c` merge was
+bit-identical and recovered no call boundary. That does not exclude emission
+or data-layout effects in other partitions. Read the complete source and
+linkage evidence before planning a TU move.
+
 **13 has the same caveat as 10 to 12, and it is stated here rather than
 discovered later.** It closed 74 instructions in ONE function (F7940) and has
 never been swept across the tree, so its yield in a refinement pass is
@@ -1395,14 +1510,19 @@ read the two together.
 
 ### Lever 0. What an enumeration proves depends on how many cells hit zero
 
-Running the domain to completion is necessary; it is not the whole story. Say
-which of these you have, per function (7789 does it per closure):
+Complete a declared finite enumeration before claiming a unique preimage or
+excluding its domain. Full-function acceptance does not require uniqueness
+across equivalent source spellings. Report the tested cells, remaining cells
+and which outcome you have, per function (7789 does it per closure):
 
-- **A unique preimage** — exactly one cell maps onto the object. You have
-  decoded the author's ORDER. `V90MP`: 4! = 24 cells, one zero, nearest
+- **A unique preimage within the declared family** — exactly one cell maps
+  onto the object. That identifies an order under the tested source and
+  compiler controls. `V90MP`: 4! = 24 cells, one zero, nearest
   near-miss at 2.
 - **Several preimages** — more than one cell reaches zero. You have decoded a
-  specific FACT, not an order, and the finding must say which fact.
+  shared source properties, and the finding must say which ones. A complete,
+  natural, validated candidate can be retained without claiming its particular
+  order is uniquely original.
   `enterPhase4` decodes only that the clear follows the deadline, because the
   `inPhase3` slot collides; `V90Modem` decodes a zero-test and "`dil` stored
   last"; `resetLinearMapping` decodes only the NEGATIVE, that a signed 16-bit
@@ -1417,10 +1537,10 @@ the total**: count the `mov`-class stores, the x87 ops and the branches
 separately on each side, and if those disagree while the total is zero, lever 2
 does apply and is cancelling with itself.
 
-Where the sub-counts also agree, `+0` does mean operand order, statement order,
-emission order, or width and signedness. The lens is most useful on a **SIZE**
-symbol, where it converts an apparently structural difference into an
-arithmetic one; on a BYTES symbol it is close to redundant with the bucket.
+Where the sub-counts also agree, the bucket projection agrees. The cause is
+still open: different predicates, dependencies or value/member associations
+can have equal counts. Use the lens to nominate operand and control-flow
+comparisons on a **SIZE** symbol, rather than to close its source structure.
 
 **TWO CENSUSES EXIST AND THEY USE DIFFERENT TAXONOMIES; RECONCILE THEM BEFORE
 QUOTING EITHER.** F7986 bucketed 29 rows of the V.90 cluster and found **22
@@ -1434,7 +1554,8 @@ neither number is the tree's, and the census is worth re-running per worklist
 rather than inherited.
 
 Bucketing measured on one cluster: of 29 reachable `+0` rows, **22 have every
-bucket agreeing** -- genuinely encoding only -- and **7 cancel**. None of the
+bucket agreeing**, historically labelled encoding-only, and **7 cancel**.
+The equal-bucket observation alone does not establish that label. None of the
 seven had an x87 imbalance, which is the bucket that carried F7960's wrong
 field types, so that defect did not repeat there (F7986). Note what that
 leaves: for five of the seven the cancelling was bucketed but not TRACED, so
@@ -1451,18 +1572,19 @@ differently wrong. Use `--near` to find cheap work, never to decide what a
 symbol's defect can be.
 
 - **No preimage** — **but FIRST ask whether the domain was drawn around the
-  right code.** A no-preimage result licenses the strong conclusion "the
-  difference is not what I thought it was", and that conclusion is only as good
-  as the boundary you enumerated over. `packData`'s sixteen-cell domain covered
+  right code.** A no-preimage result excludes the tested family under its
+  controls; check that the family covers the relevant helpers.
+  `packData`'s sixteen-cell domain covered
   its own four loops and was genuinely exhausted; the CRC lived in a `static`
   helper whose two loops were never in it, and the answer was there (F7940). A
   `static` helper that gets inlined has no symbol of its own, so a per-function
   enumeration cannot see it. **Enumerate over the callee set, not over the
   function that carries the symbol.** Only once the boundary is right does a
-  no-preimage result mean the map is constant or simply misses. The difference is
-  not what you thought it was. Four measured this way in one pass alone
+  no-preimage result exclude the tested source family under that profile.
+  Other source properties and interactions remain open. Four measured this
+  way in one pass alone
   (7795), and `SpectralShaper::reset` at 10 cells with none reaching zero is
-  the cleanest: by lever 1's own rule it is therefore not statement order.
+  the cleanest: those ten statement-order cells do not recover it.
 
 **Enumerate before reading any cell.** Two passes have recorded doing that
 explicitly, because stopping at a tempting near-miss is how an exhausted
@@ -1471,11 +1593,14 @@ enumeration turns back into a search.
 ### Lever 1. Statement order — enumerate, do not search
 
 The single most productive lever: ten of the closures across four passes.
+**Lever 17 is this same question one level in** — the order of the two
+statements inside a loop body — and it is worth checking first when a small
+pointer-walk loop is short by a handful of instructions.
 
 When a difference is a statement order, the candidate source spellings form a
 small finite family. **Compile all of them.** If exactly one maps onto the
-object, the object's emission has a unique preimage and you have *decoded* the
-author's order.
+object, the object's emission has a unique preimage within that family. Keep
+the source representation and compiler profile in the claim.
 
     resetBeforRRN     2 orders compiled, 1 matches   -> EXACT   (7770)
     externalReset     all 3! compiled, 6 distinct emissions, unique preimage -> EXACT (7779)
@@ -1489,34 +1614,29 @@ recoverable, because the domain was exhausted rather than trusted.
 
 **The branch that would kill it, and it must be excluded by measurement:** if
 the compiler emits the same order for *every* source spelling, the map is
-constant, no source produces the object's bytes, and the difference is not a
-store-order difference at all. Nothing before the compile distinguishes that
-case from a bijection.
+constant within that family. If its output differs from the reference, those
+order changes cannot recover it under the fixed controls. This does not
+exclude a source/flag interaction or another source representation.
 
 **Where it stops.** Hill-climbing on byte count is not evidence:
 
     V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
                                 order; best was 27 of 290 -> DECLINED (7771)
 
-Closer bytes are not a grade. Finding F7782 is the ruling on this: take the
-bytes when the space is exhausted and one element maps; decline when you are
-searching. Record which side you are on and what the domain was — a finding
-that says "closed by reordering" without saying how many spellings were
-compiled is not reviewable.
+Closer bytes are not a grade. Finding F7782 rejects near-match selection as
+recovery evidence. A complete supported match can be retained even if several
+natural spellings match; state the shared properties and the limits of any
+original-order claim. Record the domain and actual compilation count. A finding
+that says "closed by reordering" without that evidence is not reviewable.
 
 
-**OUR SOURCE ORDER IS THE ANSWER SHEET, NOT A CANDIDATE, and this is the
-sentence to read first.** A reconstruction writes the statements down in the
-order the object's stores come out of the disassembly, so **our source order
-already IS the blob's EMISSION order** — it is the first thing anybody
-transcribes. Comparing the two therefore tells you nothing, and a cell that
-reproduces it is not a hit. What an enumeration is searching for is the
-PREIMAGE of that order under GCC 3.4.2's scheduling, which is a different
-object and is usually not an order you can read anywhere. In all four of
-7805's closures our source was already the emitted order and the compiler had
-permuted it. So before enumerating: if our source reads like the disassembly,
-that is the ANSWER and not a guess, and the domain to enumerate is everything
-else.
+If a reconstruction transcribes stores in disassembly order, that order is
+the desired emitted sequence, not evidence of the author's statement order.
+Keep the unchanged source as the baseline control and test complete emitted
+bodies, including operands and relocations. In all four of F7805's closures,
+the source already followed the desired emitted order but the compiler
+permuted it. An enumeration searches for a source preimage under the declared
+controls; matching a handwritten order alone is not a byte-identity result.
 
 **AND THE HARNESS IS WHAT MAKES AN EXHAUSTED DOMAIN AFFORDABLE**, which is
 what turns rule 0 from advice into something a pass can budget for. Compile the
@@ -1536,23 +1656,6 @@ That one was checked to reproduce our committed object's thirteen instructions
 exactly, from our committed source order, before a single cell of it was read.
 A model nobody has seen agree with the real compiler is `gates.md`'s dead
 detector with 40,320 rows of output.
-
-**The branch that would kill it, and it must be excluded by measurement:** if
-the compiler emits the same order for *every* source spelling, the map is
-constant, no source produces the object's bytes, and the difference is not a
-store-order difference at all. Nothing before the compile distinguishes that
-case from a bijection.
-
-**Where it stops.** Hill-climbing on byte count is not evidence:
-
-    V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
-                                order; best was 27 of 290 -> DECLINED (7771)
-
-Closer bytes are not a grade. Finding F7782 is the ruling on this: take the
-bytes when the space is exhausted and one element maps; decline when you are
-searching. Record which side you are on and what the domain was — a finding
-that says "closed by reordering" without saying how many spellings were
-compiled is not reviewable.
 
 ### Lever 2. Instruction count at EQUAL byte size can expose a missing or extra statement
 
@@ -2859,10 +2962,30 @@ them.
 because it inlined a helper, or a constructor that `SIZE`s large because it did
 not inline one the reference contains, is the signal; so is an exact function
 that gains or loses a helper call under an unrelated change. Reach for this
-lever before the flags, and when you do move a function, split its `t_*`
-mutation suite with it: `anchorcheck` reports the detached anchors as "matches 0
-time(s)" and a suite whose anchors now live in two files has to become two
-suites. The same question for the rest of the object is #6/#20.
+lever before the flags. (Splitting a TU used to require moving its `t_*`
+mutation suite; that system is retired, so there is no anchor bookkeeping to
+do. The same question for the rest of the object is #6/#20.)
+
+**The tested V.34 TU merge was null (2026-10-19).** The object records a
+`V34.c` FILE
+record that this tree does not have; its `.text` is `0x57860..0x5AF10`, 20
+global functions, which this tree spreads over `v34scram.c` (4), `v34shell.c`
+(13) and `V34RX.c` (3). Renaming the two `.c` files to `.inc` and adding one
+`V34.c` that includes both -- the whole merge, one compile -- left the census
+**bit-identical**: same sizes, same exact set, `diff` of `--list-exact` empty.
+The call-boundary observation is measurable: the object has **no relocations at all**
+to `scrambleGPC`/`scrambleGPA`/`descrambleGPC`/`descrambleGPA`/`agcadapt`/
+`decision` (every call site inlined them), so there was no boundary for the
+merge to restore, and the 908-byte deficit sits inside functions that already
+shared a TU. Count cross-TU relocations when testing a call-boundary
+hypothesis. Zero references exclude that particular explanation, not every
+effect of a partition: emission state, constant/data layout and selected
+COMDAT copies have separate observables (Levers 3, 11 and 15). Do not move a
+TU without an ownership witness and a predicted discriminator. The same
+screen would
+have saved the `v8seq.c` question: the source comments annotate seven
+`V8Interface.c` functions with `(v8seq.c)`, but the object has no `v8seq.c`
+FILE record at all.
 
 ### Lever 15. A header-only template has NO translation unit — the user instantiates it
 
@@ -2954,6 +3077,619 @@ codegen-neutral is a different finding -- record it and leave the cast.
 
 Issues #140 (tree-wide retyping audit) and #141 (replace the cast macros this
 hides behind -- `RXS`, `RXS_SRE`, `RXS_FSE`, `RXSTATE`).
+
+### Lever 17. Inside a loop body, the ORDER of the accumulate and the store is a source property
+
+Lever 1 is about statements in a function; this is the same question one level
+in, and it is cheap because the domain is two cells. Measured on
+`v8_fsktxfilter` (V.8, F-2026-10-19, 116-byte function): the object walks three
+moving pointers and, in one pass, both copies the delay line and multiplies
+into an accumulator:
+
+    movzwl (%edi),%ecx      ; x = *src--      (zero-extending 16-bit load)
+    movswl %cx,%eax         ; (short)x
+    imul %edx,%eax          ; * tap++
+    add %eax,(%esp)         ; acc +=
+    mov %cx,(%esi)          ; *dst-- = x
+
+With the same declarations, the same `short k` and the same bounds, the two
+statement orders in the body compile differently and only one is the object:
+
+    acc += (short)x * *tap++;   *dst-- = x;     36 instructions, the object's exact 116 bytes
+    *dst-- = x;   acc += (short)x * *tap++;     33 instructions, 94 bytes
+
+So GCC 3.4.2 does not move an accumulate across a store here, and a 33-vs-36
+instruction gap in a small pointer-walk loop is a body-order question before it
+is an allocation question. Result: grade 0 `BYTES (1 byte)` -- the discarded
+`pop %ecx` versus `pop %edx` -- and **grade 1 `ACCEPT`**. `make period` 394/0.
+
+**A SIZE -> REGALLOC conversion is a win, and it is worth stating as a
+success criterion.** The census has four buckets and the reconstruction
+question is "is the function's source right", not "is its register assignment
+right". When the object's size is reached and grade 1 accepts, the SIZE
+question is answered; the residual is allocation and belongs to levers 3/5.
+Do not keep hill-climbing a `BYTES (1..4)` residual -- that is how a
+`pop %ecx`/`pop %edx` rename becomes an afternoon. Here the conversion moved
+REGALLOC 32 -> 33 and SIZE 631 -> 630 with the exact set unchanged.
+
+### Lever 18. A 16-bit store does not pin the pointee type -- prefer the spelling with the FEWEST casts
+
+Lever 16 removes casts by retyping a holder to its truthful type. This is the
+mirror case, and it BOUNDS what byte identity can claim: when a value's only
+observable use is a 16-bit store, the declaration that produced it is not in
+the object at all.
+
+Measured on `v8_fsktxfilter`, four spellings of the two moving pointers, same
+body and same local:
+
+    unsigned short *src, *dst, with casts       116 B, byte-identical
+    short          *src, *dst, no casts         116 B, byte-identical
+    short *src, unsigned short *dst             116 B, byte-identical
+    unsigned short *src, short *dst             116 B, byte-identical
+
+A 16-bit store cannot distinguish them, and `unsigned short x = *short_ptr`
+is the low 16 bits, which the compiler loads with `movzwl` anyway. **So the
+object proves nothing about the pointer types here, and the reconstruction
+should take the spelling with the fewest casts** (the declared `short
+rx_scratch[]` needed no cast at all). Treat "this declaration is unobservable"
+as a reason to prefer the truthful, cast-free spelling -- not as a licence to
+pick a type the header does not support.
+
+**And the cast that IS forced is worth recognising.** The object's pair
+
+    movzwl (%edi),%ecx      zero-extending load
+    movswl %cx,%eax         sign-extended for the product
+
+is reachable only from an unsigned 16-bit local re-signed for the multiply:
+`unsigned short x = *p; acc += (short)x * t;`. Both directions of removing it
+were measured and both are wrong:
+
+    (short)x present      116 B, movzwl + movswl + imul   (the object)
+    x * *tap++            93 B, movzwl + imul             UNSIGNED multiply
+    short x              93 B, movswl + imul              signed load, no zero-extension
+
+So a load extension that disagrees with the product's signedness is evidence
+for a narrow unsigned local plus one explicit conversion, not for a field
+retype (compare Lever 8) and not for a stray cast.
+
+### Lever 19. Test frontend inline eligibility separately from the native body
+
+The installed Gentoo compiler has defaults of 100 for
+`max-inline-insns-auto` and 500 for `max-inline-insns-single`, decoded from
+its own parameter records. These are frontend cost budgets, not final
+machine-instruction counts. Record the actual profile and the complete
+callgraph decision before testing an `inline` declaration as a hypothesis.
+Native body length alone does not establish the original frontend cost or
+keyword.
+
+PR #333 supplies a counterexample to inferring cost from the standalone
+body. Two ordinary scalar declaration/assignment forms of `inverseMap`
+both emit the exact 440-byte helper, but estimate at 98 and 102. Under the
+same retained profile they respectively inline and retain the original call
+in `process`. The [fresh full-TU replay](../apparatus-unblock-review.md)
+preserves every other function body. No parameter override or artificial
+operation is needed. Multiple spellings recover the cost boundary, so the
+machine code does not identify one original spelling.
+
+Measured on `src/service/ringDetector.c` (2026-10-19). `RingDetector_Reset` is
+449 bytes / 124 instructions and has ONE call site, in `RingDetector_Create`.
+With a plain definition our `Create` was 41 bytes:
+
+    malloc(0x54); call RingDetector_Reset; ret
+
+while the object's `Create` is 452 bytes and contains the whole reset body.
+Adding `inline` to the DEFINITION in the .c (the header's non-inline
+declaration is left alone) inlined it:
+
+    Create   41 B / 9 insns  ->  435 B / 121 insns   (object 452 / 125)
+    structsim  longest run 0 -> 14,  LCS 0% -> 77.6%
+
+Two observations support the helper-operation interpretation:
+
+- A `difflib.SequenceMatcher` of the object's `RingDetector_Reset` instruction
+  list against the object's `RingDetector_Create` list scores 0.787, and every
+  non-equal opcode is the malloc/return prologue, a branch displacement, or a
+  pure register rename (`%ecx` <-> `%edx`, `%esi` vs `%edi`). This supports
+  shared operations; it does not distinguish an inline call from duplicated
+  source, since the enclosing context can alter register allocation in both.
+- The standalone symbol is still emitted in both, which is what the language
+  says should happen: the header declares the function without `inline`, so
+  the inline definition is an external definition too.
+
+**The bound.** A callee inside the auto budget may inline with or without
+the keyword. A current-source cost above that budget is a useful control,
+not proof of the unknown original source cost. Verify definition visibility,
+other eligibility constraints and the actual decision; compare the complete
+TU before retaining an explicit-inline hypothesis. It also does not fix the
+callee: `RingDetector_Create`
+stayed SIZE because `Reset`'s own body still differs by 4 instructions of
+register allocation (the object spills `c` into a third callee-saved register
+and reloads it), so the inline decision and the body's residual are separate
+questions.
+
+### Lever 20. A `cwtl` the object does not have is a 16-bit TEMPORARY, not allocation
+
+When our code emits `cwtl` (`movswl %ax,%eax`), `movzwl %ax,%eax` or a
+`movswl %ax,%reg` and the object's corresponding site has no extension at all,
+the first suspect is not register allocation. It is a **short local that exists
+only to be compared**: the source narrows a value into a `short`, the compiler
+sign-extends it back to a word for the compare, and the compare then narrows it
+again. The object never builds the temporary -- it increments or reads the
+FIELD and tests the field.
+
+Measured on `v90RateReneg` (`src/pump/v34/VPcmV34Main.cpp`, 2026-10-19):
+
+    source:   short n = (short)((unsigned short)t->seg_symcount + 1);
+              if (n <= 0x7f) ...
+
+    object:   movzwl 0x3a4(%esi),%eax / inc %eax / cmp $0x7f,%ax / jle <store>
+    ours:     movzwl 0x3a4(%esi),%eax / inc %eax / cwtl / cmp $0x7f,%ax / jle
+    fixed:    movzwl 0x3a4(%esi),%eax / inc %eax / cmp $0x7f,%ax / jle <store>
+
+Nine spellings were enumerated, and the result is a clean discrimination:
+
+| spelling | emitted |
+|---|---|
+| `if (t->seg_symcount <= 0x7f)`, `(short)` of it, or `< 0x80` | identical, correct -- no extension |
+| `short n` or `int n` + `(short)` compare | keeps the `cwtl` |
+| `unsigned short n` + `(short)` compare | `movzwl %ax,%eax` instead |
+| plain `int n` | 32-bit `cmp $0x7f,%eax` |
+
+So the plainest field test is the preimage. The change also restored the exact
+instruction count (121 vs 121, was 123) and took structsim to LCS 118 (97.5%).
+
+**Read the fingerprint before trusting it.** A cast at the declaration is the
+tell: `(short)((unsigned short)x + 1)` says the author was fighting a width, and
+the object usually shows which width he settled on. But the object legitimately
+contains `cwtl` where a `short`-returning call feeds wider arithmetic (the same
+function has one at 0x9a74 after `getV90CpBits`, and ours matches it there), so
+the test is per SITE: ours has the extension, the object's corresponding
+instruction does not.
+
+**A `short` RETURN does the same thing as a `short` local**, and it is easy to
+miss because the narrowing lives in the callee's signature rather than in the
+expression. `V92Phase3Modulator` (`src/pump/v90/V92Phase3Modulator.cpp`, same
+day) had five `cwtl` the object does not have, at sites reading
+
+    movzwl 0x4(%esi),%eax / neg %eax / cwtl / movswl %ax,%ebx
+
+where the object reads `movzwl 0x4(%esi),%eax / neg %eax / movswl %ax,%ebx` --
+one widening, not two. The causes were a `(short)` cast on the negation AND
+`static short jaSymbol(...)` / `static short trn1uSymbol(...)` returning `short`,
+so the value was narrowed on return and widened again by the caller. With the
+helpers returning `int` and the casts gone the symbol's instruction count became
+the object's exactly (391 vs 391, was 394); the common run stayed 78 and LCS
+went 299 of 394 (75.9%) to 299 of 391 (76.5%), which is a count result and not a
+run result -- quote it that way. The temporary itself is still a `short`: with
+`int sample` the same function measured 18 differing bytes instead of 3.
+
+So when the fingerprint is present, check three places, cheapest first: the
+compare (test the field), the cast on the expression, and the helper's return
+type.
+
+### Lever 21. Between two locals of the same class, DECLARATION ORDER is the source property
+
+`V34XF_GetMaxUpstreamRateIndex` was five bytes and grade 1 `ACCEPT`, and the five
+bytes were one swap: the object loads the session pointer into `%ecx` and forms the
+engine base in `%edx`, ours the other way round.
+
+    object   mov 0x3548(%ebx),%ecx     lea 0x4(%ebx),%edx
+    ours     mov 0x3548(%ebx),%edx     lea 0x4(%ebx),%ecx
+
+Nothing about the statements changed it. What changed it was moving
+`const VPcmFloModem *sess = ...;` above `struct v34_engine *e = ...;`, i.e. the
+order the two locals are DECLARED in. With session first, GCC gives it `%ecx`, the
+later engine pointer `%edx`, and the function is byte-exact (34 of 34 instructions,
+longest run 34). The twin `VPcmV34GetMaxUpstreamRateIndex` has the same body and
+took the same fix, so the pair closed together: census 1116 -> 1118 exact.
+
+The domain was enumerated rather than searched — four orderings of the block's four
+declarations:
+
+    e, sess, rate (as written)   BYTES 5    run 34   ACCEPT
+    sess, e, rate (landed)       EXACT      run 34   LCS 100.0%
+    sess, rate, e                BYTES 19   run 28   LCS 94.1%
+    rate, sess, e                BYTES 19   run 27   LCS 94.1%
+
+Only one of the four maps onto the object, and the other three lose six or seven
+instructions of contiguous run — so this is a recovered declaration order within
+the tested family, not a hill-climb on differing bytes.
+
+**When to reach for it.** A grade 0 `BYTES` verdict with grade 1 `ACCEPT` whose
+`--why` row is a register name on two instructions that read two DIFFERENT members
+of the same object is the fingerprint: nothing is wrong with the statements, two
+live ranges of the same class are competing for one register pair, and the
+allocator resolves it in declaration order. Enumerate the permutations of that
+declaration block (they are few) and take the one the object matches. Do not do
+this where the two locals are of different classes or where the row also changes a
+mnemonic or a displacement — that is a different defect and the order will not fix
+it.
+
+### Lever 22. A base that survives a CALL forces the FRAME -- and a repeated base offset is a NESTED TYPE
+
+Two findings that arrived together and belong together, because the second is what
+makes the first available.
+
+**A. The prologue's shape is about what stays live across a call.**
+`VPcmV34InitMOH` was 32 differing bytes and four instructions short. The object
+builds two bases and writes progress through the second one AFTER a call:
+
+    sub $0x1c,%esp
+    mov %ebx,0xc(%esp)  ... mov %ebp,0x18(%esp)      four mov-to-stack saves
+    lea 0x264(%ebx),%esi                             receiver
+    lea 0x4(%ebx),%edi                               engine
+    call v34handshakinit
+    movl $0x7,(%edi)                                 progress, through the engine base
+
+Ours wrote `movl $0x7,0x4(%ebx)` with the full displacement, so nothing had to
+survive the call and GCC chose the push prologue (`push` x3 + `sub $0x10`). One
+declaration —
+
+    struct v34_engine *e = (struct v34_engine *)(void *)&obj->progress;
+
+— plus `e->progress = 7;` took the function to the object's instruction count
+(95 of 95), run 8 -> 18 and LCS 68.4% -> 86.3%, and 32 differing bytes to 6.
+
+**When to reach for it.** Ours is push-based where the object is
+`sub $0xNN,%esp` with `mov %reg,K(%esp)` saves. Then look for a field written on
+BOTH SIDES of a call through a base: that is what makes the base live across the
+call and forces the frame. A base used only before the call, or only after it,
+will not do it, and adding a pointer where the object really does push makes the
+function worse.
+
+**B. A base formed at a constant offset in many functions is an inner struct.**
+A prologue scan for `lea 0xK(%reg)` / `add $0xK,%reg` (`/tmp/opencode/obj4.py`)
+found **39 to 51 functions** forming a base at `obj+4`, with a displacement
+histogram of `0x248` x30, `0x220` x14, `0x24c` x12, `0x21c` x11 and so on. Adding
+the base offset back maps every one of those displacements onto a real member, so
+the object's outer type was `{ int status; struct body body; }` and those
+functions were reaching the body directly. Modelling the body as a struct and
+taking its pointer in each of those functions is what produced `struct v34_engine`
+and `struct v34_tx`, and with them the exact symbols `V34XF_IndicateK56FlexRateDetermined`,
+`V34SetINFO0dBits`, `V34XF_IndicateJdReceived`, `VPcmV34SetMaxBlockLength`,
+`V34XF_GetMaxUpstreamRateIndex` and `VPcmV34GetMaxUpstreamRateIndex`.
+
+Two rules that keep it honest. The FLAT members stay: where the DSP core reads the
+same words with full displacements, that spelling is the original too, so the
+choice is per FUNCTION and the flat accessor is not wrong. And the base is taken
+only where the object forms one — it is a property of the function, not of the
+field, and each candidate must be measured (`byteident --why` plus the run and
+LCS) rather than assumed from the scan.
+
+### Lever 23. A single scratch register is not evidence -- measure first
+
+`byteident`'s REGALLOC bucket is the tempting one: grade 0 `BYTES` and grade 1
+`ACCEPT` means the two sequences are the same instructions with the operands
+renamed, so it looks like one register away from an EXACT symbol. It is 34 of
+the tree's 1852 symbols, and a census of what the differing register CARRIES
+says most of them cannot be moved by source at all.
+
+| what the register carries | symbols |
+| --- | --- |
+| a value the function discards (a `pop %reg`) | 8: `V92Jd::getJdBitVector`, `Scrambler<h,h>::reset`, `Scrambler<h,i>::reset`, `ParallelDifferentialDecoder<unsigned char>::reset`, `v8_fsktxfilter`, `V90AutoDigitalImpDetector::applyPadGainToLinMapper`, `V90MP::evaluateInfo`, `V90Phase4Modulator::setRdRtSymbols` |
+| a constant or a symbol ADDRESS carried into a stack argument slot | 9: `dp_v8_init`, `dp_v8_exit`, `dp_v22_init`, `dp_vpcm_init`, `V90SignBitsExtractor` ctor, `V92Phase3Modulator::generateTRN1u`, `V90Phase3Modulator` ctor (`$0x63`), `V90CP` ctor (`$0x12`), `V92Phase4Modulator::recivedRt` |
+| a field loaded, tested and then printed | 6: `V90Phase4Modulator::recivedE2u`/`recivedFirstRrnE2u`/`recivedCPtag`, `V92Phase4Modulator::recivedEd`/`recivedEd`, `RxDetMarkB103` |
+| two values swapped between two pointers | 4: `FloatFIR::reset`, `Scrambler<h,h>::process`, `V22_FSE_init`, `_iir_filter_create` (the two ARGUMENTS swap registers) |
+| a zero or small constant kept for a store | 4: `V90Parameters` ctor, `V92Jd` ctor, `V90Phase4Modulator::setMappingParams` and its V.92 twin |
+
+**The worked negative is `V90SignBitsExtractor::V90SignBitsExtractor()`**
+(`src/pump/v90/V90SignBitsExtractor.cpp:91`), 13 instructions, 2 bytes:
+
+```
+object 31931:  push %ebx / mov $0x6,%ecx / sub $0x8,%esp / mov 0x10(%esp),%ebx ...
+ours   371:    push %ebx / mov $0x6,%edx / sub $0x8,%esp / mov 0x10(%esp),%ebx ...
+```
+
+Instruction for instruction identical otherwise -- the constant is hoisted to
+the same place, before the same frame and the same loads. The source is an
+empty constructor whose only content is `decoder(V90SBE_DECODER_SIZE)`, so
+there is no declaration pair to order (Lever 21), no expression to reshape, and
+nothing live across the call (Lever 22A). The 2 bytes are the translation
+unit's `-frename-registers` state, not a source property.
+
+Three earlier attempts in this bucket failed the same way: the Jd zero register
+(`xor %eax` against `xor %ebx`) was invariant under three further spellings, and
+`V8GetMessage`'s field/local pair never reproduced the object.
+
+So: chase a REGALLOC symbol only when the two registers carry **different
+members**, when the swapped value **survives a call**, or when the pair is two
+locals of the same class. A bare scratch carrier is rejected, and the census
+above is the denominator to say so.
+
+### Lever 24. Taking a member's ADDRESS creates a base the object does not have
+
+`setfinalrate` opened with eight locals that were addresses of members:
+
+```c
+	short *tx_baud = &obj->ratecfg.baud;
+	short *tx_preemp = &obj->ratecfg.preemp;
+	const short **tx_scale = &obj->ratecfg.divtab;
+	short *tx_carrier = &obj->ratecfg.carrier;
+	...
+```
+
+and wrote through the pointers (`*tx_baud = 0x960;`). GCC 3.4.2 materialised
+**eight** `lea` bases in the prologue and spilled every one of them to
+`0x1c..0x34(%esp)`: 194 instructions against the object's 175, longest common
+run 4, LCS 52 (26.8%). The object has no bases there at all -- it stores with
+full displacements, `0xaa84`, `0xaa8a`, `0xaa90`, `0xaa94`, `0xaa96`, `0xaaa8`,
+`0xaaac`, `0xaab0(%ebx)`. Writing the members inline (`obj->ratecfg.baud = 0x960;`)
+took the same function to 174 instructions, run 8 and LCS 89 (50.9%) in one
+edit, and two further corrections (below) reached 171 instructions and LCS 101
+(57.7%).
+
+The fingerprint is a prologue full of `lea` **and** a spilled pointer per
+member, with the body storing through `(%reg)` at displacement zero. The object
+proves the source did not take the address: a `lea` the object does not have is
+a local it did not declare. It is the inverse of Lever 22B -- there we ADDED a
+base because the object forms one, here we remove locals because it does not.
+
+Two companion findings from the same function, both worth reusing:
+
+- **A hoist the object does not make.** `unsigned short a9e2 = *(unsigned short
+  *)(m + 0xa9e2);` was read once and used twice. The object loads only `0xa9de`
+  and `0xa9e0` in its prologue and **re-reads** `0xa9e2` at each use site, which
+  is the source reading the field where it is needed. Reading it inline took 174
+  to 169 instructions and LCS 50.9% to 56.6%. A local that exists to shorten two
+  expressions is visible as a prologue load the object lacks.
+- **A rate code is 16-bit.** `int code; int high;` against every object test
+  being `cmp $0x2,%ax`, `cmp $0x5,%ax`, `testb $0x4,0xa9de(%ebx)`. `short code;
+  short high;` took 169 to 171 and LCS 56.6% to 57.7% -- this is Lever 20's
+  shape at a place where it costs two instructions rather than saving them.
+
+Bound: taking an address is legitimate when the pointer is passed to a callee
+(`rx_predict(rx, &rx->pred_err_re, ...)`) or genuinely re-seated; the lever
+applies where the pointer only abbreviates a store.
+
+
+### Lever 25. Use unmatched hunks to nominate operations for inspection
+
+Lever 2 says a size difference is "an absence or an extra". That is true of the
+verdict and useless as a plan: a function can be short by eighty instructions
+because four arms are absent, or because the compiler scheduled the same
+statements differently. Measure the SHAPE of the gap before reading any source.
+
+    python3: canonicalise each side (registers -> R, relocation class -> RELOC,
+    absolute addresses -> A), align with difflib.SequenceMatcher, then list the
+    blob-only hunks sorted by size with the address of each.
+
+Three calibrations from the same day (`/tmp/opencode/missingHunks.py`, which needs
+`--start-address=0x%x` and `hi = addr + size`, not `size`):
+
+- `modulatevector` (V.34): blob 820, ours 739, hunks **62, 61, 56, 47, 37, 20,
+  19, 18** -- a handful of large blocks separated by long matched runs. That is
+  a reason to inspect those arms; hunk size alone does not establish absent
+  source.
+- `v8_getbit` (V.8): blob 129, ours 121, hunks **21, 17, 8, 6, 5, 4, 3, 2** --
+  many small hunks interleaved with matches, and the largest ones are a 21-line
+  bit-fetch block whose logic ours has in a different arrangement. That is
+  scheduling/if-conversion and register state, the class that has been declined
+  every time it was chased (`adaptecho`, `RxHdxTone`, `SetAdaptEqV32`).
+- The counter-example that justifies the rule: `setfinalrate` before its fix was
+  blob 175 vs ours 194 with run 4 and eight member-pointer `lea`s in the
+  prologue -- ONE large cause, visible in the head, and the fix moved LCS
+  26.8% -> 57.7%.
+
+One or two large hunks can nominate a source block; many interleaved small
+hunks can suggest scheduling or operand differences. Neither pattern decides
+whether source recovery is needed. Quote the hunk sizes in the finding either way,
+because "SIZE (48 bytes)" alone cannot tell you which of the two you have.
+
+### The hunk list alone over-reports content: PAIR the two sides
+
+Measured 19 Oct 2026 on the V.34 body family, and it changes how the list above
+must be read. `missingHunks.py` prints only the BLOB-only hunks, so a merely
+REARRANGED block shows up looking exactly like a missing one. Count both sides
+instead (`/tmp/opencode/gapshape.py` does: blob-only total, ours-only total,
+number of hunks >= 12 and their sum):
+
+| symbol | blob | ours | net | blob-only | ours-only | hunks>=12 | sum | largest |
+|---|---|---|---|---|---|---|---|---|
+| `modulatevector` | 829 | 748 | -81 | 760 | 679 | 17 | 641 | 112 |
+| `decodeDepth` | 529 | 524 | -5 | 461 | 456 | 11 | 371 | 101 |
+| `demapFrame` | 416 | 364 | -52 | 358 | 306 | 11 | 284 | 73 |
+| `initdigital` | 318 | 304 | -14 | 270 | 256 | 8 | 187 | 62 |
+| `getFrame` | 274 | 260 | -14 | 242 | 228 | 8 | 200 | 45 |
+| `initV34` | 245 | 239 | -6 | 203 | 197 | 4 | 149 | 86 |
+| `initG248` | 86 | 81 | -5 | 67 | 62 | 3 | 48 | 20 |
+| `agcadapt` | 72 | 70 | -2 | 27 | 25 | 0 | 0 | 7 |
+
+Every one of them has blob-only ~= ours-only, and a hunk sum that is three to
+twenty times the net gap. This suggests investigating arrangement, but equal
+hunk totals do not establish that the statements or their operands agree. The 73-
+instruction `demapFrame` hunk at `0x594d3`, the largest in that function, is a
+loop body whose spilled counter lives in different stack slots on each side --
+`0x34(%esp)`/`0x38(%esp)` in the object against ours' own frame -- so nothing is
+missing from it.
+
+Print both sides' hunks and pair their operations before classifying a gap.
+Similar hunk sizes are a triage clue, not evidence that a source block exists
+elsewhere. Compare control flow, operands and value lifetimes as well.
+
+### Even ONE large deletion can be arrangement: test the INSTRUCTION MULTISET
+
+The pairing above compares hunk SIZES, and a single pure deletion in the object
+can still be a block ours has somewhere else. The sharper test is the
+instruction MULTISET, and it is now a repository tool:
+
+    make contentgap S=SYM            # one symbol
+    python3 tools/toolchain/contentgap.py --worst 40
+
+It aligns the two canonicalised instruction lists and reports the surplus --
+instructions present more times on one side than the other -- at THREE levels,
+because each answers a different question:
+
+    kinds       projected opcode      is an instruction KIND absent after
+                                      branch opcodes become classes?
+    structure   operands masked       is an instruction absent once constants
+                                      and displacements are folded?
+    operands    operands kept         how much of the operand text moved?
+
+Measured on the V.34 body family (`kinds` / `structure` / `operands`, blob ours):
+
+| symbol | blob | ours | kinds | structure | operands |
+|---|---|---|---|---|---|
+| `initdigital` | 292 | 279 | 20 / 7 | 36 / 23 | 45 / 32 |
+| `V34SetINFO1aBits` | 326 | 317 | 13 / 4 | 16 / 7 | 36 / 27 |
+| `demapFrame` | 397 | 353 | 61 / 17 | 91 / 47 | 150 / 106 |
+| `modulatevector` | 807 | 725 | 119 / 37 | 149 / 67 | 324 / 242 |
+| `getFrame` | 256 | 253 | 17 / 14 | 25 / 22 | 99 / 96 |
+| `initV34` | 235 | 228 | 29 / 22 | 32 / 25 | 65 / 58 |
+| `agcadapt` | 71 | 69 | 3 / 1 | 3 / 1 | 3 / 1 |
+
+**A zero proves equality of the projection only.** It cannot establish source
+equivalence: register relationships, constants, offsets, branch conditions
+and dependent operation order can disappear from the comparison. A NONZERO
+count is also a QUESTION, not a verdict: GCC legitimately
+substitutes `lea` for `add` and `xor` for `mov $0`, so a kinds surplus can be
+codegen with no source difference at all.
+
+**CORRECTION, and the reason this subsection was rewritten the same day.** The
+first version of this test (an ad-hoc script, `/tmp/opencode/contentgap.py`)
+took only the alignment's `delete` opcodes and ignored `replace`, and on that
+measurement `initdigital` reported **0 unmatched from 110 deleted
+instructions**, which was read as "the whole family is arrangement". The
+production tool includes `replace` and reports kinds 20 / 7 for the same
+symbol. Both numbers are internally consistent; they answer different
+questions, and the flat claim "every deleted instruction exists elsewhere, so
+it is arrangement" was **too strong**. What survives is the narrower rule
+above needs further narrowing: neither zero nor surplus proves the source
+cause. Both are prompts for operand and control-flow inspection.
+
+**And the surplus list is where the lead usually is.** `initdigital`'s surplus
+is `movzwl N(R),R` thirteen times in the blob against `movswl R,R` ten times in
+ours -- a zero-extending LOAD against a sign-extending register read. That is
+not missing content and not arrangement: it is the Lever 20 shape, a 16-bit
+temporary or a signedness choice, and the next pass on this function should
+start there rather than at the hunks.
+
+The multiset screen does not close `initdigital`, `V34SetINFO1aBits`,
+`demapFrame`, `modulatevector`, `getFrame`, `initV34` or `agcadapt` as
+reconstruction targets. Their published structural surpluses are nonzero in
+any case. Reopen individual operations only with a native operand, control-flow
+or lifetime witness; the screen alone establishes neither a defect nor its
+absence.
+
+Three known bad controls now demonstrate this boundary through the actual
+canonicalisation pipeline: reversed dependent add/multiply order, a different
+value stored to a different member, and an opposite conditional branch. All
+have zero structural surplus. The first produces 8 versus 7 at input 3.
+`python3 tools/toolchain/contentgap.py --self-test` reports these blind spots
+alongside its positive surplus controls; diagnostic output states what remains
+unchecked. No grading or normalisation rule is relaxed.
+
+Earlier recoveries in this family used declaration order (Lever 21), a `short`
+temporary or return (Lever 20), taking a member's address (Lever 24), and the
+frame a base forces (Lever 22). Those results do not exclude further source
+control-flow, ownership or arithmetic recovery.
+
+### Lever 26. Test explicit source repetition against compiler duplication
+
+`V90CP::evaluateInfo` had four arms 1,003 bytes short of the object across a
+1,024-byte gap. The tested loop representation did not recover those
+operations. Under the
+retained flags, the tested loop forms did not emit the native repetitions;
+explicit longhand copies recovered more of the enclosing graph. This is
+per-site source evidence. Repeated final blocks alone do not establish
+source repetition: inlining, unswitching, peeling and late block duplication
+must be distinguished with compiler-stage controls.
+
+    state   blob   ours   short by
+      7      220     80     140     four 9-bit reads, one per nof_58[k]
+      8      425    136     289     four per-frame loops, frames 0x58/0x358/0x658/0x958
+     11      578    120     458     six guarded per-buffer blocks
+     10      385    269     116     KEEPS its loops -- the control case
+
+Writing states 7, 8 and 11 out longhand took ours 275 -> 483 instructions
+against the object's 510 and the grade 0 difference from `SIZE (925)` to
+`SIZE (131)` (LCS 309, 60.6%). State 10 is the control that proves the rule is
+per-site evidence and not a policy: the object kept its loops there, and
+unrolling it as well overshot to 572 instructions (a 1,139-byte arm against
+511). A local accumulator is also NOT the source shape: `n = (n << 1) | bit`
+in a loop over the nine bits gives 479 instructions but a WORSE LCS (301).
+
+Fingerprint: an arm that is a fixed multiple of a smaller arm's size, with the
+same instruction multiset repeated and the cursor advanced by a constant
+between copies. Read the arm extents from the JUMP TABLE, not from byte deltas
+between neighbouring targets (block placement reorders those).
+
+**And gate it on the affected fixtures FIRST.** The first full run of this
+change failed 392/2 because three of state 7's four blocks had lost their
+`p += 0x11;` and re-read the same nine bits: `t_v90cpinfo` and `t_v90cpb2i`
+reported `short_58[1][0]` reading `ff ff` against `00 00`. A hand-unrolled
+block sequence must keep the cursor advance in EVERY block, and
+`make period T=<test> J=8` on the two fixtures that read the field is a
+95-second check that the full eight-minute gate would only find later.
+
+### Trade two neighbours, and RECORD the loss: the codegen ratchet needs a review
+
+Moving one function can take an EXACT neighbour with it, because the period
+compiler allocates registers for a whole translation unit at a time. The trade
+can still be right, but it is not free and it is not silent.
+
+The worked case is `v90RateRenegSilence` in `VPcmV34Main.cpp`. Writing it with
+the object's three bases took it from 83 differing bytes to 22 (LCS 97.7%), and
+in the same translation unit `V34XF_IndicateJdReceived` fell from byte-identical
+to `BYTES (3)`. The three bytes follow one register choice: `xor %eax,%eax` in the object
+against `xor %ebx,%ebx` in ours, its store operand and the shared tail selected
+by JNE. Mnemonics still match (normalized longest run 37 of 37, LCS 100%),
+but successor rows differ; see F12127. Four
+spellings of the zero failed to move it, so it is allocation rather than source.
+
+That loss is acceptable, and it is *recorded*:
+
+- `tools/ci/period_reviewed_losses.json` holds one entry per reviewed loss with
+  `base_sha` (the pull request's base revision), `symbol`, `accepted_commit`
+  (where the trade was made), `evidence_commit` and `evidence` (a path plus
+  `#anchor` into this documentation), and `head_body_sha256`.
+- The digest comes from
+  `python3 tools/ci/period_metrics.py --fingerprint SYMBOL --head-objects build/tc_out`
+  and covers the function BODY and its relocation identity, so editing that
+  function again invalidates the review rather than letting it ride.
+- The Gentoo Period check FAILS on any loss without a matching, current review,
+  even when `make period` is green and the census counts are unchanged. `make
+  period` alone cannot see it: the differential asks whether behaviour matches,
+  and this loss is behavioural nothing; it is a codegen regression in a
+  neighbouring symbol.
+
+So the discipline is: make the trade deliberately, quote the neighbour's before
+and after in the commit message, add the review entry in the same batch, and
+expect the ratchet to keep failing until you do. A loss with no review is not a
+smaller problem than a red differential -- it is the same problem with a quieter
+alarm.
+## A detector names a hypothesis; the gate names the answer
+
+`tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
+only**. It does not check the base register, so two different structs at the
+same displacement are paired freely, and one hit in five is real (F2402).
+
+Measured false positive (V.34, 2026-10-19): `receiver` reported
+`mem 0x214`/`mem 0x216` with object `movzwl` versus ours `movswl`, on
+`include/dsplib/v34recv.h:360-361` (`short pred_err_re`/`pred_err_im`). The
+object's only two loads of those displacements in the whole object were indeed
+`movzwl`, and the change made our sites `movzwl` -- and the period gate
+**rejected it: 392 passed, 2 failed** (`t_v34datapump` 11/18753 checks;
+`t_v34rx` 244054/120452400 plus 602/8451852 transcript checks). Reverted;
+394/0 restored.
+
+The rule that follows: **a detector hit is a hypothesis until the period
+differential corroborates it.** A clean codegen argument is not stronger
+evidence than the gate -- in this case the object's `movzwl 0x214(%ebp)` was
+evidently not that field at all, and the tree's sign-extending source is what
+matches. Run the gate before recording a retype as recovered.
+
+## A findings entry is a historical measurement, not a state
+
+Findings record what was true when they were written. Before acting on one,
+re-measure the claim it makes. F7817 listed `v8_fskmodulate` among eight
+functions where "the blob sibcalls and we do not", and stated that our source
+does not call `v8_fsktxfilter`; measured today it is **grade 0 EXACT**, calls
+`v8_fsktxfilter` at `V8Fsk.c:190`, and tail-calls `v8_txwritequeue` exactly as
+the object does. The only visible difference was NOP padding placement, which
+`byteident` strips. Reading F7817 as a work item would have "fixed" an exact
+function.
+
+`python3 tools/toolchain/byteident.py --why SYMBOL` is the two-line answer.
 
 ## Narrow where the object narrows, not earlier
 
@@ -3122,6 +3858,47 @@ them as unreachable either.
 a zeroing idiom that failed exactly when a register was renamed (7762), and a
 padding guard that matched no padding (7769). If `--why` reports something that
 looks like a tool artefact, it may be one; say so and check.
+
+### Measure how much of a function's shape a recovery restored
+
+`tools/toolchain/structsim.py` reports, per symbol, the longest common
+contiguous run and the longest common subsequence (LCS) between the object's
+copy and ours. Registers are canonicalised to `R`; a call keeps WHICH function
+it calls but loses its displacement; a per-TU `.rodata`/`.bss` relocation
+addend is masked because it is not comparable with the merged object's; small
+displacements and immediates are kept. Alignment padding is stripped, and the
+number stripped is printed.
+
+It exists because grade 1 rejects any length difference: a function two
+instructions out and one that shares nothing both read REJECT, and neither
+says how far from the shape we are. `compare.py` is coarser still -- mnemonics
+with operands dropped -- and its report is per-symbol identical-or-not.
+
+    make structsim S=v8_tone_detect
+    python3 tools/toolchain/structsim.py v8_tone_detect v8_getbit
+    python3 tools/toolchain/structsim.py --worst 40
+
+**Controls, measured 2026-10-19.** `v8_fsktxfilter` (grade 1 REGALLOC) and
+`v8_fskmodulate` (grade 0 EXACT) both score **100%**, so the metric does not
+punish a pure renaming. `v8_tone_detect` moved from 227 instructions, longest
+run 14, LCS 48.9% to 182 instructions, longest run 50, LCS 85.2% when the
+biquad was inlined and a pointer-taking helper removed (its four pointer
+arguments had been hoisted out of the loop and spilled), while remaining
+grade-0 SIZE. That is the case this is for: size alone said 760 bytes against
+the object's 603 and could not tell a structural recovery from a stylistic
+one, and the byte gap afterwards (605 vs 603) is smaller than the shape
+improvement warrants quoting.
+
+**It is NOT a gate and NOT a ratchet.** LCS falls when the compiler schedules
+two independent statements differently even though the source is right, which
+is why `compare.py --ratchet` is deliberately outside `make phase`; and a
+whole-tree scoreboard invites hill-climbing a number, which the
+fit-versus-recovery rule declines. Use `--worst` to CHOOSE a target and the
+single-symbol form to record what a recovery restored. Denominator: the
+symbols the blob and `TC_OUT` both define; the tool refuses on an empty or
+stale object tree, and `--self-test` carries ten cases including the ones it
+must NOT equate (different displacement, different call target, symbol addend
+versus section addend).
 
 ### Byte/word aliases require an explicit endian boundary
 
@@ -6338,9 +7115,11 @@ inline all expressions into their consumers.
 The constructor-based boundary regression from
 [issue #292](https://github.com/philpem/slmodem_dsp_re/issues/292) now runs in
 the normal tone-detector fixture. Its 64 scalar checks were followed by
-192 block-overload checks; the fixture now reports 82,628 checks. The standalone `tools/probe_generic_tone_unordered.py`
-reuses that same test definition and preserves its exit status. Keep the
-historical failing run as evidence of the coverage gap; the new passing
+192 block-overload checks; that measurement reported 82,628 checks. The
+[standalone driver](https://github.com/philpem/slmodem_dsp_re/blob/e82145fe7/tools/probe_generic_tone_unordered.py)
+and its [replay wrapper](https://github.com/philpem/slmodem_dsp_re/blob/e82145fe7/test/explore/t_gtonedet_unordered.cpp)
+were retired after the default fixture acquired the same scalar regression.
+The historical failing run remains evidence of the coverage gap; the passing
 regression closes the demonstrated component failure, without claiming a
 nonfinite input is reachable through the modem lifecycle.
 
@@ -6454,8 +7233,25 @@ Combine removes the intermediate return conversion, and the copy survives
 allocation and scheduling. The scalar size gap moves from one to two bytes,
 while the inlined block caller also changes and the other IIR function stays
 byte-identical. The original return operation supports this partial recovery;
-no claim of whole-function identity follows from it. Do not invent an
-uninitialised output to match the undefined zero-section path.
+no claim of whole-function identity follows from that control.
+
+The positive-iteration path supplies a further witness: at `0xa8af5` the
+original sign-extends the section output into EDX, copies it to feedback ECX
+at `0xa8af8`, then returns EDX at `0xa8b09`. Keeping a separate short output,
+assigning it to the next section's input and returning it recovers that
+output/feedback boundary. The complete scalar function reaches REGALLOC with
+59 matched instructions. The inlined block caller and the untouched second
+IIR engine must still be audited across the complete translation unit.
+
+An uninitialised output must not be inferred from the undefined zero-section
+path alone. Here the positive path independently establishes the two
+carriers. Under `DSPLIB_REPRODUCE_BUGS`, the zero-section result remains
+unconstrained and its D393 differential-fixture exclusion stays in force.
+The normal build separately returns the input for a nonpositive section count;
+`make check-iir-sections` verifies that repair without treating the blob's
+undefined result as an oracle. The reconstruction-mode object must remain
+unchanged by this guarded repair. Register-renaming identity does not establish
+a unique original local-variable spelling.
 
 ### Recover conversion boundaries at the use that establishes them
 
@@ -9489,31 +10285,11 @@ These controls preserve the other family bodies and pass all four focused
 period fixtures. The remaining register and alias-context differences need
 new evidence, not another arbitrary spelling palette.
 
-## State what mutation evidence establishes
+## Historical mutation evidence and its limits
 
-A caught mutant proves that a particular injected fault makes a particular
-fixture fail. It does not establish valid input history, complete output
-coverage, or fidelity of the fixture's oracle. A fixture can reject arithmetic
-mutants while missing an omitted diagnostic or using an impossible internal
-state. Report assertion failures and runtime signals separately, and do not
-interpret either as proof of fixture validity.
-
-For reconstruction work, validate the fixture boundary and the observed defect
-before extending its mutation set. A known-bad control representing the actual
-missing operation, wrong owner or changed branch provides more direct evidence
-than a larger undifferentiated kill count. Byte-exact function bodies still
-need relocation/dependency and full-TU review, but do not need new mutants merely
-to reconfirm their already established instruction identity.
-
-Distinguish three costs in reports: `make phase` validates source anchors without
-executing mutants; the portability tier checks stored mutation snapshot
-consistency; explicit mutation campaigns compile and execute changed programs.
-The full campaign's cost effectiveness has not been measured here. Evaluate it
-with elapsed time and actionable new findings before treating repeated full
-runs as a routine reconstruction requirement. Targeted period mutation controls
-remain useful when they test a concrete fixture or changed fault anchor; they
-are not a refreshed whole-suite mutation result.
-
+The following recorded guidance was written while mutation tooling existed.
+Its examples remain historical evidence; the current tree uses differential,
+code-generation, transcript and conformance checks.
 
 ## Validate configuration capture at existing reset boundaries
 
@@ -9552,10 +10328,9 @@ no mutation execution or registry change is needed for this refinement.
 witness, bounded two-endpoint replay and the intentionally larger size gap.
 
 
-The master follow-up for mutation policy is
-[issue #296](https://github.com/philpem/slmodem_dsp_re/issues/296). Keep that
-review separate from reconstruction changes: this PR uses period differential
-correctness and native evidence, and does not require a full mutation campaign.
+Issue #296 recorded the historical mutation-policy follow-up. The mutation
+tooling has since been removed; the period differential and native evidence
+remain the reconstruction checks.
 
 
 ## Explain exact-set losses at the first differing compiler stage
@@ -10529,3 +11304,1169 @@ optional frozen-artifact test. Parent review verifies 25,931 selected linked
 body bytes, and separately resolves 222 absolute fields plus 180 dispatch-table
 entries at their actual linked addresses. The five pre-existing owner-edited
 files retain their recorded contents.
+
+## Lever 27. A bit-test predicate's COMPARISON OPERATOR is a forced fact: `!= 0` folds to shift-and, `> 0` if-converts to setcc
+
+An unsigned single-bit test assigned to an integer looks like it has one
+spelling. GCC 3.4.2 does not agree. `(x & C) != 0` is canonicalised at the
+tree level to `(x >> log2 C) & 1`, so the object gets a shift and a mask;
+the ORDERING comparison `(x & C) > 0` is left as a compare against zero and
+if-converts to `xor`/`test`/`setne`. Both are 16-bit-bounded values here
+(`x` an `unsigned char`, `C` a single positive bit), so the two predicates
+are semantically identical and the one the object emits is the one the
+author wrote.
+
+Measured on `V21RX_control` (F12015): of nine equivalent spellings --
+`!= 0`, `? 1 : 0`, `!!`, an `int` or `unsigned char` local holding the
+comparison, the shift-and written out, `== mask`, `== 0x10`, and `> 0` --
+only `> 0` reproduces the object's `xor %eax,%eax ; test $0x10,%dl ;
+setne %al ; mov %eax,(%ecx)`. The others emit `mov %edx,%eax ; shr $0x4 ;
+and $0x1` (or stay at the wrong length when the form hoists a local) and
+were all rejected with measurements.
+
+**When to reach for it.** A `BYTES` row whose first rejection is `xor vs
+mov` (or a missing zeroing `xor`) on an assignment from a masked value is
+the fingerprint. Enumerate the comparison operators and the local-variable
+forms; do not accept the tidier `!= 0` because it reads better, and do not
+infer the operator from final assembly alone -- the fold, not the source
+spelling you started from, is what produced ours. Keep both predicates
+semantically identical at the value's real width before calling a mapping
+a recovery.
+
+
+## Recover pre-merge edge multiplicity before calling a block order final
+
+A block or switch-arm order that survives every case-label permutation can
+still be a source fact, because GCC seeds switch arms from their CFG edge
+frequencies before it reorders blocks. RD_create is the worked case (finding
+F12044): four equal targets put every arm at 25%, below the round-2 threshold,
+so the libiberty fibheap tie-break produced 650, 850, 1000 rather than the
+object's 1000, 650, 850. Splitting the two distinct source cases that return
+1000 gave five targets at 20%; the later edge merge summed the parallel edges
+to 40%, the 1000 arm was seeded first, and the object's order followed.
+Splitting a single straight-line body is not this lever: the split must be
+between distinct source labels or arms that the RTL later merges, and the
+domain must show that no other grouping maps.
+
+Two measured boundaries. First, an arm-order difference with equal body
+content is not automatically this lever: wave 17 found 59 non-exact symbols
+with a table in both builds and an equal entry count, and none had the same
+arm multiset in a different physical order; block-bag scans of 85 same-size
+and 654 non-exact symbols found no reorder candidate, while the RD_create
+control was flagged. Second, for load/store or argument-setup order the test
+is an alias barrier or operand capture before allocation (see the predictor
+capture recovery); when every spelling emits the same canonical order and the
+object differs only at `sched2` -- or at the reload base register -- record
+that first differing stage and stop rather than fitting.
+
+Wave 17 also measured three switch-lowering leads that prove the lever but did
+not then recover the original labels: splitting the V8 timeout cases produces
+a 14-entry table (base 4) against the object's 18 (base 0), and splitting the
+V22 error-valued cases reproduces the object's exact 17-entry shape and target
+order but the label set was not uniquely determined by the object. Both were
+declined as blanket duplication with an underdetermined domain.
+
+**The V22 case was resolved from outside the object, and that is the
+generalisable step (F12047).** The label set did not have to come from the
+table: it is the set of values the status producers can actually leave in the
+switch operand. Enumerating every writer of `struct v22fp::status` over the
+object's table domain (0..16) gives exactly 0..11 and 16; no writer produces
+12..15, so those are the default holes. Each value is a separate source label
+with its own (identical) arm -- collapsing them into one fallthrough group
+makes GCC 3.4 drop the table entirely -- and the resulting 17-entry table has
+the blob's five unique targets in its order, LCS 124 against 104 for the
+unjustified 17-label spelling. Search the domain's producers before declaring
+a table's label set underdetermined.
+
+
+## Compare byte-immediate tests by form and mask, not by a summed count
+
+A byte-immediate test has three encodings: `a8 ib` (AL), register `f6 /0`
+with a byte operand, and memory `f6 /0`. Counting masks alone hides a site:
+`initTxSequence`'s memory `0x04` row disappears once its register `0x04` test
+is summed, so a mask-total screen under-reports. Count `(form, mask)` and
+compare each form separately.
+
+The helper that recovered the native register form takes two byte parameters
+and returns `int`:
+
+    static int flag_test(unsigned char value, unsigned char mask)
+    { return value & mask; }
+
+Passing a field directly can still leave `testb $imm,disp(%reg)`; a live byte
+local forces the value into a register and reproduces `test $imm,%al/%dl`. The
+helper inlines in every TU (`nm` shows no standalone symbol). For V92Jd the
+test is on the SHIFTED byte and needs `!= 0` (`sar %cl; test $1,%al; setne`),
+while its `phase` must be unsigned (`shl %cl; test %eax,%edx; setne`). Both
+C1/C2 closed EXACT; V29RX_control is the other closure, and five further TUs
+gained LCS or size.
+
+Two structural facts came from the same screen. `V34descrambler` and
+`decoderv34` have TWO constant-shift loop copies selected by `testb $4`; our
+hoisted `tap` ternary if-converted to `sbb` and blocked loop unswitching.
+Moving the conditional tap into the loop body restored both copies, and
+`decoderv34`'s slice counter is `short`. A memory-form site is not a helper
+site: `V8UpdateModemParameters`'s memory `0x08` recovered the native test but
+lost LCS (174 -> 171), and `V22FP_control` either stays memory or moves 128
+bytes. See [byte/bit tests](byte-bit-tests.md).
+
+
+## Let the caller decide a width; check both extensions before retyping
+
+`widthaudit` keys an access by `(displacement, base register)`. Two different
+owners can share a displacement under different bases, and the tool will pair
+the blob's signed load with our unsigned one as if they were one field.
+`cid_modem +0x15c` was exactly this: `struct cid::pack_len` is loaded both
+`movzwl` and `movswl` in BOTH builds (blob 0x091f42 / 0x092163, ours
+0x4bb / 0x701), so the reported s16/z16 pair was a base-role artefact. Confirm
+ownership and check both extensions before retyping anything.
+
+A real width fact is decided by the CALLER, not by the callee's prologue.
+`TxHdxDataV27` wanted `movzwl %ax,%ebx` plus an unsigned 16-bit `cmp/jbe`;
+every blob caller loads the count zero-extended and passes it unconverted, and
+every sibling scrambler's count parameter is `unsigned short`. The callee's
+own `movswl 0xc(%esp)` is the tail-call widening to `SDMv27_scrambler`, not
+evidence of a signed parameter. The fix was `unsigned short taken` plus an
+`unsigned short` count parameter; the rate chain was a switch
+(`test/je; dec/je`), not an if-chain. Result: 89 -> 83 instructions, LCS
+56 -> 100%, SIZE -> BYTES.
+
+The same trace found a magnitude shape: the blob's gain loop in `cid_modem`
+inlines `static int iabs(int)` (`movswl/lea/movswl/cltd/xor/sub/add`), and
+`sum += iabs((int)buf[i])` matched it (368 -> 365 instructions, LCS
+236 -> 241). Search for `cltd/xor/sub` magnitude loops before writing a
+branch.
+
+
+## Recover a shift loop's two-pointer walk and its single return value
+
+`V90SdDetector::process` moved 66 -> 82 instructions against the blob's 81
+(LCS 70 -> 80, run 29 -> 52, SIZE 2). Three facts: the shift walks two
+decrementing pointers (window end, source and destination, body at the third),
+with `src` declared first and the index assigned after both; the `fldz`/`fld`
+sit AFTER the shift, not before; and the return value is ONE variable live
+across the shift (`xor %ebp,%ebp` before, `mov %ebp,%eax` at each exit).
+Spelling the return per-arm or moving the index assignment deleted the
+prologue zero or reordered the blocks, and every such cell measured worse.
+The TU's emission order also matched the blob's (reset, C2, C1, D2, D1,
+process): check definition order before blaming allocation when a small body
+is close.
+
+
+## Recover ownership before compensating for inlining
+
+Issue [#25](https://github.com/philpem/slmodem_dsp_re/issues/25) supplies a
+same-TU control for a misleading exact match. PR #311 had moved `reset_cid`
+and its static `V23_MRF_FILT` from `Rxcid.c` to `Dtmf_Rx.c` to retain exact
+`create_cid`. Its attribution used GLOBAL call relocations and adjacent text.
+Neither establishes that split. In the reference, FILE symbol 495 is
+`Rxcid.c`, LOCAL OBJECT 496 is `V23_MRF_FILT` (.rodata +0x9240, 180 bytes),
+and `reset_cid+0x43` has an absolute `R_386_32` into that local object.
+`tools/local_data_ownership.py` reports the unique owner from that witness.
+This also agrees with the earlier F1410 attribution. A symbol-name/size/
+section audit alone missed the incorrect owner.
+
+The retained recovery puts the table and reset back before `create_cid` in
+`Rxcid.c`, matching their relative text order. It spells the reset's call as
+`if (history != NULL) FPM_MRF_init(..., 0); else FPM_MRF_init(..., 1);`.
+The reference's `test/je` at reset +0x6d sends NULL to the cold literal-1
+arm; non-NULL falls through to literal 0. Passing `history == NULL` as one
+argument instead lets the period compiler expand reset inside the constructor.
+Two explicit call arms retain the constructor's existing exact 183 bytes.
+This establishes the measured call/control shape within the tested family;
+it does not recover unique original C syntax.
+
+The bounded domain was seven cells: unchanged split baseline, then reset
+before/after the constructor group crossed with boolean argument, NULL-first
+explicit calls and non-NULL-first explicit calls. All 14 complete objects and
+56 function verdicts used Gentoo GCC 3.4.2-r2, the retained flags and
+`DSPLIB_REPRODUCE_BUGS`. The unchanged split control reproduced all eight
+production bodies. Reproduce it with:
+
+    python3 tools/cid_ownership_reproduce.py --out /path/to/scratch/cid --dumps
+
+The tool pins source inputs to `286d7126d791addb4b1d503a723a006679297e5b`,
+prints the header checkout, complete commands and executed compiler/assembler
+identities, and retains sources, objects, hashes and the result ledger.
+`--dumps` also retains RTL and assembly; its 56 bodies were checked against
+the non-`-save-temps` run and were unchanged.
+
+Full-TU collateral is part of this decision. All four DTMF bodies remain
+unchanged. `create_cid` remains exact; `cid_modem` has identical instructions
+and relocation targets, with only the raw addend locating its moved mergeable
+diagnostic string changing. `reset_cid` moves from 487-byte SIZE to 517-byte
+BYTES against the reference's 517, still with 63 differing bytes and a
+grade-1 rejection. Its first rejected aligned rows are the two argument-address
+setup instructions in opposite order; the remaining gap is open.
+
+Unedited `pack_next_bit` grows from 303 to 319 bytes against the reference's
+301. In paired dumps, bijective alias-set renumbering (preserving universal
+set zero and class equality) leaves its instruction patterns and UID order
+identical through `27.flow2`. The first difference is `28.peephole2`: UID 233
+clears AX in the split control and SI after co-location. Later if-conversion
+and block layout diverge. This localises the collateral to a late compiler
+choice; it does not independently prove the persistent scratch-cursor cause.
+No padding or scratch consumer was added to compensate for it. `cid_modem`'s
+29 stage pairs agree after also resolving `.LC` labels to their actual strings.
+
+The measured acceptance is structural recovery with no grade-0-or-1 set
+gain or loss: 1,196/1,852, with 1,163 link-selected exact functions. Period
+differential passed 394/394 and `make phase` passed. The partial object remains
+different: 77,225/943,398 positioned reference bytes against baseline 77,179;
+exact-position relocation matches are 1,157/18,317 against 1,161, with the
+candidate relocation denominator unchanged at 18,301. These are position
+counts, not added/deleted relocation counts or an identity claim. The
+initialised-data screen resolves the one wrong LOCAL-owner key: 662 matching
+non-relocated payloads, 100 relocated payloads excluded, over 762 reference
+and 765 candidate data keys. The three apparatus extras remain.
+
+Use this lever when an exact constructor seems to require an unsupported TU
+split: check local-data ownership and the callee's native call/control shape
+together. Retain an independently witnessed boundary correction with its
+explicit collateral ledger; keep the non-exact neighbour open for subsequent
+structural recovery.
+
+## Close inherited experiments with their native operation widths
+
+The unfinished wave-25 work contained two useful source shapes. In
+`interpretMohTimeout`, the native jump table has fourteen entries: zero
+targets the shared out-of-range return, and codes 1–13 target their literal
+returns. Removing the explicit zero case and placing `return 0` after the
+switch recovers all 102 bytes, including the resolved fourteen-entry table.
+The previous source emitted 136 bytes. This is one exact preimage in the
+inherited two-spelling domain, not a uniqueness claim across arbitrary C.
+
+Six magnitude sites provide a separate operation-width witness. The reference
+uses `cltd` or a sign shift followed by XOR/subtraction, with sign extension
+before the operation where the input is a short. A local `int iabs(int)`
+helper retains this promoted magnitude operation under the period compiler.
+The helper name and original spelling remain inferred. In `V27RX_eq_train`,
+the phase corrections still narrow to short, but magnitude and the subsequent
+`cmp $0x2000` use 32 bits; keep `err` as int at that boundary.
+
+| Function | Before bytes | Retained bytes | Reference bytes |
+| --- | ---: | ---: | ---: |
+| `FP_Pow` | 152 | 145 | 143 |
+| `FPM_FSE_receive` | 2157 | 2132 | 2131 |
+| `V27RX_eq_train` | 264 | 255 | 255 |
+| `FSEv22_decision24` | 431 | 414 | 467 |
+| `V22_FSE_receive` | 1722 | 1704 | 1885 |
+| `band_pass` | 1258 | 1232 | 1187 |
+
+Only the timeout function becomes exact. The V27 function enters BYTES;
+the other five remain SIZE. The larger V22 size gaps are retained for the
+independently witnessed magnitude graph, not selected by proximity. Do not
+use these results to infer the rest of those functions or compensate for
+their remaining allocation and control-flow differences.
+
+The inherited screen compiled sixteen complete objects and recorded 180
+function verdicts. Its unrelated V29 countdown signedness edits were not
+retained: the proposed field retyping still needs the all-loads/both-extension
+audit. Final controls against master `75c3447b1` compiled fourteen complete
+objects and recorded 158 function verdicts. Seven of 79 bodies change, exactly
+the seven edited functions; no symbol, binding or section membership changes.
+Non-code payloads remain unchanged in six TUs. The timeout TU changes its
+relocated `.rodata` table, whose fourteen resolved targets match the reference.
+
+`make phase` passes 394 period binaries with zero failures. Across 1852 names,
+grade 0-or-1 rises from 1196 to 1197 with no losses: 1161 EXACT, one UNRESOLVED,
+35 REGALLOC, 93 BYTES and 562 SIZE. The partial object remains different:
+76787/943398 positioned reference bytes versus 77225 before the batch, and
+1160/18317 exact-position relocation matches versus 1157. Position counts are
+layout-sensitive; neither count establishes whole-object identity. Preserve
+these costs alongside the exact-function gain and the operation-width evidence.
+
+The [proposed follow-on waves](../source-recovery-waves-after-wave25.md) start
+with the parked signedness audit and relocated-data ownership inventory.
+
+## Resolve data targets and observation lifetimes before refining syntax
+
+The [waves 26–29 first pass](../recovery-waves-26-29.md) adds a relocation-aware
+data inventory and closes bounded source families without adopting near fits.
+
+**Compare pointer initialisers by their relocation targets.** A changed named
+target can leave every raw byte of a pointer table unchanged: the addend is
+still zero and the target identity lives in the relocation record. Conversely,
+repacking a LOCAL object or mergeable string changes raw addends without
+changing the initialiser's resolved descriptor. `tools/toolchain/datareloc.py`
+compares ordinary bytes plus field positions and target identities/offsets,
+retaining unique LOCAL FILE ownership. It reports unsupported and ambiguous
+records explicitly. Mergeable string contents are a narrower comparison than
+pointer identity; GLOBAL/WEAK names establish no TU owner. Keep strict
+partial-object comparison separate.
+
+The calibrated inventory resolves 96 of 100 relocated keys (659 of 677 relocations
+per side). Four COMDAT/linkonce vtables containing 18 relocations stay unsupported.
+Together with 662 non-relocated matches this is 758 matched / 4 unsupported over 762
+reference keys, with 765 candidate keys and three apparatus extras. The controls
+pass 22 assertions over 21 real ELF32 objects, including the identical-raw-bytes
+wrong-target negative. A clean supported subset is not a whole-object result.
+
+**A zero-extending load alone does not recover a field declaration.** The four
+V29 countdown handlers sign-test the low half and sign-extend a register for a
+later full-width comparison. Six paired field-only signedness controls leave
+all 84 paired function bodies unchanged. Two complete families (42 objects,
+196 function verdicts, including both controls) yield no exact target and do
+not explain the native reload before subtraction. Leave the field neutral
+rather than selecting a same-sized but different instruction graph. Preserve
+the owner when inventorying raw offsets: the constructor's later `+0x16` clear
+belongs to a different object reached through parent `+0x24`.
+
+**Track when a value is observed, not only which field supplies it.** Native
+`V34GiveINFO0dBits` reads the session variant at distinct diagnostic/selection
+points and delays a decoded-word read until earlier conjunction terms pass.
+The reconstruction captures scalars early. Two declared families compile 14
+complete objects / 98 function verdicts and produce no exact target; a 755/758-byte
+near-fit still has the wrong load/boolean graph, while a 758-byte body differs
+in 118 bytes and changes two neighbours. None is retained.
+
+Writing a live member expression repeatedly does not force repeated machine
+loads: GCC can reuse it. A future recovery must explain the original observation
+points through owner/type/alias evidence or period RTL, rather than add volatile
+accesses or repeat nearby syntax. Executed component histories and planted
+boundary probes likewise need separate claims; the first fixture audit records
+the outstanding V27 constructor-to-training callback history.
+
+## Test an alias-analysis discriminator before repeating live-read syntax
+
+The follow-up to the two closed INFO0 families crosses captured versus live
+source with retained aliasing versus `-fno-strict-aliasing`: four full objects,
+28 function verdicts, unchanged control identical across all seven production
+bodies. The live source's final session read exists in `07.addressof` but global
+CSE replaces it with register reuse in `08.gcse`. With aliasing withdrawn it
+survives to assembly, after the short `is_short` store, matching the reference's
+observation point. This localises a compiler mechanism in our candidate; it does
+not identify the original source alias representation or original flag profile.
+The candidate becomes 774 bytes against 758 and four TU bodies change. No flag
+or source is adopted. Use this discriminator to investigate independently
+witnessed alias/owner structure or broader profile controls, not to select a
+near-fit or manufacture a reload with volatile.
+
+**Constructor-derived callback histories can close a specific fixture gap.** The
+V27 follow-up starts from the real constructors and invokes the installed
+epoch/training/running decision chain without planting history or replacing live
+callbacks. It observes phase-error neighbours 8190/8192/8194 in all four supported
+rate/training configurations, but no low-fold branch in its non-negative angle
+domain. State the decision-component boundary: this is not an FPM/AGC/waveform
+history. Fixed-answer detector controls and deliberate bin/fold perturbations
+demonstrate sensitivity separately from differential agreement. Preserve the
+wider seeded probes and their labels. See [waves 30–31](../recovery-waves-30-31.md)
+for native addresses, denominators and limits.
+
+## Cross alias representation before selecting a global profile
+
+A load restored by `-fno-strict-aliasing` does not uniquely identify an original
+compiler option. Cross independent complete TUs and a justified diagnostic source
+representation before interpreting it. Keep raw data, bindings, relocation records
+and every emitted local body in the ledger, not just reference-shared functions.
+
+The INFO0 follow-up compiles eight objects across three TUs: 156 emitted-body
+verdicts, 110 reference-shared and 46 local-helper verdicts. All 71 distinct unchanged
+retained bodies reproduce production. Withdrawing alias analysis leaves the RX
+energy-union bodies unchanged and loses `ApplyBulkDelay`'s grade-1 match. Native
+debug-level register reuse after a short store contrasts with the withdrawn
+candidate's memory comparison. This is evidence against selecting the option on
+the current source, not a global exclusion over other original declarations.
+
+A separate four-cell union-view/int-pointer cross supplies a source-representation
+explanation: alias-set-0 union reads retain INFO0's fourth session read through
+global CSE under retained flags. Only INFO0's body changes; the other six bodies,
+bindings and non-text payloads remain unchanged. Both read representations emit
+the same body when alias analysis is withdrawn. The union is a diagnostic model,
+not an independently recovered original declaration, and the non-exact candidate
+is not adopted for its nearer byte count. Original ownership/interface/type
+evidence is the next discriminator. See [waves 32–33](../recovery-waves-32-33.md).
+
+## Retain witnessed partial boundaries without selecting a near-match
+
+When an independent owner/interface inventory supplies no new declaration
+witness, record that negative and move to another measured residue. Separate
+allocation history and mangled neighbouring interfaces do not recover an
+unmangled caller's optimiser-visible alias declarations. The bounded INFO0
+owner pass found no such witness and did not reopen its syntax families.
+
+Visual diagnostics supplies a positive partial example. A declared 2×3×2
+family plus unchanged control compiles 13 objects/39 function verdicts. Original
+instructions independently require a selector-8 range exclusion, three echo
+load/advance sequences before output stores, and two direct receiver-relative
+equaliser loads. The retained source restores those boundary classes; 31 period
+layout assertions and changed-use owner/offset/width checks prove address
+preservation. The control object is byte-identical to production, both neighbours
+remain unchanged, and exact/grade-0-or-1 gain/loss sets are empty.
+
+The partial is 1006 bytes against native 1023 (previously 987), with no exact candidate
+in the declared domain. Two source forms emit identically, so the retained
+capture spelling is not uniquely recovered. Retention rests on the independent
+boundary witnesses, not the size gap. The partial-link positioned-match count
+decreases by 12 bytes; its DIFFERENT/raw-different status remains explicit. Block/tail,
+subowner and resampler-base residuals remain in the ledger, without scratch
+compensation or unsupported compiler-stage attribution. Focused period and the
+394/0 full phase gate pass. See [waves 34–35](../recovery-waves-34-35.md).
+
+## Cross equivalent owner bases once, then strengthen the input history
+
+The visual-diagnostics follow-up crosses explicit PCM subowner formation with
+owner-rooted resampler reads: four objects/12 function verdicts, 23 layout
+assertions per object, and a full-object byte-identical unchanged control.
+Native session `+0x6bd0` then `+0x14/+0x20` supports naming the existing echo
+subowner. Native owner `+0x43c/+0x434` supports the two fallback load encodings;
+complete addresses remain equal to receiver `+0x1d8/+0x1d0`. Preserve owner,
+offset and width at each changed use before interpreting the base choice.
+
+The retained partial changes only three instruction regions; neighbours, all
+40 relocation records and non-text payloads remain identical. Target size stays
+1006/native 1023 and positioned matches decrease one byte. This is bounded native
+base recovery, not unique source syntax or a reason to expand cast spellings.
+
+A separate fixture constructs the actual owner and drives exported echo and
+equaliser component APIs: 24 paired trials, 278 new assertions and independent
+integer known answers. A wrong-owner near-to-far control fails 2/278 assertions.
+It supplements the unchanged synthetic grid. Constructor provenance plus caller-
+supplied component inputs does not establish modem-generated adaptation histories;
+PCM/status-2 and selector-8 states remain unproved by this fixture. Keep those
+boundaries explicit. Final period/structural gate passes 394/0. See
+[waves 36–37](../recovery-waves-36-37.md).
+
+## Follow both layout invocations and distinguish status from progress
+
+Candidate `.31.bbro` first reorders visual selector bodies, but cleanup and a
+second STC reorder inside `.34.stack` choose the final DFE-first layout. Native
+final topology is near-echo-first; original RTL is unavailable. A predeclared
+`-fno-reorder-blocks` control preserves source-arm order, merges the return and
+loses exact SNR without recovering native topology. The two-object/six-verdict
+domain closes as a mechanism diagnostic, not a flag/source recovery. Diagnostic
+normalisation must retain UIDs, operands and edges; identical preprocessed input
+alone does not validate a dump normaliser.
+
+A constructor session argument is not live status, and owner+4 progress is not
+owner+0 status. Real V.92 construction here enters quick-connect status 4/role `0x66`;
+exported retrain clears status 0. Required negotiated phase-2 history for visual
+status 2/3 was not established. An observer-only wrong-owner control fails 6/61,
+distinguishing owners without planting state. Valid PCM echo allocations still
+do not license the status guard. Selector 8's native zero-return stub makes
+output-only coverage blind: a valid future fixture needs call-target observation.
+Preserve these negatives rather than adding a seeded stand-in. See
+[waves 38–39](../recovery-waves-38-39.md) for denominators and next controls.
+
+## Trace result-value joins before compensating for block order
+
+Native visual DFE guard failures join an explicit zero definition; the previous
+candidate carries its entry-zero result directly to an epilogue. This difference
+exists before block reordering. A baseline-plus-explicit-fallback experiment
+restores the zero definition, native five-class join and near-echo-first selector
+order: two full-TU objects/six verdicts, without case permutations or scratch.
+
+A diagnostic build from the recovered Gentoo recipe and one unchanged replay
+reproduce production raw bytes while exposing predecessor traversal. Probability,
+trace length and first-encountered ties explain the unchanged candidate's two STC
+decisions. These are candidate observations, not original RTL/source uniqueness;
+the alternative's ordinary dumps do not inherit baseline instrumentation claims.
+
+Retain the independently witnessed value boundary, not a presumed layout cause.
+The two-line fallback is 1007 versus native 1023 bytes, still non-exact; neighbours
+and exact/grade-0-or-1 membership remain unchanged. Review changed jump-table
+addends, raw relocations and symbol order explicitly. Focused period and full
+phase 394/0 pass. See [waves 40–41](../recovery-waves-40-41.md) for controls,
+compiler provenance, partial-link result and unestablished status-event histories.
+
+## Require compiler causality before a new source control
+
+A four-target residue investigation traces expansion, if-conversion, reload and
+tail duplication rather than trying alternate structures. Nine unchanged raw
+full-TU replays establish the diagnostic path. Live-set checks explain blocked
+pointer motion and its later LEA-enabled legality; `stmt.c` explains unsigned
+partitioning and bounded-zero omission. These are candidate compiler causes,
+not evidence of original helper factoring or source spelling.
+
+Only one native-backed source prediction follows: an unsigned switch-expression
+cast in V8SetMessage's selector helper. Two cells reproduce the predicted first
+RTL and final branch prefix, while six neighbours and data remain unchanged.
+The public/helper argument stays int; helper-null join remains unresolved. The
+partial remains 403/native 392, with no exact gain. Do not expand this into helper,
+case-order or code-structure palettes; trace the remaining compiler unknown first.
+
+Generated INFO0 peer history illustrates the corresponding fixture discipline:
+observe native bits and state progression, independently compute CRC, and make
+external CRC corruption a passing rejection case. A copied-observer negative
+control demonstrates sensitivity separately. The maintained 7808 assertions extend
+only the INFO0 prefix, not later negotiation or status reachability. Full phase
+394/0 passes. See [waves 42–43](../recovery-waves-42-43.md) for denominators,
+collateral, invalid-run exclusions and bounded next steps.
+
+
+### Recover narrow induction and promoted dispatch independently
+
+`VTBv32_init` normalises its induction value with `CWTL` after each increment
+in both loops. The reconstruction's `int` with casts only at the comparisons
+omitted those operations. A short counter restores them; the two loops reach
+128 and eight respectively, within its range.
+
+The same function's native mode dispatch sign-extends the short argument and
+uses a signed 32-bit decision tree. A `switch` applies the required integer
+promotion, whereas the previous `if` chain compiled to halfword comparisons.
+A four-cell full-translation-unit comparison isolates the two boundaries:
+short induction alone and promoted dispatch alone remain SIZE; together they
+recover all 355 bytes and relocation targets, reaching EXACT at 75 instructions.
+Keep the existing case order and all branch bodies fixed. The inlined copy in
+`V32FP_recreate` also changes and remains SIZE, so it needs its own component
+validation and collateral audit.
+
+## Cross source lifetimes with a compiler-pass control
+
+When a native reload disappears, trace the actual transformation before trying
+more type spellings. In [F12100](../findings.md#f12100-native-transmit-lifetimes-and-a-shared-gcse-control),
+a WORD reload survived CSE and disappeared in GCSE PRE. A pass control restored
+a complete training function while losing an already-exact wrapper. Inspecting
+the wrapper's native pointer capture and refresh ages recovered it under both
+profiles. The old exact body had concealed a source/profile compensation.
+
+Treat that loss as a discriminating question. Compare the complete TU, preserve
+useful controls, and cross the native-supported source explanation with the
+option. A flag change alone is not recovered source; an old exact neighbour is
+not proof that its current source is uniquely original. Require the complete
+native constraints, named collateral sets, actual-build differential and object
+parity before adopting the combined explanation. Record the resulting profile's
+scope and ambiguity rather than manufacturing function attributes.
+
+Keep the unit of work large enough to close the dependency graph. Shared
+request lifetimes, callback owner epochs and outgoing arguments can couple
+several functions in one TU. Analyse their constraints together without
+extracting the original state machine into helpers. Retain a native-supported
+capture even when its frame is temporarily less close, provided the complete
+review explains the tradeoff; size and local runs do not overrule evidence.
+Batch final validation at the closure checkpoint. Report whole-function gains
+separately from partial recoveries and distinguish measured model usage from
+free local computation.
+
+## Transfer a mechanism without transferring its assumptions
+
+[F12101](../findings.md#f12101-transfer-native-epochs-without-transplanting-field-types-or-proof-claims)
+extends the countdown/owner inquiry across related fax code and a data-mode
+caller. Preserve each site's actual interpretation: an unsigned shared field
+can feed a signed guard through an explicit narrow local or conversion.
+Do not retype the field to copy another module's spelling. Also distinguish a
+reload lost by GCSE PRE from a reload absent because our source caches the value.
+The same final instruction deficit can have different first causes.
+
+Transfer the narrowest explanation supported by the native graph. Moving a
+post-callee owner capture before its condition closes the data-mode example;
+that does not support transferring the fax optimisation profile to it. Audit
+callbacks, outgoing arguments and protected neighbours in the whole TU.
+
+Keep evidence limitations separate from code differences. First refresh the
+selected partial-link context for an alternate object tree. If the official
+recogniser still refuses a native instruction or guard form, record its exact
+reason. Ordered function-relative table targets and instruction boundaries are
+stronger evidence than matching debug strings alone, but do not silently replace
+the grader's proof. Retain an independently supported source recovery with its
+honest UNRESOLVED status when the complete review and period gate justify it.
+A separately scoped recogniser extension needs its own positive and negative
+controls; changing source to fit an unsupported proof pattern is not recovery.
+
+
+### Isolate a pass control at its actual input
+
+A diagnostic flag is a single-variable control only when the source, headers
+and other options are identical. Similar final arithmetic does not establish
+that condition. If a historical diagnostic used different expressions, either
+recompile the retained source with only the flag changed or demonstrate that
+the executable RTL and CFG have converged before that pass. Normalise incidental
+UIDs and source locations without discarding operands, edges or probabilities.
+Follow downstream register renaming before interpreting final register choices
+as the input to an earlier tail-merging decision.
+
+Keep this compiler diagnosis distinct from fixture reachability. A constructor
+followed by a real control request may reach states that an older test comment
+calls unreachable. Check setters and installed handlers before accepting that
+claim; extend the component history instead of planting an unproven internal
+state. Report the boundary and retain synthetic probes under their own label.
+
+
+### Preserve the operand view at its use
+
+An unsigned-short local does not ensure that its uses remain narrow. In
+[F12104](../findings.md#f12104-direct-component-counts-preserve-the-receive-loops-two-value-views),
+initial expansion promoted a carry local and shared its widened value between
+pointer arithmetic and the loop test. Direct reads of the component count
+preserved a WORD control view and the separately extended subtraction value.
+One native-supported explanation predicted a second complete wrapper before
+its candidate was compiled. Keep callback observations, signed old values and
+unsigned new values explicit; do not introduce another carrier to force a
+register. Review all TU peers and preserve the scripted component boundary.
+
+### Recover the complete formatting argument graph
+
+[F12105](../findings.md#f12105-formatter-producer-lifetimes-improve-without-closing-the-whole-body)
+shows why isolated comparison or constant spellings do not establish original
+helper types. Map every argument producer, x87 value lifetime, conversion,
+control-word change, scale materialisation and post-call field age together.
+A popping instruction can reflect a dead value rather than a different scalar
+type. Current dumps and backend rules explain current decisions; original RTL
+remains unavailable.
+
+Use a withheld contrast without tailoring it. An unchanged target body is an
+inert source control, not a recovered graph, even if it already has the desired
+instruction. A partial may still recover independently supported native
+constraints. Select it by the complete observations, preserve its period
+oracle and name its unresolved obligations; neither a smaller instruction count
+nor a closer byte extent determines which source is better supported. Stop
+candidate extension when the whole-body or withheld prediction fails.
+
+## Keep experimental compiles outside integration gates
+
+Run exploratory variants with unchanged full-TU controls and local native/TU
+comparisons. Full phase gates, global fidelity censuses, whole-tree parity,
+full partial links and CI are not prerequisites for experimental compilation.
+Refresh only the proof inputs required by the local comparison.
+
+Validate retained source with focused period checks. Settle independent review
+and supported partials before freezing the integration candidate, then batch
+the full gate, global comparisons and PR/CI validation at that checkpoint.
+See [experiment design](experiment-design.md#1-validate-the-experiment-before-interpreting-it)
+for the distinction between diagnostic controls and integration evidence.
+
+### Check both sides of an inline budget against native callers
+
+A profile can gain EXACT bodies and lose no EXACT names while damaging functions
+already classed NONMATCH. In F12108, disabling automatic inlining restores six
+complete native bodies but introduces twenty helper calls across two large
+pumps. The relevant native contract requires both the wrapper call and the
+pumps' inline expansions. Current callee costs separate those outcomes; an
+interior automatic-inline budget restores the six bodies and leaves both pumps
+raw unchanged, with an adjacent budget as a failing boundary control.
+
+Review the complete TU, exports, data and constructor collateral before
+retaining such a profile. Treat it as a qualified source/profile hypothesis;
+exact original flags need not be unique. Conversely, a score gain cannot waive
+a native call boundary. The measured V90 cost interval is local evidence, not a
+budget to copy into unrelated TUs. Check parameter identity before reusing old
+`-finline-limit` results as exclusions for `max-inline-insns-auto`.
+
+F12109 bounds this technique's reach. The demodulator has a consistent interval
+and recovers two native ABI cutpoints with all peers unchanged, but closes no
+function and reduces its longest matching run. Retain such a result only for
+its independently supported structural facts, with its data/layout changes and
+remaining mismatches explicit. Do not extrapolate the phase-4 promotions into a
+profile sweep. A remaining native SF spill, when initial RTL already uses SF,
+requires producer-lifetime/stack-lowering evidence before a type or cast change.
+
+F12110 separates a tap-producer boundary from a superficially similar XOR
+association experiment. The former changes which value is spilled and transfers
+to the duplicate function; the latter was already tested. Publishing the WORD
+before consuming it for feedback supplies a second, independently observed
+boundary. The recovered loops still differ in capture/allocation details, so
+remain NONMATCH and leave that frontier low priority. Search replay tools by
+source family as well as literal symbol: dynamically constructed target names
+can hide relevant old domains. A history index supplies leads, not exclusions.
+
+
+### Treat destructive comparisons as predicates before arithmetic (F12111)
+
+An INC instruction can implement a comparison with -1 when its narrow input
+is dead. It need not represent a source increment. Inspect the period machine
+description and the actual death notes: `RxClampV32` keeps a signed narrow
+counter for the next decrement, while its separately tested producer dies at
+the shared sentinel. That lifetime permits GCC's HI comparison peephole and
+`*addhi_4` emitter, closing all 49 bytes without a flag or register constraint.
+A SI addition followed by a HI zero test cannot reuse the SI zero flag and
+therefore does not reproduce the same instruction.
+
+Keep frontend loop formation separate from the later comparison decision.
+A common loop test may be duplicated before the first optimized jump dump;
+removing that transformation diagnostically did not recover this whole body.
+Trace initial RTL, header copying, value reuse, combine and peephole2, then
+cross the supported source graph and value lifetimes. Preserve wrapping count
+behaviour and final aliased reads. Useful intermediate cells can remain in a
+cumulative scratch investigation; the run's complete promotions and protected
+losses must still be reported separately from partial instruction runs.
+
+### Separate access types from pointer identities at each pass (F12112)
+
+Start with ordinary source habits suggested by native access groups. An author
+may write `substruct *p = foo->inner` simply to avoid repeated qualification,
+then use `p` for several stores. Consider real argument/subobject aliases and
+captured fields before a prolonged compiler-flag investigation. They are normal
+source hypotheses, not artificial register uses. An opaque entry followed by
+a concrete cast is a different idiom; infer callback interchangeability or C
+polymorphism only from actual uses across functions. Preserve an existing API
+when the object does not distinguish the alternatives.
+
+A missing native reload need not imply an aliasing write or wrong member type.
+Test a supported opaque argument with its concrete typed local, alongside a
+typed-argument/local control. V22 control produces identical complete objects
+from both forms: the local leaves different early and late base pseudos at PRE,
+and later copy propagation recognises their equality after that opportunity.
+Concrete alias sets and typed members remain unchanged.
+
+Inspect the expressions at the deciding pass. Equal final base registers do
+not prove that PRE saw equal expressions. Distinguish access type, public
+argument type and local value identity; a successful opaque form does not
+uniquely identify the original API when the typed form has the same object.
+
+Keep the explanation cumulative with real value captures. The pointer local
+alone did not close V22: the early scrambler producer, conditional HDX refresh
+and late parameter-bit capture also had to agree. Trace all remaining regions,
+preserve reads across potentially aliasing stores and review the protected peer.
+This is not a reason for a local-copy or pointer-spelling palette elsewhere.
+
+### Recover volatile access at the supported scope
+
+A reference reread can justify a volatile-access hypothesis, alongside aliasing
+and value-lifetime explanations. Test its scope: a volatile field affects all
+consumers, whereas `volatile T *p` makes this reader's pointee accesses volatile
+without making the pointer variable itself volatile. The latter is different
+from `T * volatile p`.
+
+The V34 delay inquiry first recovered parameter-owner epochs, but the compiler
+then reused a DMA-field value the reference rereads. A reader-local volatile
+view closes the full body. The native writer independently reuses its just-written
+DMA value across a separate compound update, supporting narrower qualification
+than a shared volatile field. Compare readers and writers and require the whole
+TU result; a reread alone does not prove original qualifiers or asynchronous
+hardware access. This is qualifier recovery, not permission to insert a barrier
+until an instruction matches.
+
+### Transfer demonstrated observation boundaries (F12115)
+
+Choose a transfer candidate from an actual native/source read boundary, then
+check previous experiments before compiling. A short body or a narrow-load
+screening tag alone is insufficient. Keep the target limit as a ceiling rather
+than filling it with weaker or exhausted leads.
+
+`VPcmV34InitiateHangUp` closes only when two consumed captures agree: retain the
+session observed before the diagnostic call, and capture status between the
+first rate clear and the following two. Either isolated owner correction leaves
+the function nonmatching. This is the same kind of observation-boundary inquiry
+as the earlier owner transfers, without copying their compiler flags or types.
+
+Keep negative controls specific. Reusing V21's default-diagnostic owner removes
+an extra root load but allows CSE to remove a native field reread; local volatile
+controls still do not close that body. Preserve the result rather than applying
+the delay reader's qualifier elsewhere by analogy. Review every affected TU:
+the hang-up source change also changes scheduling in the unchanged MOH function.
+
+### Isolate scalar captures from added pointer carriers (F12116)
+
+Measure value locals and added owner pointers separately. The V34 rate setter's
+engine/K56 owners recover 85 of 89 literal instruction tuples, leaving four
+rate-load/argument-store instructions. Scalar captures with another parameter
+pointer remain NONMATCH; those value captures through the existing owner close
+the function. Preserve the supported owner graph while testing its remaining
+value boundary.
+
+Retain reviewed structural gains separately from classification claims.
+`SetAdaptEcV32` recovers native FP ownership and the complete operation sequence,
+but different register carriers fail the strict consistent-renaming proof.
+Its 81/81 normalised run is diagnostic; the grade stays NONMATCH. Independent
+value-flow review and period checks support retention without changing the
+classifier. Stop allocation-only spelling variants while structural gaps remain.
+
+### Match a floating producer's lifetime, not just its numeric value (F12117)
+
+The reset diagnostic computes an absolute floating value early and converts it
+to an integer argument later. Capturing the integer immediately is numerically
+plausible but gives the wrong x87 lifetime. Retain the ordinary floating local
+and its late conversion; inspect the popping subtraction and constant load as
+well as the final formatted value. Add period inputs around fractional truncation
+boundaries before retaining a changed arithmetic producer.
+
+Distinguish an observed float member from its pointer owner. The V90 partial
+restores the late float-field comparison while still caching an owner the
+reference reloads. A disappearing memory operand between pass dumps narrows the
+search interval; it does not prove a particular pass caused the loss. F12118
+identifies the actual PRE deletion and corrects the earlier feature verdict:
+the no-GCSE control restores the owner reload, although the function remains
+NONMATCH. Whole-TU obligations still block profile retention.
+
+### Separate feature verdicts from complete-function grades (F12118)
+
+For each hypothesis, record whether its named operation appeared, separately
+from EXACT/REGALLOC/NONMATCH. The V90 control restored the requested reload;
+using its unchanged NONMATCH grade as a negative verdict sent the next inquiry
+in the wrong direction. Track instruction identities, reaching values and the
+emitted instruction pair, with known positive and negative controls. Textual
+memory counts can mix different uses and equivalence annotations.
+
+A feature success admits the whole-TU review; it does not approve a flag. The
+no-GCSE profile improves two late owner observations but exposes missing native
+owner captures elsewhere and merges a call tail. Native-backed source locals
+repair two of those features in crossed controls, while the unresolved argument
+snapshot/call-tail obligations remain explicit. Test those obligations before
+retention rather than widening the source or flag search.
+
+### Trace type bridges and loop legality before retaining a flag (F12120)
+
+A float-returning operation and a float cast of a double-returning operation
+can have different rounding boundaries. Follow the actual RTL modes and stores;
+the AGC negative control demonstrates the distinction rather than relying on
+source type names. Keep a known failing precision control beside the green run.
+
+A flag can restore arithmetic indirectly by changing loop recognition and
+constant placement. AGC's default pipeline rejected a multiple-entry loop;
+combine then folded reciprocal multiplication into division. A shared loop exit
+preserved the original operation order while restoring hoisting under both
+profiles. Inspect actual operation nodes and their instruction identities:
+REG_EQUAL annotations can otherwise look like additional executed arithmetic.
+
+### An exit store can be compiler promotion, not a source cache (F12121)
+
+Do not infer a manually cached local from register-held state and one final
+member store. AGC's direct member updates produce the native graph through actual
+GCSE PRE and store motion. Follow the transformation before adding more locals.
+For a spill, inspect the interference point: changing the observation epoch of
+an independently witnessed replacement count removed overlap with a two-register
+conversion, without forcing allocation.
+
+Stop source variants when the complete instruction/branch correspondence differs
+only by an independently checked GP permutation and encoding layout. Report the
+maintained grade and its proof limits separately. A pair-specific checker is not
+a generic recognizer; frame-free EBP use, saved state, definitions dominating
+uses and branch destinations require guarded eligibility and negative controls.
+
+
+### Distinguish a block's consumed cursors from an inlined helper (F12122)
+
+Identical arithmetic does not prove that a block routine called a scalar
+helper in the original source. Inspect which pointers the block consumes,
+which initial values survive each iteration, and where the sample cursor
+advances. These are separate constraints from the inner arithmetic.
+
+`FPM_iir_filt_block` initially called the already-REGALLOC scalar filter through
+indexed samples. Advancing the sample cursor before the inner filter and
+writing through `samples[-1]` recovered the native sample epoch, but left the
+function NONMATCH. The reference also saves the initial coefficient/history
+pointers before the outer guard and restores those snapshots each iteration.
+An explicit block body consuming its parameter cursors, with real saved-pointer
+reset consumers, recovers all 86 instructions under the maintained REGALLOC
+proof. The scalar arithmetic, short count and guarded normal-build repair stay
+unchanged. Do not replace the saved roots with cached coefficient values:
+bounded overlapping sample/coefficient/history arrays distinguish them.
+
+Transfer only the witnessed ownership. `FPM_iir_filt_II` independently has the
+same saved-root pattern but indexes samples. Coupling those roots with its
+native short postdecrement recovers the prologue and 73-instruction count,
+but still fails the operand/order proof. Matching size or instruction count
+does not close the function. The later coefficient-observation repair below
+supplies an independent reason to retain this graph as a partial; its remaining
+instruction ordering still needs a first-pass explanation, not a cursor, width
+or declaration palette.
+
+### Trace tied operands before interpreting an x87 spill
+
+A stack store can originate in register matching rather than a source precision
+boundary. In the Gentoo `GetGain` dumps, CSE shares a coefficient with a later
+product. At `.22.regmove`, the dead integer-conversion temporary is merged into
+the cross-call `base` pseudo. `.25.greg` then spills that conversion before the
+multiplication, whereas the reference stores the multiplied base. The existing
+private-float-result control recovers a separate SF lifetime and does not solve
+this earlier DF spill. A no-regmove diagnostic restores that named feature but
+closes no function and changes nine TU bodies; no profile is retained.
+
+Read the matching constraint and death notes before proposing source variants.
+The i386 commutative `%0` constraint allows both multiplication inputs to match
+the destination. Swapping the written operands does not remove the dead-input
+match. A useful next source hypothesis must explain both that matching input
+and the independently observed coefficient folding; a cast or nearby expression
+spelling alone does neither.
+
+
+### Check memory epochs before dismissing different scheduling (F12123)
+
+Two streams with the same operations can read different values. In
+`FPM_iir_filt_II`, the reference publishes the first history word, reads the
+third coefficient, then publishes the second history word. Reading the
+coefficient after both stores changes the result when that coefficient aliases
+the second history word. A bounded one-array component fixture gives 5096 in
+the reference and 1500 in the earlier reconstruction; all intermediate integer
+arithmetic stays in range.
+
+Capture the consumed coefficient at the witnessed read point. Keep the saved
+cursor roots and short countdown established independently. This repairs the
+component oracle without making the full function REGALLOC: remaining loads
+and multiplies are ordered differently within equivalent memory intervals.
+Retain the native-backed observation correction and label its full grade
+honestly. Do not discard a failing valid-input oracle as mere allocation, or
+claim that equal operation counts prove equivalence.
+
+### Validate nonzero word countdowns at a bounded public slot (F12124)
+
+A signed-positive and a nonzero countdown can agree on every small positive
+fixture while disagreeing on a complete bounded input buffer. MRF's public
+int count narrows to a word: positive 65535 becomes -1, and the native
+partial-input loop consumes 65535 samples through its wrapping countdown.
+Constructor-created state and an eight-word ring keep every access valid;
+zero outputs avoid the separate signed-output-index hazard. Compare the
+complete history as well as return/count fields. The earlier source fails
+9/24 checks even though both versions return zero and leave the same need.
+
+Retain the minimal BUG-only predicate correction when the oracle and native
+branch prove it, even if the whole function remains NONMATCH. Preserve normal
+behavior separately; the old and new nonreproduction full objects are raw
+identical here. Do not generalize this fixture into normal modem reachability,
+a uniquely recovered formal type, or permission to test negative history sizes
+and wrapped output stores. Do not replay the old loop/wrap spelling cube.
+
+### Separate extraction width from the carrier across a branch (F12125)
+
+When a native byte extraction supplies full-width array indices across a
+branch, trace the local's mode in initial RTL. An eager `unsigned char k`
+can define QI before the branch and add an SI extension in the successor.
+`int k = (unsigned char)input[index]` preserves byte extraction while carrying
+the full-width result. In PPS, that one predicted change removes the redundant
+successor extension. A byte-typed local elsewhere is insufficient evidence:
+V.22 PPS's corresponding map uses are already in the capture's block.
+
+Require the complete function comparison after recovering the local feature.
+PPS still fails at 230/229 instructions; the remaining extra state-argument
+reload first appears in global allocation despite a shared initial owner
+pseudo. Stop source variants without an independent source-level distinction.
+Do not fit declaration order to physical stack slots. A native discarded read
+also needs a read-footprint detector before runtime output/state tests may be
+credited with observing it; ordinary green differential output cannot do so.
+
+### Keep initial shifts distinct from final reverse copies (F12126)
+
+A historical cursor experiment excludes only the loops it actually changed.
+FDSP's old final-copy cube did not test the two initial delay shifts. Their
+native consumed destination pointers justify one new control, which recovers
+those regions. Composing independently witnessed final-copy constraints still
+requires a whole-function proof: a final control reaches native's 126-instruction
+count while retaining different source-update epochs, branch forms and call
+scheduling. None of these controls closes FDSP.
+
+Trace the first differing graph. Here initial RTL already contains the
+predecrement source cursor and the counter comparison against 159; the loop
+pass preserves them. Do not attribute either to allocation or enumerate
+postdecrement/predicate spellings merely to select an opcode. The next
+admission needs an independent call/alias witness or the relevant expansion
+rule. Keep synthetic fixtures labelled and establish a constructor-to-loop
+component history before retaining a later FDSP change.
+
+For a missing call, inspect actual cgraph decisions and original local-symbol
+ownership before splitting a TU. Native FDSP local anchors place InitObj inside
+the same TU envelope as its validator. The current inliner first reduces the
+callee with four helper inlines, then expands it into that caller. The original
+reason for retaining the call remains open; a source/profile budget diagnosis
+is the next checkpoint. A missing call alone does not justify a TU split or
+an attribute to suppress inlining.
+
+### Audit return observability before clearing a stale register map (F12127)
+
+A CFG-aware comparison may correctly identify independent returning arms while
+still needing a return-value contract. Do not clear maps at RET or ignore EAX
+merely because the reconstructed header says void. V92 reset's native returns
+leave path-dependent residues and its immediate callers propagate them; only
+known transitive callers discard them. No original declaration is recovered.
+Keep that bounded conclusion distinct from a whole-export proof. Also compare
+actual successor rows: V34's 37/37 normalized run conceals different shared tails.
+
+### Separate original erroneous reads from their linked memory (F12128)
+
+For a layout-dependent original bug, reproduce the operation in BUG mode and
+supply an explicit test memory environment. D302's zero substitution hid its
+native SAR1 and out-of-table read. A scoped test-only relocation binding lets
+source and reference read the same backing while preserving production tables
+and independent data checks. Keep the genuine original-backed comparison and
+label synthetic backing separately; neither proves final-object placement.
+
+Validate the binder structurally and the fixture dynamically. Nonzero distinct
+targets and poisoned neighbours expose flat-zero, repaired-shift and wrong-index
+controls. Report coverage for every selected region. Preserve input boundaries,
+check exact instruction bytes rather than assumed signedness, and invalidate
+cached executables when binding bytes change. These are apparatus changes;
+production source carries the original expression without hooks or padding.
+Equal instruction totals still require the whole-function operand/CFG proof.
+
+### Preserve a shared narrowing boundary through CSE (F12129)
+
+When native code shares a shifted signed energy between later shifts, inspect
+CSE before changing arithmetic or scheduling. In V.32, an `int` intermediate
+lets CSE associate SAR16 then SAR4/SAR3 into SAR20/SAR19. A native-supported
+short intermediate blocks that early association; combine later removes the
+redundant extension without losing the shared producer. Check the complete
+consumer graph and emitted width: a short introduced merely to fit registers
+has no such justification. This mechanism is demonstrated across all six
+quality callers, with full-TU controls and period differential coverage.
+
+Inspect initial RTL for eager predicate folding before blaming allocation.
+Nested retrain predicates preserve the native branch sequence here. Likewise,
+keep a full-width increment when native narrows only its comparisons and store;
+a named short can create an extra shared extension. These are per-site source
+constraints, not global rewriting rules.
+
+Recover initializer and owner lifetimes from consumed native spills and branches.
+The V.32 slicers initialize the nearest index after quality, but initialize the
+consumed differential fallback before it. Their default quality arm refreshes
+the owner after storing count, while early exits retain it. Returning this real
+selected owner from the existing helper expresses the shared graph; it does not
+prove the historical helper declaration. Preserve subsequent sample rereads and
+alias-sensitive output/read order.
+
+Stop a spelling route when later passes erase its distinguishing graph. An
+integer bit-pack temporary survives initial expansion here but combine produces
+the same nine final bodies. Incoming argument reloads first inserted by global
+allocation do not independently justify new source captures. The six-cell wave
+retains native-backed partial recovery but closes no function: keep that outcome
+separate from instruction totals and local mnemonic-run changes.
+
+### Explain a failed global allocation with its complete blocker set (F12130)
+
+A reload first appearing in `.greg` identifies a stage, not a cause. Read the
+allocation order, the pseudo's initial hard conflicts, its class, local homes
+and the earlier conflicting global assignments. In V.32 `16Tpt`, the root is
+last and all three remaining registers are occupied by identified global
+competitors. The allocator's local-eviction path cannot displace those globals.
+The incoming argument's memory equivalence explains its subsequent reloads;
+a separately logged sample spill must not be mistaken for the root's rejection.
+See the [full audit](../v32-16tpt-allocation-audit.md) for the observed masks,
+source rules, native lifetimes and limits.
+
+Compare native spill and address-producing epochs before proposing a component
+alias. A natural consumed alias can be a valid hypothesis, but changing its
+lifetime merely to perturb an explained priority order supplies no new source
+discriminator. Conversely, allocation-stage divergence does not establish that
+source is correct. Seek a supported live-range, use/dependency or class change;
+the original machine code constrains those inputs without exposing original RTL.
+
+### Use initialized input aliases to expose a stale publication (F12131)
+
+A native input reread after state publication can differ from a captured local
+even without an intervening call. When the component declaration permits the
+alias and both pointers name valid storage, use an initialized member that the
+method updates as the input. In V.8, input `&pr->run` exposes the stale stored
+sample: the blob rereads the incremented run, while the old reconstruction
+publishes its previous value. A 64-call history covers the index wrap and checks
+the complete owner; the old-source negative fails 128/193 checks and the recovered
+source passes. Label the component boundary and alias arrangement; do not claim
+normal waveform or modem lifecycle coverage from it. This does not license
+arbitrary overlapping objects or impossible planted histories.
+An ordinary short input may alias a short state member even when the input
+pointer is const-qualified. The native reread needs no volatile qualifier or
+barrier; test the actual alias/read-age explanation before proposing one.
+
+Treat a shared native action as a source-graph constraint. Two failed predicates
+join one V.8 increment, so a short-circuit conjunction with a common else action
+is an admitted source form. Verify initial RTL and final edges: eager predicate
+folding or a changed memory-read epoch would falsify the prediction. A consumed
+member-pointer local can likewise represent an independently observed address
+producer; it is not an artificial register use.
+
+### Recover predicate signedness without reopening unrelated floating code (F12132)
+
+A bounded nonnegative loop still has a measurable source signedness. V.90
+prefilter selection uses unsigned branches in both native six-element loops;
+one unsigned-int index restores both directly from initial RTL. Preserve the
+function's floating narrowing, unordered comparisons and diagnostic read ages.
+A successful predicate prediction with an unchanged NONMATCH grade is partial
+source recovery, not a whole-function promotion. Check the complete TU and
+protected siblings before retention.
+
+### Follow captured pointer values through both conversion directions (F12133)
+
+A local pointer copy is a direct source hypothesis when native loads a member
+at entry and consumes the saved value after intervening stores. In equalizer
+edge fading, the same high/low coefficient pointers feed conversion out and
+conversion back; spelling the members anew loses that captured epoch. Verify
+both consumers in initial RTL and final code, rather than assuming that a new
+local survived optimization. Do not invent an owner-alias history merely to
+turn this source constraint into a behavioural-bug claim.
+
+Name packed fields from the actual join/split operations and verify their
+allocation topology. Two independent allocations, two-byte strides and explicit
+high/low concatenation establish separate 16-bit planes; a single logical
+32-bit value does not establish one 32-bit array. Keep raw/aligned/skew names
+consistent, preserve offsets and prove a naming-only compile unchanged.
+
+### Preserve member observations across calls in a template (F12134)
+
+Publishing a member from an argument does not make the two interchangeable
+across later calls. LowPassFIR validates incoming `nTaps`, then observes published
+`taps` across free/allocation/hamming. Each sinc iteration independently captures
+the coefficient pointer before its call. Keep these epochs separate and preserve
+the existing floating recurrence/narrowing and normalization contracts.
+
+Audit all defining copies and actual ELF section flags. A census can select
+fewer owners than the full TU emits, and executable linkonce sections are code
+even when a local analysis helper puts every non-`.text` section into a data
+bucket. Explain the named section and verify true data/bindings/bystanders;
+do not weaken a production comparator to excuse drift.
+
+### Trace inlined helper parameters before blaming register allocation (F12136)
+
+An inlined reconstruction helper can still alter pseudo identities and live
+ranges. FP_Pow's coefficient helper introduced an early int copy of a short
+index. CSE redirected a late post-increment comparison to that older copy,
+extending its lifetime across the loop. Direct native-supported table access
+removed the copy and produced an EXACT scratch candidate. Compare initial RTL
+and the first CSE output before trying declaration-order or cast palettes.
+A helper introduced for a guarded bug substitution is especially worth checking.
+
+Preserve the normal repair while recovering the reproduction expression. If
+the original access leaves a measured table extent, provide a separately
+validated test memory context; instruction identity alone cannot establish
+linked runtime fidelity. Keep historical backing and synthetic context probes
+distinct. See the [FP_Pow deep dive](../fp-pow-deep-dive.md).
+
+### Keep diagnostic axes separate from acceptance (F12138)
+
+A first rejection or similarity score does not inventory all residual causes.
+Report extents/placement, relocations, CFG, operations, register/stack evidence
+and strict identity separately, with units, unmatched sides and unknowns.
+Resolve branch destinations under an explicit instruction correspondence; byte
+displacements alone do not show a changed successor. Preserve ambiguous
+correspondence and every defining copy. The existing strict grade remains the
+acceptance authority. See the [vector design](../metric-vector-assessment.md).
+
+Third-party search scores need negative controls. The examined permuter already
+has i386 support but erases real operand/relocation distinctions in zero-score
+cases. Prefer its bounded manual enumeration behind an unchanged full-TU
+compiler wrapper and the existing strict oracle. Do not turn a lower heuristic
+score into source evidence. See the [assessment](../decomp-permuter-assessment.md).
+
+### Use a diagnostic vector to select an inquiry, then inspect the proof (F12139)
+
+Run `diffvector.py` on explicit defining copies to separate placement, raw
+encoding, canonical relocation identity, mapped edges and operand observations.
+Keep units, unknown records and the chosen mapping visible. A literal stack
+text difference can be a relocated immediate, not a changed stack slot; a raw
+instruction encoding difference can be only relocation placement. No diagnostic
+axis replaces the existing grade or period differential. The
+[guide](metric-vector.md) includes measured examples and controls.
+
+Test the acceptance checker independently when axes disagree. F12141 finds a
+high/low-byte false acceptance even though current selected REGALLOC rows do
+not show that specific mismatch. Fix that proof boundary before widening search.
+The first actual finite-permuter trial (F12140) was raw-identical: enumeration
+works, but the admitted short-local form is not an allocation lever. Stop there
+instead of filling a palette budget.
+
+### Preserve register bit selection in a renaming proof (F12142)
+
+Register family and spelling length are insufficient: AL and AH select
+different bytes, while AL and AX have different widths despite equal name
+length. Compare an explicit width/bit-position descriptor before binding a
+family. Keep the full-width-write rule separate so partial writes do not kill
+the unknown upper bits of an old live value.
+
+Test both the main comparison and fallback certificates. The saved-frame
+implementation needed no expansion; its literal caller operands and full-width
+callee permutation already refuse the tested changes. Keep known-negative
+before/after controls and real-ELF positives. A checker tightening is not a
+source gain: refresh named membership and report any reclassification explicitly
+rather than changing a floor or source to preserve a former false acceptance.
+
+### Keep a measured type recovery separate from a whole-function gain (F12144)
+
+The 4-point slicer's int counter omitted the native signed-word increment
+conversion and comparison. A short local restores that complete latch from
+initial RTL onward, with an independently bounded 0..3 value domain, unchanged
+siblings/data and passing period component checks. Its longest global run and
+whole grade do not improve. Retain the demonstrated type boundary as a partial;
+do not call a closer byte count or an extra matching row a function promotion.
+
+Use a complete diagnostic census for navigation, then verify the actual site
+and experiment history. F12143's 607-function population yields three inquiry
+sites in two DATA functions, while eleven attractive screens are closed or
+mispaired. All rows retain their mapping/unknown caveats. The
+[next closure](../nonmatch-vector-triage.md#next-bounded-wave) crosses only the
+MOH carrier width and its witnessed ordered reason chain.

@@ -16,6 +16,14 @@
       "accepted_commit": "dfc23b7d1e92f5913b22b124771211d3e4650771",
       "evidence_commit": "dfc23b7d1e92f5913b22b124771211d3e4650771",
       "evidence": "docs/v32-mrf-count-audit.md#first-divergence-in-the-unchanged-collateral"
+    },
+    {
+      "base_sha": "4e6c0dff924ee7322d82b14a52b1fb5fae309df5",
+      "symbol": "V34XF_IndicateJdReceived",
+      "head_body_sha256": "24b6f54783b8d3b8c78c643f83bb685d6d7d8cb9fac8337f8b50f2f47c4b3f50",
+      "accepted_commit": "c0f2fd35e27fb3f956c0ada8e82e73006312198c",
+      "evidence_commit": "57a7b0aed59ee8dce56c73d7e056079a346249d6",
+      "evidence": "docs/method/refinement.md#trade-two-neighbours-and-record-the-loss-the-codegen-ratchet-needs-a-review"
     }
   ]
 }

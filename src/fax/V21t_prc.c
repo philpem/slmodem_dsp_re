@@ -16,6 +16,10 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v21fax.h"
 
+/* The object re-derives this from `modem` at every use; a local pointer
+ * changes the loop rotation at 0x0a2527 and costs two instructions. */
+#define TXROOT(modem)		((struct v21_tx *)(modem))
+
 /*
  * V21TX_modem -- .text 0x0a24f0, 182 bytes.  See v21fax.h for the two arms,
  * the budget and why `in` does not advance while `out` does.
@@ -34,15 +38,14 @@
 int
 V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 {
-	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21_tx_hdx *hdx;
 	unsigned short taken;
 	short budget;
 	short total;
 
-	hdx = tx->hdx;
+	hdx = TXROOT(modem)->hdx;
 
-	tx->result.byte.flags1 &=
+	TXROOT(modem)->result.byte.flags1 &=
 		(unsigned char)~V21TX_RESULT_B1_BIT1;
 
 	if (hdx->int_0004 == 0)
@@ -57,7 +60,7 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	do {
 		short got;
 
-		hdx = tx->hdx;
+		hdx = TXROOT(modem)->hdx;
 		got = hdx->handler(modem, in, out, &budget);
 
 		out += got;
@@ -65,18 +68,20 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	} while (budget > 0);
 
 	if (*count != taken) {
-		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
+		TXROOT(modem)->result.byte.flags1 |=
+			V21TX_RESULT_B1_BIT1;
 		/*
 		 * A BYTE store into the low byte of the int this function
 		 * returns -- `movb $0x4,0x1c(%edi)` at 0x0a2564 -- which is
 		 * why it cannot be written through `AT_I`.
 		 */
-		tx->result.byte.status = V21TX_RESULT_BYTE_04;
+		TXROOT(modem)->result.byte.status =
+			V21TX_RESULT_BYTE_04;
 	}
 
 	*count = (unsigned short)total;
 
-	return tx->result.word;
+	return TXROOT(modem)->result.word;
 }
 
 /*
@@ -149,7 +154,7 @@ TxNextStateV21(void *modem)
 
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", state);
+			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", tx->hdx->state);
 		tx->result.byte.flags2 &=
 			(unsigned char)~V21TX_RESULT_B2_BIT0;
 		tx->result.byte.status = V21TX_STATUS_DEFAULT;
@@ -177,14 +182,14 @@ TxHdxStartV21(void *modem, unsigned short *in, short *out, short *budget)
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21_tx_hdx *hdx = tx->hdx;
 	unsigned short taken;
-	short nsamples;
+	unsigned short nsamples;
 
 	taken = (unsigned short)
 		FIFO_read(hdx->fifo,
 			  in, (unsigned short)*budget);
 	*budget = (short)((unsigned short)*budget - taken);
 
-	nsamples = (short)ModDataV21(modem, in, out, taken);
+	nsamples = ModDataV21(modem, in, out, taken);
 
 	TxNextStateV21(modem);
 	tx->result.byte.status = V21TX_STATUS_START;
@@ -246,34 +251,27 @@ TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
 {
 	struct v21_tx *tx = (struct v21_tx *)modem;
 	struct v21_tx_hdx *hdx = tx->hdx;
-	unsigned short req = (unsigned short)*budget;
 	unsigned short taken;
 	unsigned short nbits;
 	short nsamples;
 
 	taken = (unsigned short)
 		FIFO_read(hdx->fifo,
-			  in, req);
+			  in, (unsigned short)*budget);
 
-	if (req <= taken) {
+	if ((unsigned short)*budget <= taken) {
 		nbits = taken;
-		nsamples = (short)ModDataV21(modem, in, out, nbits);
-		*budget = (short)((unsigned short)*budget - nbits);
-		tx->result.byte.status = V21TX_STATUS_DATA;
-		return nsamples;
-	}
-
-	if (hdx->int_0004 != 0) {
-		nbits = taken;
-		nsamples = (short)ModDataV21(modem, in, out, nbits);
+	} else if (hdx->int_0004 != 0) {
 		*budget = (short)((unsigned short)*budget - taken);
+		nsamples = (short)ModDataV21(modem, in, out, taken);
 		TxNextStateV21(modem);
 		return nsamples;
+	} else {
+		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
+		nbits = (unsigned short)*budget;
+		tx->result.byte.status = V21TX_STATUS_UNDERRUN;
 	}
 
-	tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
-	nbits = req;
-	tx->result.byte.status = V21TX_STATUS_UNDERRUN;
 	nsamples = (short)ModDataV21(modem, in, out, nbits);
 	*budget = (short)((unsigned short)*budget - nbits);
 	tx->result.byte.status = V21TX_STATUS_DATA;

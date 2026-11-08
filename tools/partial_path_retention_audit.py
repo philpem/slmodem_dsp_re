@@ -116,16 +116,6 @@ def main():
             folder = root/family/label
             assert (folder/'candidate.o').read_bytes() == (d.ROOT/'build/tc_out'/obj).read_bytes()
             assert (folder/Path(source).name).read_bytes() == (d.ROOT/source).read_bytes()
-        source = (d.ROOT/'src/pump/v32/V32.c').read_text()
-        _, _, fn = d.function(source, 'V32FP_GetCleanedSamples')
-        locators = json.loads((d.ROOT/'test/mutations/v32c_fpctl.json').read_text())
-        for index in (1, 2):
-            row = locators[index]
-            assert row['fn'] == 'V32FP_GetCleanedSamples'
-            assert source.count(row['find']) == 1 and row['find'] in fn
-            assert row['find'] != row['replace']
-        assert locators[1]['replace'] == '\tif (have < V32FP_CLEAN_MAX)'
-        assert '*n = V32FP_CLEAN_MAX;' in locators[2]['replace']
     count = sum(r['common_verdicts'] for package in reports.values() for r in package.values())
     assert count == 54
     output = {'source_cells': 8, 'common_body_verdicts': count, 'rows': reports,

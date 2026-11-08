@@ -173,8 +173,9 @@ V22_PPS_init(struct v22_pps *state, const struct v22_pps_cfg *cfg, int fresh)
 }
 
 void
-V22_PPS_free(struct v22_pps *state)
+V22_PPS_free(struct v22_pps *state, int unused)
 {
+	(void)unused;
 	/* Q first, which is the reverse of the order init allocates them. */
 	sysdep_free(state->hist_q);
 	sysdep_free(state->hist_i);

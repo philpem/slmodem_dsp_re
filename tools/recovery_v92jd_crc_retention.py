@@ -39,50 +39,9 @@ def period():
         assert hashlib.sha256(selected.read_bytes()).hexdigest()==digest,'candidate overwritten';text=(folder/'t_v92jd.run.log').read_text();assert status==0 and 'FAIL' not in text
         report[label]={'command':cmd,'exit':status,'checks':sum(map(int,re.findall(r'(\d+) checks',text))),'object_sha256':digest,'log':text,'boundary':'Existing component constructor/packer/unpacker fixtures, not modem end-to-end.'};(OUT/'period.json').write_text(json.dumps(report,indent=2)+'\n');print(label,'period',report[label]['checks'],flush=True)
 
-def mutation_rows(source):
-    rows=json.loads(subprocess.check_output(['git','show',REV+':test/mutations/v92jdstd.json'],cwd=ROOT,text=True));result=[];changed=[]
-    for row in rows:
-        if 'find' not in row:result.append(row);continue
-        old=row;row=dict(row);label=row['label']
-        if 'CRC tap ' in label:
-            for vector,title in [('bits','data'),('phaseBits','phase')]:
-                first='\t\t\tint t = '+vector+'[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];\n'
-                tail='\t\t\tint tap3 = (crc[4] + t) & 1;\n\t\t\tint tap10 = (crc[11] + t) & 1;'
-                find=first+tail;replace=find.replace('crc[4]','crc[5]') if 'tap 3 ' in label else find.replace('crc[11]','crc[12]')
-                new=dict(row,label=label+' ('+title+')',find=find,replace=replace);assert source.count(find)==1;result.append(new);changed.append(new['label'])
-            continue
-        if source.count(row['find'])==0:
-            vector='phaseBits' if 'phase' in label else 'bits'
-            first='\t\t\tint t = '+vector+'[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k] + crc[0];'
-            group='for (g = 0; g <= 1; g++) {\n\t\tint k;\n\t\tfor (k = 0; k <= 15; k++) {\n'+first
-            if 'covers only' in label:row['find']=group;row['replace']=group.replace('g <= 1','g <= 0')
-            elif 'starts one bit' in label:row['find']=first;row['replace']=first.replace('GROUP1 + 1','GROUP1 + 2')
-            elif 'preload all ones' in label:
-                row['find']='for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\t'+group;row['replace']=row['find'].replace('crc[i] = 1','crc[i] = 0')
-            else:raise AssertionError(label)
-        assert source.count(row['find'])==1,(label,source.count(row['find']));result.append(row)
-        if row!=old:changed.append(label)
-    return result,changed
-
-def mutations():
-    source=variants('',subprocess.check_output(['git','show',REV+':src/pump/v90/V92Jd.cpp'],cwd=ROOT,text=True))['direct-members-expanded'];rows,changed=mutation_rows(source);(OUT/'v92jdstd-candidate.json').write_text(json.dumps(rows,indent=1)+'\n')
-    stable=ROOT/'build/period';report={'changed_fault_labels':changed,'candidate_anchors':sum('find' in x for x in rows),'mutants':[]};ledger=json.loads((OUT/'results.json').read_text());template=ledger['families']['V92Jd']['cells']['direct-members-expanded']['command']
-    # Existing driver uses command as a single Docker argv list.
-    for index,row in enumerate(r for r in rows if r.get('label') in changed):
-        label='mutant-'+str(index);folder=OUT/'V92Jd'/label;folder.mkdir(exist_ok=True);(folder/'V92Jd.cpp').write_text(source.replace(row['find'],row['replace']))
-        command=[x.replace('/direct-members-expanded/','/'+label+'/') for x in template]
-        with (folder/'compile.log').open('w') as log:subprocess.run(command,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True)
-        target=OUT/('period-'+label);target.mkdir(exist_ok=True)
-        for p in list(stable.glob('src_*.o'))+list(stable.glob('test_harness_*.o'))+[stable/'test_unit_t_v92jd.o']:shutil.copy2(p,target/p.name)
-        selected=target/'src_pump_v90_V92Jd.o';shutil.copy2(folder/'candidate.o',selected);digest=hashlib.sha256(selected.read_bytes()).hexdigest();cmd=['make','period','T=t_v92jd','J=4']
-        with (target/'gate.log').open('w') as log:status=subprocess.run(cmd,cwd=ROOT,env=dict(os.environ,PERIOD_OUT=str(target.relative_to(ROOT))),stdout=log,stderr=subprocess.STDOUT).returncode
-        assert hashlib.sha256(selected.read_bytes()).hexdigest()==digest;assert status!=0,'mutant survived';text=(target/'t_v92jd.run.log').read_text();assert 'FAIL' in text
-        report['mutants'].append({'label':row['label'],'command':command,'period_command':cmd,'exit':status,'object_sha256':digest,'log':text});(OUT/'mutations.json').write_text(json.dumps(report,indent=2)+'\n');print('CAUGHT',row['label'],flush=True)
-
 if __name__=='__main__':
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--mutations',action='store_true');ap.add_argument('--audit',action='store_true');ap.add_argument('--period',action='store_true');ap.add_argument('--baseline-dir',type=Path,default=ROOT/'build/copy293-baseline');args=ap.parse_args()
-    if args.mutations:mutations()
-    elif args.audit:audit()
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--audit',action='store_true');ap.add_argument('--period',action='store_true');ap.add_argument('--baseline-dir',type=Path,default=ROOT/'build/copy293-baseline');args=ap.parse_args()
+    if args.audit:audit()
     elif args.period:period()
     else:
         OUT.mkdir(exist_ok=True);frozen=OUT/'frozen';frozen.mkdir(exist_ok=True)

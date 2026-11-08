@@ -1161,6 +1161,8 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 			if (compandingLaw == pcmType) {
 				unsigned char c =
 				    mappingParams->constellation[k][i];
+				unsigned char *codec =
+				    &mappingParams->codecConstellation[k][i];
 				unsigned char e;
 
 				if (compandingLaw != 0)
@@ -1177,23 +1179,20 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 					    mappingParams->constellation[k][i];
 
 					if (compandingLaw != 0)
-						mappingParams
-						  ->codecConstellation[k][i] =
+						*codec =
 						    (unsigned char)
 						    (linear2alaw(
 							__builtin_abs(
 							 (int)ucode[k][d]))
 						     ^ 0xd5);
 					else
-						mappingParams
-						  ->codecConstellation[k][i] =
+						*codec =
 						    (unsigned char)
 						    ~linear2ulaw(
 							__builtin_abs(
 							 (int)ucode[k][d]));
 				} else {
-					mappingParams
-					  ->codecConstellation[k][i] =
+					*codec =
 					    mappingParams
 					      ->constellation[k][i];
 				}
@@ -1474,10 +1473,9 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 				unsigned int i;
 
 				count = 1;
-				mappingParams->constellation[k][0] = c;
-				FORCERATE_ENCODE(k, 0);
-
 				if (dmin[k] != 0) {
+					mappingParams->constellation[k][0] = c;
+					FORCERATE_ENCODE(k, 0);
 					thresh = (short)
 					    ((alt[k][c] - (short)phaseDmin[k])
 					     <= (ucode[k][c]
@@ -1513,6 +1511,8 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 						       - (short)phaseDmin[k]);
 					}
 				} else {
+					mappingParams->constellation[k][0] = c;
+					FORCERATE_ENCODE(k, 0);
 					thresh = (short)(ucode[k][c]
 						  - (short)phaseDmin[k]);
 					for (i = (unsigned int)(c - 1);
@@ -2370,27 +2370,29 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 		while (rrn > currentK) {
 			unsigned char u;
 			unsigned char companded;
+			unsigned char searchRow;
 
 			minIndex = findMinValueIndex(mappingParams);
+			searchRow = (unsigned char)minIndex;
 			mappingParams->constellationSize[minIndex]++;
 
-			u = mappingParams->constellation[minIndex][0];
+			u = mappingParams->constellation[searchRow][0];
 
-			if (dmin[minIndex] == 0) {
-				short lim = ucode[minIndex][u] + dMin;
+			if (dmin[searchRow] == 0) {
+				int lim = ucode[searchRow][u] + dMin;
 
 				while (u < 128) {
-					if (ucode[minIndex][u] >= lim)
+					if (ucode[searchRow][u] >= lim)
 						break;
 					u++;
 				}
 			} else {
-				short lo = ucode[minIndex][u] + short_10;
-				short hi = alt[minIndex][u] + short_10;
+				int lo = ucode[searchRow][u] + short_10;
+				int hi = alt[searchRow][u] + short_10;
 
 				while (u <= 0x71) {
-					if (ucode[minIndex][u] >= lo
-					    && ucode[minIndex][u] >= hi)
+					if (ucode[searchRow][u] >= lo
+					    && ucode[searchRow][u] >= hi)
 						break;
 					u++;
 				}
@@ -2399,11 +2401,11 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 			if (compandingLaw != 0)
 				companded = (unsigned char)
 				    (linear2alaw(__builtin_abs(
-					(int)ucode[minIndex][u])) ^ 0xd5);
+					(int)ucode[searchRow][u])) ^ 0xd5);
 			else
 				companded = (unsigned char)
 				    ~linear2ulaw(__builtin_abs(
-					(int)ucode[minIndex][u]));
+					(int)ucode[searchRow][u]));
 
 			if (u >= 128
 			    || mappingParams->constellationSize[minIndex]
@@ -2673,8 +2675,6 @@ V90ConstellationDesigner::process(unsigned int rate,
 				  unsigned int arg13,
 				  V90SpecialSpectralConditions cond)
 {
-	short pass = 1;
-	short done = 0;
 	int failed = 0;
 	unsigned int currentRate;
 
@@ -2706,6 +2706,9 @@ V90ConstellationDesigner::process(unsigned int rate,
 		maxRate = 56000;
 	if (minRate > maxRate)
 		minRate = maxRate;
+
+	short done = 0;
+	short pass = 1;
 
 	do {
 		unsigned char (*mark)[128];
@@ -2784,8 +2787,9 @@ V90ConstellationDesigner::process(unsigned int rate,
 		scaled = (unsigned char)(42
 					 - (unsigned char)mappingParams->word_0);
 		if (scaled > 4)
-			scaled++;
-		byte_08 = scaled;
+			byte_08 = (unsigned char)(scaled + 1);
+		else
+			byte_08 = scaled;
 
 		if (mappingParams->word_0 <= 20) {
 			edprintf("V90ConstellationDesigner: Connection design "

@@ -118,35 +118,6 @@ def audit_whole():
     (out/'audit.json').write_text(json.dumps(report,indent=2)+'\n')
     print(report['full_tu_body_verdicts_checked'],'body verdicts;four-cell source/GCSE cross;0 exact gains/losses;data/binding/relocation inventories equal')
 
-def mutation_reanchor():
-    out=d.ROOT/'build/diagnostic-parameters-structure293';ledger=json.loads((out/'results.json').read_text())
-    row=next(r for r in json.loads((d.ROOT/'test/mutations/v90params.json').read_text()) if r.get('label')=='the printed whole part keeps its sign')
-    source=(d.ROOT/'src/pump/v90/V90Parameters.cpp').read_text()
-    assert source.count(row['find'])==1 and row['equivalent'] is True
-    template=ledger['families']['V90Parameters']['cells']['native-float-fabs-whole']['command']
-    report={'label':row['label'],'equivalent':True,'find':row['find'],'replace':row['replace'],'controls':{}}
-    for label,text in [('mutation-baseline',source),('mutation-whole-sign',source.replace(row['find'],row['replace']))]:
-        folder=out/'V90Parameters'/label;folder.mkdir(exist_ok=True)
-        (folder/'V90Parameters.cpp').write_text(text)
-        command=[s.replace('/V90Parameters/native-float-fabs-whole','/V90Parameters/'+label) for s in template]
-        run(command,folder,'compile')
-        periodout=out/('period-'+label);periodout.mkdir(exist_ok=True)
-        original=d.ROOT/'build/period';sources=list(original.glob('src_*.o'))
-        assert len(sources)==300
-        for path in sources+list(original.glob('test_harness_*.o'))+[original/'test_unit_t_v90params.o']:
-            shutil.copy2(path,periodout/path.name)
-        obj=periodout/'src_pump_v90_V90Parameters.o';shutil.copy2(folder/'candidate.o',obj)
-        with (periodout/'gate.log').open('w') as log:
-            status=subprocess.run(['make','period','T=t_v90params','J=4'],cwd=d.ROOT,env=dict(os.environ,PERIOD_OUT=str(periodout.relative_to(d.ROOT))),stdout=log,stderr=subprocess.STDOUT).returncode
-        assert obj.read_bytes()==(folder/'candidate.o').read_bytes(),'selected object overwritten'
-        result=(periodout/'t_v90params.run.log').read_text()
-        assert status==0 and result.count('PASS ')==4 and 'FAIL' not in result
-        report['controls'][label]={'command':command,'object_sha256':hashlib.sha256(obj.read_bytes()).hexdigest(),'period_exit':status,'period_log':str(periodout/'gate.log'),'test_log':result,'source_sha256':hashlib.sha256(text.encode()).hexdigest()}
-    assert report['controls']['mutation-baseline']['object_sha256']!=report['controls']['mutation-whole-sign']['object_sha256'],'mutation did not alter object'
-    report['conclusion']='Reanchored removal of whole-part absolute value remains a measured equivalent mutation over the finite nonnegative reachable input domain. Both actual period binaries pass4005 checks. No anchor/suite deletion or equivalent-verdict change.'
-    (out/'mutation-reanchor.json').write_text(json.dumps(report,indent=2)+'\n')
-    print('1 unique reanchored mutation;baseline4005 checks pass;mutant4005 checks pass as declared equivalent;objects differ')
-
 def audit_owner():
     from gcc3_stage_divergence import chunks
     from gcc3_reload_trace import instructions
@@ -292,8 +263,6 @@ if __name__ == '__main__':
         d.CELL_FLAGS=lambda path,label:('-fno-gcse',) if label.endswith('diagnostic-no-gcse') else ()
         sys.argv+=['--baseline-dir',str(frozen)]
         d.main();sys.exit(0)
-    if '--mutation-reanchor' in sys.argv:
-        mutation_reanchor();sys.exit(0)
     if '--audit-whole' in sys.argv:
         audit_whole();sys.exit(0)
     if '--whole-expression' in sys.argv:

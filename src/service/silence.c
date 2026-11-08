@@ -49,23 +49,32 @@ silence_is_more_then(struct silence *s, float t)
 /*
  * Initialise, allocating when handed NULL.  The allocation IS checked here,
  * where FIFO8_create's is not -- both are the object's own shape.
+ *
+ * `ret` IS A SEPARATE LOCAL.  The object copies the argument into the
+ * result register before testing it (`test %eax,%eax; mov %eax,%edx; je`),
+ * which a body that keeps using `s` cannot produce, and the two clear
+ * statements are in the object's order: energy before saw_signal.
  */
 struct silence *
 silence_create(struct silence *s, void *obj,
 	       unsigned int (*query)(void *obj, int what))
 {
+	struct silence *ret;
+
 	if (s == 0) {
-		s = sysdep_malloc(sizeof(*s));
-		if (s == 0)
+		ret = sysdep_malloc(sizeof(*ret));
+		if (ret == 0)
 			return 0;
+	} else {
+		ret = s;
 	}
-	s->obj = obj;
-	s->query = query;
-	s->count = 0;
-	s->nsamp = 0;
-	s->saw_signal = 0;
-	s->energy = 0.0f;
-	return s;
+	ret->obj = obj;
+	ret->query = query;
+	ret->count = 0;
+	ret->nsamp = 0;
+	ret->energy = 0.0f;
+	ret->saw_signal = 0;
+	return ret;
 }
 
 /* A tail call and nothing else -- five bytes in the object. */

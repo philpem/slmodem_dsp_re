@@ -266,18 +266,13 @@ VOICE_create(void *modem, unsigned int rate)
 			rc_out = RcFixed_Create(VCE_RC_MODE_48000_OUT);
 		v->rc_out = rc_out;
 
-		if (!rc_in || !rc_out)
+		if (!v->rc_in || !v->rc_out)
 			goto fail;
 	}
 
 	v->state = VOICE_STATE_COMMAND;
 	v->info = (struct voice_info *)modem_get_param(modem,
 						       MDMPRM_VOICEINFO);
-
-	cfg.modem = modem;
-	cfg.get_sreg = (unsigned int (*)(void *, int))vce_get_sreg;
-	cfg.hook_on = vce_hook_on;
-	cfg.hook_off = vce_hook_off;
 
 	/*
 	 * The output ring starts a whole block ahead of the input one -- its
@@ -288,6 +283,11 @@ VOICE_create(void *modem, unsigned int rate)
 	v->block = rate * VCE_BLOCK_REF_SAMPLES / VCE_BLOCK_REF_RATE;
 	v->out_ring.count = (int)v->block;
 	v->out_ring.blk = v->block;
+
+	cfg.modem = modem;
+	cfg.get_sreg = (unsigned int (*)(void *, int))vce_get_sreg;
+	cfg.hook_on = vce_hook_on;
+	cfg.hook_off = vce_hook_off;
 
 	v->voice = voice_create(&cfg);
 	if (!v->voice)
@@ -454,9 +454,7 @@ VOICE_command(void *obj, unsigned int cmd)
 		 * the debug line above prints the raw quotient.
 		 */
 		dur = info->tone_duration / 10;
-		if (dur == 0)
-			dur = 1;
-		arg[1] = (int)dur;
+		arg[1] = (int)(dur == 0 ? 1 : dur);
 		op = VOICE_DTMF_COMMAND;
 		break;
 
@@ -516,6 +514,8 @@ VOICE_process(void *obj, void *in, void *out, int count)
 	int ret = 0;
 
 	while (count > 0) {
+		struct vce_ring *in_ring = &v->in_ring;
+		struct vce_ring *out_ring = &v->out_ring;
 		unsigned char *rx = (unsigned char *)in;
 		unsigned char *tx = (unsigned char *)out;
 		int chunk = count;
@@ -542,25 +542,25 @@ VOICE_process(void *obj, void *in, void *out, int count)
 
 			if (n > (unsigned int)remaining)
 				n = (unsigned int)remaining;
-			if (n > 2 * v->block - v->in_ring.wr)
-				n = 2 * v->block - v->in_ring.wr;
-			if (n > 2 * v->block - v->out_ring.rd)
-				n = 2 * v->block - v->out_ring.rd;
+			if (n > 2 * v->block - in_ring->wr)
+				n = 2 * v->block - in_ring->wr;
+			if (n > 2 * v->block - out_ring->rd)
+				n = 2 * v->block - out_ring->rd;
 
-			sysdep_memcpy(&v->in_ring.data[v->in_ring.wr], rx,
+			sysdep_memcpy(&in_ring->data[in_ring->wr], rx,
 				      2 * n);
 			rx += 2 * n;
-			v->in_ring.count += (int)n;
-			v->in_ring.wr = (v->in_ring.wr + n) % (2 * v->block);
+			in_ring->count += (int)n;
+			in_ring->wr = (in_ring->wr + n) % (2 * v->block);
 
-			if ((unsigned int)v->in_ring.count >= v->block) {
+			if ((unsigned int)in_ring->count >= v->block) {
 				int rlen = VCE_BLOCK_REF_SAMPLES;
 				int outlen;
 				int msg, code, i;
 				unsigned short hostcount, blkcount;
 
 				RcFixed_Resample(v->rc_in,
-						 &v->in_ring.data[v->in_ring.blk],
+						 &in_ring->data[in_ring->blk],
 						 (int)v->block, v->lin, &rlen);
 
 				for (i = 0; i < rlen; i++)
@@ -794,7 +794,7 @@ VOICE_process(void *obj, void *in, void *out, int count)
 
 				outlen = (int)v->block;
 				RcFixed_Resample(v->rc_out, v->lin, rlen,
-						 &v->out_ring.data[v->out_ring.blk],
+						 &out_ring->data[out_ring->blk],
 						 &outlen);
 
 				if (code != 0)
@@ -804,19 +804,19 @@ VOICE_process(void *obj, void *in, void *out, int count)
 				 * Retire the block from one ring, hand it to
 				 * the other, and flip both halves.
 				 */
-				v->in_ring.count -= (int)v->block;
-				v->in_ring.blk = v->in_ring.blk ? 0 : v->block;
-				v->out_ring.count += (int)v->block;
-				v->out_ring.blk = v->out_ring.blk ? 0
+				in_ring->count -= (int)v->block;
+				in_ring->blk = in_ring->blk ? 0 : v->block;
+				out_ring->count += (int)v->block;
+				out_ring->blk = out_ring->blk ? 0
 						  : v->block;
 			}
 
-			sysdep_memcpy(tx, &v->out_ring.data[v->out_ring.rd],
+			sysdep_memcpy(tx, &out_ring->data[out_ring->rd],
 				      2 * n);
 			tx += 2 * n;
 			remaining -= (int)n;
-			v->out_ring.count -= (int)n;
-			v->out_ring.rd = (v->out_ring.rd + n) % (2 * v->block);
+			out_ring->count -= (int)n;
+			out_ring->rd = (out_ring->rd + n) % (2 * v->block);
 		}
 
 		if (pending != 0)

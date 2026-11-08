@@ -33,7 +33,7 @@ void
 null_create(struct faxvmi_link *dp, const void *cfg)
 {
 	(void)cfg;
-	dp->int_0014 = 0;
+	dp->modem = 0;
 	dp->pack_count = 0x32;
 	dp->pack_width = 8;
 	dp->unpack_width = 8;
@@ -51,7 +51,9 @@ null_delete(struct faxvmi_link *dp)
  * unsigned word; this leaf consumes it as signed and reloads it after each
  * store.  Acquire the destination only on the admitted loop path.  `i` is 16-bit in the object -- `lea 0x1(%edx),
  * %eax` then `movswl %ax,%edx` re-narrows and re-sign-extends the index
- * after every increment, which a plain `int` would not need.
+ * after every increment, which a plain `int` would not need. The signed
+ * interpretation is witnessed by `cmpw $0x0,(%ebx); jle` in the pre-test
+ * and `cmp %dx,(%ebx); jg` at the loop tail.
  */
 int
 null_process(struct faxvmi_link *dp, short *in, unsigned short *result,

@@ -238,11 +238,24 @@ extern "C" {
  * `vpcm_create` DOES check the result -- `test %eax,%eax` at .text+0x3b31 and
  * a branch into the failure unwind -- so the null return matters to the caller
  * even though nothing but a failing allocator can produce one.
+ *
+ * THE NULL TEST IS ALSO WHAT KEEPS THE CALL A CALL.  `return
+ * sysdep_malloc(...)` is a sibling call -- `mov $0x14,%eax; mov %eax,0x4(%esp);
+ * jmp sysdep_malloc`, three instructions -- and the object has the five of a
+ * normal call (`sub $0xc; movl $0x14,(%esp); call; add $0xc; ret`).  A null
+ * test that returns the same value is folded away but inhibits the sibling
+ * call, which is the only spelling of six tried that maps onto those five
+ * instructions: direct return, temp, cast, sizeof, discard-the-result and this
+ * one.  The test is the author's, and the object's size depends on it.
  */
 void *
 K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3)
 {
-	return sysdep_malloc(K56FLEX_OBJECT_SIZE);
+	void *obj = sysdep_malloc(K56FLEX_OBJECT_SIZE);
+
+	if (obj == 0)
+		return 0;
+	return obj;
 }
 
 /*
@@ -253,12 +266,22 @@ K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3)
  * pass it straight in, and neither clears that slot afterwards.  So the test
  * is load bearing rather than defensive: the unwind path runs with the slot
  * holding whatever the failed create left in it.
+ *
+ * THE CLEAR AFTER THE FREE IS ALSO THE OBJECT'S, and it is what keeps the call
+ * a call.  The object builds a frame (0x102c0: `sub $0xc` / load 0x10 / test /
+ * `mov %eax,(%esp)` / call / `add $0xc` / ret) instead of the `jmp
+ * sysdep_free` a bare `if (obj) sysdep_free(obj);` produces.  That same shape
+ * DOES tail-jump in `RingDetector_Delete` (0x2368) and `dcr_delete` (0xc8),
+ * so the difference is a statement after the call; clearing the local handle
+ * is folded away but inhibits the sibling call.  Six other spellings were
+ * measured and all left the jmp.  Finding F12051.
  */
 void
 K56FLEX_Delete(void *obj)
 {
 	if (obj != 0)
 		sysdep_free(obj);
+	obj = 0;
 }
 
 /*

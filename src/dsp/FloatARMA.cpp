@@ -113,8 +113,8 @@ arma_round4(unsigned int n)
  * the whole of the tail, `odd` takes 1 and 3.  The tail cannot run: both tap
  * counts are rounded to a multiple of four everywhere they are set.
  */
-static float
-arma_convolve(const float *p, const float *c, unsigned int n)
+static void
+arma_convolve(float *result, const float *p, const float *c, unsigned int n)
 {
 	long double even = 0.0L;
 	long double odd = 0.0L;
@@ -135,7 +135,7 @@ arma_convolve(const float *p, const float *c, unsigned int n)
 		n--;
 	}
 
-	return (float)(odd + even);
+	*result = (float)(odd + even);
 }
 
 /*
@@ -195,8 +195,8 @@ FloatARMA::process(const float *in, float *out, unsigned int count)
 
 	do {
 		x[xp] = *in++;
-		m_fwd = arma_convolve(x + xp, b, nB);
-		m_fbk = arma_convolve(y + yp, a, nA);
+		arma_convolve(&m_fwd, x + xp, b, nB);
+		arma_convolve(&m_fbk, y + yp, a, nA);
 
 		m_fwd = m_fwd - m_fbk;
 		y[yp] = m_fwd;
@@ -327,13 +327,15 @@ float
 FloatARMA::process(float in)
 {
 	float *x = m_xhist;
-	float *y = m_yhist;
+	float *y;
 	int xp = m_xpos;
-	int yp = m_ypos;
+	int yp;
 
 	x[xp] = in;
-	m_fwd = arma_convolve(x + xp, m_b, m_nB);
-	m_fbk = arma_convolve(y + yp, m_a, m_nA);
+	arma_convolve(&m_fwd, x + xp, m_b, m_nB);
+	y = m_yhist;
+	yp = m_ypos;
+	arma_convolve(&m_fbk, y + yp, m_a, m_nA);
 
 	m_fwd = m_fwd - m_fbk;
 	y[yp] = m_fwd;

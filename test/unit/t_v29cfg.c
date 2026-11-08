@@ -399,10 +399,8 @@ test_values(void)
 		    ref_FPM_SRE_CFG.rms_min, 0x30);
 	diff_eq_int("FPM_SRE_CFG.rms_len (%ld)", FPM_SRE_CFG.rms_len,
 		    ref_FPM_SRE_CFG.rms_len, 0x32);
-	diff_eq_int("FPM_SRE_CFG.pad34 (%ld)", FPM_SRE_CFG.pad34,
-		    ref_FPM_SRE_CFG.pad34, 0x34);
-	diff_eq_int("FPM_SRE_CFG.pad36 (%ld)", FPM_SRE_CFG.pad36,
-		    ref_FPM_SRE_CFG.pad36, 0x36);
+	diff_eq_int("FPM_SRE_CFG owner null, ours", FPM_SRE_CFG.owner == 0, 1, 0x34);
+	diff_eq_int("FPM_SRE_CFG owner null, blob", ref_FPM_SRE_CFG.owner == 0, 1, 0x34);
 	diff_eq_int("FPM_SRE_CFG pointers null, ours (%ld)",
 		    FPM_SRE_CFG.proto == 0 && FPM_SRE_CFG.disc == 0 &&
 		    FPM_SRE_CFG.xclock == 0 && FPM_SRE_CFG.yclock == 0 &&

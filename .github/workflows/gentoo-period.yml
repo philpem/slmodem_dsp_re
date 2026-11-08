@@ -37,9 +37,19 @@ jobs:
         run: |
           python3 tools/ci/period_metrics.py --self-test
           python3 tools/ci/test_period_metrics.py
+          python3 tools/toolchain/test_fidelity.py
+          python3 -m unittest discover -s test/safety -p test_diffvector.py -v
+
+      - name: Self-test width audit reporting
+        run: python3 tools/toolchain/test_widthaudit.py
 
       - name: Self-test bounded induction jump-table proof
         run: python3 tools/toolchain/induction_jumptable_controls.py
+
+      - name: Self-test exact-only guarded switch identity
+        run: python3 tools/toolchain/test_guarded_switch.py
+      - name: Guarded frame-free register proof controls
+        run: python3 tools/toolchain/test_framefree.py
 
       - name: Pull recovered Gentoo compiler
         run: docker pull --platform linux/386 "$GENTOO_IMAGE"
@@ -57,14 +67,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/gentoo-period-base/tc_out
-          key: gentoo-period-base-objects-v2-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/byteident.py', 'tools/toolchain/jumptable.py', 'tools/toolchain/induction_jumptable.py', 'tools/toolchain/readonly_copy.py', 'tools/ci/requirements.txt') }}
+          key: gentoo-period-base-objects-v2-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/byteident.py', 'tools/toolchain/framefree.py', 'tools/toolchain/fidelity.py', 'tools/toolchain/jumptable.py', 'tools/toolchain/induction_jumptable.py', 'tools/toolchain/guarded_switch.py', 'tools/toolchain/readonly_copy.py', 'tools/toolchain/linkedcopies.py', 'tools/toolchain/callee_effects.py', 'tools/ci/requirements.txt') }}
 
       - name: Restore PR base codegen measurement
         id: base-metrics-cache
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/gentoo-period-base/base-metrics.json
-          key: gentoo-period-base-metrics-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/byteident.py', 'tools/toolchain/jumptable.py', 'tools/toolchain/induction_jumptable.py', 'tools/toolchain/readonly_copy.py', 'tools/ci/requirements.txt') }}
+          key: gentoo-period-base-metrics-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/byteident.py', 'tools/toolchain/framefree.py', 'tools/toolchain/fidelity.py', 'tools/toolchain/jumptable.py', 'tools/toolchain/induction_jumptable.py', 'tools/toolchain/guarded_switch.py', 'tools/toolchain/readonly_copy.py', 'tools/toolchain/linkedcopies.py', 'tools/toolchain/callee_effects.py', 'tools/ci/requirements.txt') }}
 
       - name: Build PR base compiler objects
         if: steps.base-objects-cache.outputs.cache-hit != 'true' || steps.base-metrics-cache.outputs.cache-hit != 'true'
@@ -125,6 +135,7 @@ jobs:
             --head "$RUNNER_TEMP/head-metrics.json" \
             --base-sha "$BASE_SHA" --head-objects build/tc_out \
             --reviewed-losses tools/ci/period_reviewed_losses.json \
+            --displaced tools/ci/displaced.json \
             --check > "$RUNNER_TEMP/metrics.md"
           status=$?
           cat "$RUNNER_TEMP/metrics.md" >> "$GITHUB_STEP_SUMMARY"

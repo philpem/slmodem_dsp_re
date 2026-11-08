@@ -172,7 +172,7 @@ struct cfgspec {
 	unsigned short seq_len;
 	int seq_enable;
 	unsigned short idle_sym;
-	unsigned short data_word;
+	int data_word;
 	unsigned short word_syms;
 	unsigned short ref_len;
 	short ref_margin;
@@ -299,8 +299,6 @@ run_create(void)
 			    y->cfg.gen.short_000e, 0);
 		diff_eq_int("SGD_CFG.gen.data_word", x->cfg.gen.data_word,
 			    y->cfg.gen.data_word, 0);
-		diff_eq_int("SGD_CFG.gen.short_0012", x->cfg.gen.short_0012,
-			    y->cfg.gen.short_0012, 0);
 		diff_eq_int("SGD_CFG.gen.word_syms", x->cfg.gen.word_syms,
 			    y->cfg.gen.word_syms, 0);
 		diff_eq_int("SGD_CFG.gen.short_0016", x->cfg.gen.short_0016,

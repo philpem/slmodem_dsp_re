@@ -443,21 +443,19 @@ int
 V90Phase4Demodulator::trn2dKnownDemod(short unused)
 {
 	short gen = (short)phase4Modulator.generateSymbol();
-	short sign = (short)((gen < 0) ? -1 : 1);
-	short mag = (short)((gen < 0) ? -gen : gen);
+	short sign = (gen < 0) ? -1 : 1;
+	short mag = (short)__builtin_abs(gen);
 	unsigned int idx = (countInState - 1u) % 6u;
-	const unsigned short *tab =
-	    (const unsigned short *)autoDigitalImpDetector->linMapp;
 	int code;
-	unsigned short level;
 
 	if ((short)autoDigitalImpDetector->pcmType != 0)
-		code = linear2alaw((mag < 0) ? -mag : mag) ^ 0xd5;
+		code = linear2alaw(__builtin_abs(mag)) ^ 0xd5;
 	else
-		code = (short)(0xff - linear2ulaw((mag < 0) ? -mag : mag));
+		code = (short)(0xff - linear2ulaw(__builtin_abs(mag)));
 
-	level = tab[idx * 128u + (unsigned int)code];
-	return (short)(sign * level);
+	return (short)(sign *
+	    ((const unsigned short *)autoDigitalImpDetector->linMapp)
+	    [idx * 128u + (unsigned int)code]);
 }
 
 /*

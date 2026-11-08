@@ -64,6 +64,7 @@
 #include "dsplib/v22.h"
 
 #include "dsplib/debug.h"
+#include "dsplib/v22ans.h"
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
@@ -244,14 +245,41 @@ v22_delete(struct dp *dp)
  * Unlike `b103_process` the rates are reported on EVERY connecting block and
  * not only on the transition into one -- there is no edge test here at all.
  *
- * THE TABLE'S LENGTH IS EVIDENCE AND THE SPELLING BELOW IS NOT.  Seventeen
- * entries and a `cmp $0x10; ja` mean the highest case label the author wrote
- * was 16, twelve of the seventeen landing on the same block as `default`.
- * 16 is `V22_MSG_NO_CARRIER` (finding F8534, corroborated from V.32), so it
- * is spelt as an explicit case falling into the default.  Any other
- * assignment of the twelve dead labels is behaviourally identical and this
- * one is not established -- what the object forces is only that a label at 16
- * exists.
+ * THE LABEL SET IS THE PROTOCOL'S OWN STATUS VOCABULARY (finding F12047).
+ * Seventeen entries and a `cmp $0x10; ja` mean the highest case label is 16,
+ * and the table's five unique targets put 2 and 5..15 on the error block at
+ * .text+0x100.  The statuses that `V22FP_modem` can leave in `fp->status`
+ * and return in the low byte, across 0..16, are exactly
+ *
+ *     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 16
+ *
+ * -- 2 is written by `v22_retrain`, 5/7/8/9/10 by `v22_ans_rmloop2`, 6/7 by
+ * `v22_org_rmloop2`, 11 by `connect_2400`, and 16 is `V22_MSG_NO_CARRIER`
+ * (F8534, corroborated from V.32).  No writer anywhere in the V.22 tree
+ * produces 12, 13, 14 or 15, so those are `default` holes.  Each reachable
+ * value is its own `case` with its own `result = DPSTAT_ERROR; break;` --
+ * not one shared fallthrough body -- and that too is a source fact the
+ * object forces: collapsing the error values into a single label group
+ * makes GCC 3.4 emit the decision chain a five-label switch gets, while one
+ * statement per value produces the object's 17-entry table, its five unique
+ * targets in its order, and LCS 124 of 161 instructions.
+ *
+ * THE JOIN AT .text+0xac IS THE CLAMP ARM'S OWN ORDER (finding F12049).
+ * The post-call clamp is written `if (tx_bits_wanted == 0) rx_len = 0; else
+ * if ((unsigned)rx_len > V22_BIT_BUFFER) ...`, and the object forces that
+ * spelling: its `jne 0x5207` sends the NONZERO status to the clamp, leaving
+ * the zero arm in the fallthrough, then both arms enter the one narrowing
+ * loop at 0x51ac and leave through the one join at 0x51dc.  The
+ * complemented arm order is NOT the object's and does not merely reorder:
+ * GCC 3.4 makes the clamp the likely fallthrough, lays it out first, and
+ * tail-duplicates `modem_put_bits` and the dispatch onto both loop exits --
+ * two call sites, 585 B / 161 insns, against the object's 557 / 150.  The
+ * recovered order gives one call and one dispatch (553 B / 149 insns,
+ * LCS 134, run 46).  The remaining four bytes are register allocation: the
+ * object keeps tx_bits in %edi and rx_bits in %esi, so the narrowing store
+ * is `mov %al,(%esi,%edx,1)`, while this build swaps the two registers and
+ * folds the base into the displacement.  Register choice is not statement
+ * structure, so it is not chased here.
  */
 static int
 v22_process(void *dp_arg, void *in, void *out, int count)
@@ -292,17 +320,17 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 	 * UNSIGNED -- `cmp $0x64; jbe` -- so a negative count would be
 	 * clamped too, and the bound is V22_BIT_BUFFER, the length of the
 	 * array about to be written.
+	 *
+	 * The arm order is the object's and is codegen-visible: the test is
+	 * `jne` to the clamp and the zero arm falls through (finding F12049).
 	 */
-	if (self->tx_bits_wanted != 0) {
-		if ((unsigned)rx_len > V22_BIT_BUFFER) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-				    "v22: FATAL: rx_len is huge (%d).\n",
-				    rx_len);
-			rx_len = V22_BIT_BUFFER;
-		}
-	} else {
+	if (self->tx_bits_wanted == 0) {
 		rx_len = 0;
+	} else if ((unsigned)rx_len > V22_BIT_BUFFER) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "v22: FATAL: rx_len is huge (%d).\n", rx_len);
+		rx_len = V22_BIT_BUFFER;
 	}
 
 	/* Hand recovered words back, narrowing ints to bytes in place. */
@@ -337,7 +365,33 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 		modem_set_param(dp->modem, MDMPRM_RX_RATE, V22_LINE_RATE_1200);
 		result = DPSTAT_CONNECT;
 		break;
+	case 2:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_05:
+		result = DPSTAT_ERROR;
+		break;
+	case 6:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_07:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_08:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_RETRAIN_REQ:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_ANS_RMLOOP2:
+		result = DPSTAT_ERROR;
+		break;
+	case V22_ST_RETRAIN:
+		result = DPSTAT_ERROR;
+		break;
 	case V22_MSG_NO_CARRIER:
+		result = DPSTAT_ERROR;
+		break;
 	default:
 		result = DPSTAT_ERROR;
 		break;

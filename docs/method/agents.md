@@ -4,15 +4,33 @@ Every number cites `docs/findings.md` in this tree.
 
 Parallelism here means **a worktree and a branch per batch**, each batch owning
 a disjoint set of source files, each running the phase gate and seeing its own
-work pass. It is the only structural remedy for the token wall (finding F220,
-and `efficiency.md`), and it costs three things: hand-overs go wrong, shared
-data structures collide, and the merge is where both bills arrive.
+work pass. Separate contexts can reduce pressure on the parent (finding F220
+and `efficiency.md`); every worker still consumes model usage. Prefer a compact
+artifact-backed task to a full-history fork. This is not evidence that parallel
+workers reduce billed cost. Hand-overs can go wrong, shared data structures
+collide, and integration needs its own review.
 
 This file is what was learned paying them. Nothing here is about how many
 agents to run, which model to use, or how to phrase a prompt — **none of that
 was measured in this tree, so none of it is here.**
 
 ---
+
+## Compact recovery packet
+
+Give an authorised recovery worker the current revision and profile, exact
+function/TU scope, immutable native/current artifacts, prior closed domains and
+one predicted discriminator. Include the baseline command, selected-link proof
+context, protected named sets, candidate limit and gate owner. Keep full logs
+and inventories on disk; request complete-TU result summaries and decisive
+excerpts. Report candidate cells, unchanged controls and distinct emissions
+separately. They bound an experiment; they do not measure paid model usage.
+
+A first pass-control success with a protected loss needs an explicit native
+obligation map, not an automatic rejection or waiver. The parent independently
+checks the frozen candidate, then permits one validation checkpoint. Freeze
+shared documentation before the full gate. Do not turn each informative partial
+into another integration cycle.
 
 ## F1. Scope a batch by what it owns, not by what it is about
 

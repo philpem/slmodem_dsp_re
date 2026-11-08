@@ -28,7 +28,9 @@
 /*
  * `_rx_look_carrier_init`, 0x9cb00, 45 bytes.  Three calls and one store,
  * nothing else: reinit the data-mode receiver, reset the async octet
- * recovery search, clear `countdown`.  Returns 0.
+ * recovery search, clear `countdown`.  Returns 0 -- but the object has no
+ * final `return 0` statement: its `%eax` is already zero from the
+ * `countdown` store, and a literal return would be a second `xor`.
  */
 int
 _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
@@ -36,7 +38,6 @@ _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
 	_init_receiver(ctx, rate_code);
 	cTOOLS_handle_data_output_reset(ctx);
 	ctx->countdown = 0;
-	return 0;
 }
 
 
@@ -74,8 +75,8 @@ _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
  * `*word8 != 0` on entry aborts to the host: IDLE_STATE, `_idle_state_init`,
  * a zero-length `cTOOLS_handle_hdlc_output` (DLE ETX only, from `ctx+2` --
  * inert, `count` is 0) whose byte count goes through `word7`
- * (`(int *)(long)word7`, the same idiom `_hdlc_emulate_receive_state`
- * established), and FAX_CLASS1_OK.
+ * (an output-count pointer, also used by `_hdlc_emulate_receive_state`),
+ * and FAX_CLASS1_OK.
  *
  * Every path ends the same: `*word8 = 5` (the SAME magic value
  * `_recieve_silence_state` already writes there, per class1.h's own
@@ -91,8 +92,8 @@ _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
  */
 int
 _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8)
+		       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		       int *word7, int *word8)
 {
 	short cnt1 = 0, cnt2 = 0;
 	unsigned short result1 = (unsigned short)*rx_count;
@@ -155,8 +156,8 @@ _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		_idle_state_init(ctx);
 		n = cTOOLS_handle_hdlc_output(ctx,
 		    (const unsigned short *)((char *)ctx + 2),
-		    (unsigned char *)(long)word3, 0, 1);
-		*(int *)(long)word7 = n;
+		    word3, 0, 1);
+		*word7 = n;
 		ctx->status = FAX_CLASS1_OK;
 	}
 
@@ -175,7 +176,7 @@ _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * unpack step really does write demodulated elements into `ctx`'s own
  * leading bytes -- `_handle_data_output` then reads them straight back out
  * as its own `src`, both within `pad_005[0xffb]` for any plausible block
- * size).  `word7` is read (`*(int *)(long)word7`) to seed the call, and
+ * size).  `word7` is read (`*word7`) to seed the call, and
  * WRITTEN at the end with the byte count `_handle_data_output`/
  * `cTOOLS_handle_hdlc_output` returns -- the same `int *` role
  * `_hdlc_emulate_receive_state` established, confirmed here independently.
@@ -200,10 +201,10 @@ _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 int
 _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
-	      int word3, int word4, int *rx_count, int *tx_count,
-	      int word7, int *word8)
+	      unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+	      int *word7, int *word8)
 {
-	short cnt = (short)*(int *)(long)word7;
+	short cnt = (short)*word7;
 	unsigned short result = (unsigned short)*rx_count;
 	int status;
 	int n;
@@ -216,7 +217,7 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 	if (status & FAXVMI_RESULT_BIT_2000) {
 		n = _handle_data_output(ctx, (unsigned short *)(void *)ctx,
-		    (unsigned char *)(long)word3, cnt, 0);
+		    word3, cnt, 0);
 		cnt = (short)n;
 	} else {
 		if (dsplibs_debug_level > 1)
@@ -227,7 +228,7 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		_idle_state_init(ctx);
 
 		n = _handle_data_output(ctx, (unsigned short *)(void *)ctx,
-		    (unsigned char *)(long)word3, cnt, 1);
+		    word3, cnt, 1);
 		cnt = (short)n;
 
 		ctx->delayed_status_countdown = 2;
@@ -241,13 +242,13 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			_idle_state_init(ctx);
 			n = cTOOLS_handle_hdlc_output(ctx,
 			    (const unsigned short *)((char *)ctx + 2),
-			    (unsigned char *)(long)word3, 0, 1);
+			    word3, 0, 1);
 			cnt = (short)n;
 			ctx->status = FAX_CLASS1_OK;
 		}
 	}
 
-	*(int *)(long)word7 = cnt;
+	*word7 = cnt;
 	*word8 = 5;
 	_put_silence(tx, *rx_count);
 	*tx_count = *rx_count;

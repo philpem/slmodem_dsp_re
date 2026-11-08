@@ -270,10 +270,10 @@ test_sre_cfg(void)
 	diff_eq_int("err_lo", SREv32_CFG.err_lo, ref_SREv32_CFG.err_lo, 0x2e);
 	diff_eq_int("rms_min", SREv32_CFG.rms_min, ref_SREv32_CFG.rms_min,
 		    0x30);
+	diff_eq_int("SREv32_CFG owner null, ours", SREv32_CFG.owner == 0, 1, 0x34);
+	diff_eq_int("SREv32_CFG owner null, blob", ref_SREv32_CFG.owner == 0, 1, 0x34);
 	diff_eq_int("rms_len", SREv32_CFG.rms_len, ref_SREv32_CFG.rms_len,
 		    0x32);
-	diff_eq_int("pad34", SREv32_CFG.pad34, ref_SREv32_CFG.pad34, 0x34);
-	diff_eq_int("pad36", SREv32_CFG.pad36, ref_SREv32_CFG.pad36, 0x36);
 
 	/*
 	 * `coeffs` is one short of the prototype table's length, and that

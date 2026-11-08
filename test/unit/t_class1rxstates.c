@@ -23,11 +23,11 @@
 #include "dsplib/faxvmi.h"
 
 extern int ref__rx_look_carrier_state(void *ctx, const short *rx, short *tx,
-				      int word3, int word4, int *rx_count,
-				      int *tx_count, int word7, int *word8);
+				      unsigned char *word3, const unsigned char *word4, int *rx_count,
+				      int *tx_count, int *word7, int *word8);
 extern int ref__rx_data_state(void *ctx, const short *rx, short *tx,
-			      int word3, int word4, int *rx_count,
-			      int *tx_count, int word7, int *word8);
+			      unsigned char *word3, const unsigned char *word4, int *rx_count,
+			      int *tx_count, int *word7, int *word8);
 extern struct faxvmi *ref_FAXVMI_create(struct faxvmi *vmi,
 					const struct faxvmi_cfg *cfg);
 
@@ -64,10 +64,8 @@ static unsigned char dst_a[DST_MAX], dst_b[DST_MAX];
 static int rxc_a, rxc_b, txc_a, txc_b, w8_a, w8_b;
 
 /*
- * `word7` is a plain `int` in the `class1_state_fn` signature, but both
- * functions here treat it as a pointer, `(int *)(long)word7` -- so the
- * argument passed at each call site must be the ADDRESS of one of these,
- * cast to `int`, never a raw value.
+ * Both receive handlers dereference the output-count pointer `word7`.
+ * Each call therefore passes the address of a real variable below.
  */
 static int w7val_a, w7val_b;
 
@@ -161,11 +159,11 @@ run_look_carrier(void)
 		w7val_a = w7val_b = (int)0x12344321;
 
 		ra = ref__rx_look_carrier_state(&ctx_a, rx_a, tx_a,
-		    (int)(long)dst_a, 0, &rxc_a, &txc_a,
-		    (int)(long)&w7val_a, &w8_a);
+		    dst_a, 0, &rxc_a, &txc_a,
+		    &w7val_a, &w8_a);
 		rb = _rx_look_carrier_state(&ctx_b, rx_b, tx_b,
-		    (int)(long)dst_b, 0, &rxc_b, &txc_b,
-		    (int)(long)&w7val_b, &w8_b);
+		    dst_b, 0, &rxc_b, &txc_b,
+		    &w7val_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);
@@ -214,10 +212,10 @@ run_data(void)
 		w7val_a = w7val_b = 0;
 
 		ra = ref__rx_data_state(&ctx_a, rx_a, tx_a,
-		    (int)(long)dst_a, 0, &rxc_a, &txc_a,
-		    (int)(long)&w7val_a, &w8_a);
-		rb = _rx_data_state(&ctx_b, rx_b, tx_b, (int)(long)dst_b, 0,
-		    &rxc_b, &txc_b, (int)(long)&w7val_b, &w8_b);
+		    dst_a, 0, &rxc_a, &txc_a,
+		    &w7val_a, &w8_a);
+		rb = _rx_data_state(&ctx_b, rx_b, tx_b, dst_b, 0,
+		    &rxc_b, &txc_b, &w7val_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare_common(tag);

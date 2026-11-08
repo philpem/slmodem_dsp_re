@@ -75,10 +75,13 @@ flags and shims belong in the build/toolchain apparatus, and a modern failure
 needs its own reproducible follow-up. See
 [compiler policy](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/compilers.md).
 
-When improving test coverage, demonstrate that the oracle rejects a meaningful
-incorrect result using valid construction and processing histories. Mutation
-suites, anchors and snapshots are deprecated and need no maintenance; see the
-[retirement policy](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/mutation-policy.md).
+When improving coverage, construct valid inputs at a stated boundary and
+compare the observable result with the blob. Keep synthetic states labelled as
+such. A passing differential fixture establishes agreement only over its input
+history and observations.
+
+Mutation suites, anchors and snapshots are retired; see the
+[retirement policy](../method/mutation-policy.md).
 
 ### Example: detecting a scheduling regression
 
@@ -90,7 +93,7 @@ non-crossing case checks that the test responds to the latch transition.
 Reversing the two data loops must fail its training-counter oracle and state
 comparison. Merely showing both loops run would miss that dependency.
 
-Run the focused period test:
+Run the focused period test and inspect the differing output or state:
 
 ```sh
 make period T=t_v34datapump J=4

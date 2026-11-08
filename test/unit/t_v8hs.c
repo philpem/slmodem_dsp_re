@@ -528,6 +528,50 @@ t_ansam_duration_one(const char *name, int reference)
 	return diff_end();
 }
 
+/* Synthetic exploratory framing boundary: initialized component storage,
+ * with seeded gap histories. No public negotiation reachability is claimed. */
+static int
+t_gap_threshold_exploratory(void)
+{
+	static const short counts[] = { -32768, -32767, 0, 1, 2, 32767 };
+	unsigned i, guard;
+
+	diff_begin("V8 gap threshold (synthetic exploratory)");
+	for (i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
+		for (guard = 0; guard < 3; guard++) {
+			int ra, rb;
+			setup(5700u + i * 3 + guard, 0x11, 0x40, 0x04);
+			obj_a.tx_state = obj_b.tx_state = 5;
+			obj_a.rx_state = obj_b.rx_state = 0x28;
+			obj_a.rx_substate = obj_b.rx_substate =
+				guard == 2 ? V8_HS_CJ : V8_HS_COLLECT;
+			obj_a.tx_avail = obj_b.tx_avail = 0x60;
+			obj_a.tx_fill_target = obj_b.tx_fill_target = 0x60;
+			obj_a.sym_avail = obj_b.sym_avail = 40;
+			obj_a.quick_connect = obj_b.quick_connect = 0;
+			obj_a.block_count = obj_b.block_count = 0;
+			obj_a.v21_params.samples_per_bit =
+				obj_b.v21_params.samples_per_bit = 0x20;
+			obj_a.v21_params.inbuf_pos =
+				obj_b.v21_params.inbuf_pos = 0;
+			obj_a.v21_params.bitcount =
+				obj_b.v21_params.bitcount = 9;
+			obj_a.v21_params.bits = obj_b.v21_params.bits = 0x155;
+			obj_a.v21_params.gap_count =
+				obj_b.v21_params.gap_count = counts[i];
+			obj_a.v21_params.gap_seen = obj_b.v21_params.gap_seen =
+				guard == 1 ? counts[i] : (short)(counts[i] ^ 1);
+			ra = ref_v8handshak(&obj_a);
+			rb = v8handshak(&obj_b);
+			diff_eq_int("gap return (%ld)", rb, ra, i * 3 + guard);
+			diff_eq_obj("gap framing", struct v8_v21_params,
+				    &obj_b.v21_params, &obj_a.v21_params,
+				    i * 3 + guard);
+		}
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -545,6 +589,7 @@ main(void)
 	long ran = 0;
 	long returns[4];
 
+	rc |= t_gap_threshold_exploratory();
 	memset(returns, 0, sizeof(returns));
 	diff_begin("v8handshak");
 

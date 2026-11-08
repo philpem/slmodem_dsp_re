@@ -36,19 +36,19 @@ extern class1_state_fn ref_class1_state_functions[19];
  * the test tier links a globalized copy (tools/testvisible.py).
  */
 extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8);
+		       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		       int *word7, int *word8);
 extern int _answer_tone_state(struct fax_class1 *ctx, const short *rx,
-			      short *tx, int word3, int word4,
-			      int *rx_count, int *tx_count, int word7,
+			      short *tx, unsigned char *word3, const unsigned char *word4,
+			      int *rx_count, int *tx_count, int *word7,
 			      int *word8);
 extern int _send_silence_state(struct fax_class1 *ctx, const short *rx,
-			       short *tx, int word3, int word4,
-			       int *rx_count, int *tx_count, int word7,
+			       short *tx, unsigned char *word3, const unsigned char *word4,
+			       int *rx_count, int *tx_count, int *word7,
 			       int *word8);
 extern int _recieve_silence_state(struct fax_class1 *ctx, const short *rx,
-				  short *tx, int word3, int word4,
-				  int *rx_count, int *tx_count, int word7,
+				  short *tx, unsigned char *word3, const unsigned char *word4,
+				  int *rx_count, int *tx_count, int *word7,
 				  int *word8);
 
 static void

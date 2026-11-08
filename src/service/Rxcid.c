@@ -2,17 +2,18 @@
  * Rxcid.c -- Caller ID, FSK: the receiver object and the async framer over
  * the demodulated bit stream.
  *
- * Reconstructed from dsplibs.o Rxcid.c (finding F1410 pins the TU as
- * reset_cid, create_cid, pack_next_bit, cid_modem), and written in the
- * object's own emission order:
+ * Reconstructed from dsplibs.o Rxcid.c, and written in the object's own
+ * emission order:
  *
  *   reset_cid       .text 0x0918b0   517
  *   create_cid      .text 0x091ac0   183
  *   pack_next_bit   .text 0x091b80   301
  *   cid_modem       .text 0x091cb0  1487
  *
- * plus the file-static V23_MRF_FILT (.rodata 0x009240, 180 bytes), which is
- * the resampler prototype reset_cid installs.
+ * The LOCAL V23_MRF_FILT table follows FILE Rxcid.c in the symbol table.
+ * reset_cid's absolute relocation into that table witnesses its TU owner.
+ * A relocation on create_cid's call to a GLOBAL function does not imply a
+ * separate TU; the reset's conditional calls also prevent its expansion.
  *
  * HOW THE FOUR FIT TOGETHER.  `create_cid` allocates and seeds the three
  * caller-visible settings; `reset_cid` clears the rest and configures the 9:10
@@ -112,7 +113,11 @@ reset_cid(struct cid *cid)
 	cfg.decimate = 10;
 	cfg.coeff = V23_MRF_FILT;
 	cfg.taps = 90;
-	FPM_MRF_init(&cid->mrf, &cfg, cid->mrf.history == NULL);
+	/* reset_cid+0x6d sends NULL to the cold literal-1 arm. */
+	if (cid->mrf.history != NULL)
+		FPM_MRF_init(&cid->mrf, &cfg, 0);
+	else
+		FPM_MRF_init(&cid->mrf, &cfg, 1);
 
 	cid->ac_idx = 0;
 	cid->last_bit = 0;
@@ -302,6 +307,12 @@ pack_next_bit(short bit, struct cid *cid)
 	}
 }
 
+static int
+iabs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
 /*
  * One block of line samples through the FSK receiver.
  *
@@ -415,7 +426,7 @@ cid_modem(const short *samples, unsigned short count, struct cid *cid)
 		    cid->mark_conf > (m * 12 >> 8)) {
 			sum = 0;
 			for (i = 0; i < nsamp; i++)
-				sum += buf[i] < 0 ? -(int)buf[i] : (int)buf[i];
+				sum += iabs((int)buf[i]);
 			if (sum == 0)
 				sum = 1;
 			FPM_div_32((unsigned int)sum, &recip, &shift);

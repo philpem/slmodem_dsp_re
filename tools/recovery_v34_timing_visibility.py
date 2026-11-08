@@ -123,23 +123,8 @@ def collateral(out):
         report['cells'][label]={'removed_target_table_entries':count,'unrelated_rodata_equal':True,'unrelated_relocation_consumers_equal':True,'other_data_equal':True,'helper_frontend_records':sorted(set(re.findall(r'^setTimingStateParameters:.*$',text,re.M))),'section_hashes':{n:hashlib.sha256(raw).hexdigest() for n,raw in parsed[1].items()},'metadata_exception':'.comment is duplicated by the diagnostic separate helper compilation' if label=='helper-separate' else None}
     (out/'collateral.json').write_text(json.dumps(report,indent=2)+'\n');print('unrelated data/consumer audit PASS4cells',flush=True)
 
-def mutations(out):
-    root=ROOT;ledger=json.loads((out/'results.json').read_text());folder=out/'mutation-default';folder.mkdir(exist_ok=True);source=generate()['native-graph']['V34hshak.c'];row=next(r for r in json.load(open('test/mutations/v34hst3mid.json')) if r.get('label')=="51's rate switch has a default that writes the 2800 scale");assert source.count(row['find'])==1;(folder/'V34hshak.c').write_text(source.replace(row['find'],row['replace']));cmd=[x.replace('/native-graph/','/mutation-default/') for x in ledger['cells']['native-graph']['commands'][0]]
-    with (folder/'compile.log').open('w') as log:subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,check=True)
-    report={}
-    for label,obj in [('production',out/'native-graph/V34hshak.c.o'),('mutant',folder/'V34hshak.c.o')]:
-     target=out/('period-default-'+label);target.mkdir(exist_ok=True);stable=root/'build/period'
-     for path in list(stable.glob('src_*.o'))+list(stable.glob('test_harness_*.o'))+[stable/'test_unit_t_v34hst3mid.o']:shutil.copy2(path,target/path.name)
-     selected=target/'src_pump_v34_V34hshak.o';shutil.copy2(obj,selected);digest=hashlib.sha256(selected.read_bytes()).hexdigest();command=['make','period','T=t_v34hst3mid','J=4']
-     with (target/'gate.log').open('w') as log:status=subprocess.run(command,env=dict(os.environ,PERIOD_OUT=str(target.relative_to(root))),stdout=log,stderr=subprocess.STDOUT).returncode
-     assert hashlib.sha256(selected.read_bytes()).hexdigest()==digest
-     text=(target/'t_v34hst3mid.run.log').read_text();assert (status==0)==(label=='production'),(label,status)
-     report[label]={'command':command,'exit':status,'object_sha256':digest,'log':text}
-     (out/'mutation-default.json').write_text(json.dumps(report,indent=2)+'\n');print(label,status,flush=True)
-
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,default=ROOT/'build/v34-timing-visibility293');ap.add_argument('--baseline-dir',type=Path,default=ROOT/'build/copy293-baseline',help='archived pre-adoption object/config; initializes immutable frozen inputs only');ap.add_argument('--mutations',action='store_true');ap.add_argument('--collateral',action='store_true');ap.add_argument('--tables',action='store_true');ap.add_argument('--period',action='store_true');args=ap.parse_args();out=args.out.resolve();args.baseline_dir=args.baseline_dir.resolve()
-    if args.mutations:return mutations(out)
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--out',type=Path,default=ROOT/'build/v34-timing-visibility293');ap.add_argument('--baseline-dir',type=Path,default=ROOT/'build/copy293-baseline',help='archived pre-adoption object/config; initializes immutable frozen inputs only');ap.add_argument('--collateral',action='store_true');ap.add_argument('--tables',action='store_true');ap.add_argument('--period',action='store_true');args=ap.parse_args();out=args.out.resolve();args.baseline_dir=args.baseline_dir.resolve()
     if args.collateral:return collateral(out)
     if args.tables:return table_audit(out)
     if args.period:return period(out)

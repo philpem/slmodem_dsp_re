@@ -356,8 +356,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		dec->short_04 = 2;
 		FSE(fp)->cfg.decision = FSE_decision_32pt;
 		fp->short_2e = 1;
-		VTBv32_init(&dec->vtb, 2, 0);
 		shift = 4;
+		VTBv32_init(&DEC(fp)->vtb, 2, 0);
 		break;
 
 	case V32_MODE_16T:
@@ -365,8 +365,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		SDM_RX(fp)->group = 3;
 		FSE(fp)->cfg.decision = FSE_decision_16Tpt;
 		fp->short_2e = 3;
-		VTBv32_init(&DEC(fp)->vtb, 3, 0);
 		shift = 3;
+		VTBv32_init(&DEC(fp)->vtb, 3, 0);
 		break;
 
 	case V32_MODE_64T:
@@ -374,8 +374,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		SDM_RX(fp)->group = 5;
 		FSE(fp)->cfg.decision = FSE_decision_64pt;
 		fp->short_2e = 4;
-		VTBv32_init(&DEC(fp)->vtb, 4, 0);
 		shift = 5;
+		VTBv32_init(&DEC(fp)->vtb, 4, 0);
 		break;
 
 	case V32_MODE_128T:
@@ -383,8 +383,8 @@ SetRxModeV32(struct v32_modem *modem, short mode)
 		SDM_RX(fp)->group = 6;
 		FSE(fp)->cfg.decision = FSE_decision_128pt;
 		fp->short_2e = 5;
-		VTBv32_init(&DEC(fp)->vtb, 5, 0);
 		shift = 3;		/* see SetTxModeV32 */
+		VTBv32_init(&DEC(fp)->vtb, 5, 0);
 		break;
 
 	default:
@@ -524,7 +524,8 @@ DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned s
 
 	enables = AGC_OF(fp)->f18;
 	SRE_OF(fp)->adapt = fp->int_04 & enables;
-	m = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, (short)n);
+	/* The MRF result is promoted unsigned at this int-count boundary. */
+	m = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, n);
 
 	fp = owner->fp;
 	if (SRE_OF(fp)->active == 0) {
@@ -611,44 +612,42 @@ void
 SetAdaptEcV32(struct v32_modem *modem, unsigned short mode)
 {
 	struct v32_fp *fp;
-	struct fpm_ecc *ecc;
 	short i;
 
 	switch (mode) {
 	case V32_ADAPTEC_OFF:
 		fp = FP(modem);
-		ECC(fp)->adapt_near = 0;
-		ECC(fp)->adapt_far = 0;
+		fp->ecc.adapt_near = 0;
+		fp->ecc.adapt_far = 0;
 		fp->int_14 = 0;
 		fp->int_18 = 0;
 		break;
 
 	case V32_ADAPTEC_ON:
 		fp = FP(modem);
-		ecc = ECC(fp);
-		for (i = 0; i < ecc->line_len; i++)
-			ecc->line[i] = 0;
+		for (i = 0; i < fp->ecc.line_len; i++)
+			fp->ecc.line[i] = 0;
 		fp->int_14 = 1;
-		ecc->unk1a = 0;
-		ecc->adapt_near = 1;
-		ecc->adapt_far = 1;
+		fp->ecc.unk1a = 0;
+		fp->ecc.adapt_near = 1;
+		fp->ecc.adapt_far = 1;
 		fp->int_18 = 1;
 		break;
 
 	case V32_ADAPTEC_SLOW:
-		ecc = ECC(FP(modem));
-		ecc->mu = (short)(ecc->mu / 10);
+		fp = FP(modem);
+		fp->ecc.mu = (short)(fp->ecc.mu / 10);
 		break;
 
 	case V32_ADAPTEC_RESET:
-		ecc = ECC(FP(modem));
-		ecc->near_delay = (short)modem->params.ec_near_delay;
-		ecc->far_delay = 0x30;
-		FPM_ECC_init(ecc, (const struct fpm_ecc_cfg *)(void *)ecc, 0);
-		ecc = ECC(FP(modem));
-		ecc->line_len = 0x30;
-		ecc->near_rd = 0;
-		ecc->far_rd = 0;
+		fp = FP(modem);
+		fp->ecc.near_delay = (short)modem->params.ec_near_delay;
+		fp->ecc.far_delay = 0x30;
+		FPM_ECC_init(&fp->ecc, &fp->ecc.cfg, 0);
+		fp = FP(modem);
+		fp->ecc.line_len = 0x30;
+		fp->ecc.near_rd = 0;
+		fp->ecc.far_rd = 0;
 		break;
 
 	default:
@@ -788,17 +787,19 @@ EpochDetectV32(struct v32_modem *modem)
 int
 RetrainDetectV32(struct v32_modem *modem)
 {
+	/* The poll result owns the common exit, independently of the counter. */
+	int detected = 0;
 	struct v32_dec *dec = DEC(FP(modem));
 	unsigned short req = (unsigned short)dec->retrain;
 
-	if (!(req & V32_DEC_RETRAIN_REQ))
-		return 0;
-
-	dec->count = 0;
-	dec->retrain = (short)(req & ~(unsigned short)V32_DEC_RETRAIN_REQ);
-	dec->short_74 =
-		(unsigned short)(dec->short_74 + 1);
-	return 1;
+	if (req & V32_DEC_RETRAIN_REQ) {
+		dec->count = 0;
+		detected = 1;
+		dec->retrain = (short)(req & ~(unsigned short)V32_DEC_RETRAIN_REQ);
+		dec->short_74 =
+			(unsigned short)(dec->short_74 + 1);
+	}
+	return detected;
 }
 
 /* The renegotiation request, bit 1 of the same word.  It is not counted. */
@@ -838,20 +839,24 @@ SeqToRate(struct v32_modem *modem, unsigned short seq)
  * The object loads `V32_ESEQ[rate]` UNCONDITIONALLY, before the test, and
  * discards it on the no-rate path.  That is safe only because index 6 is
  * inside the table -- the ladder's "none" value is the table's last entry, not
- * one past it -- and it is why this is written as a conditional expression
- * rather than as the `if` the two rate functions above use.
+ * one past it -- and it is why the load is the `code` initialiser below and
+ * the early return is a separate statement: a conditional expression puts
+ * the load in the taken arm instead, and the object's load is not there.
  */
 unsigned short
 CodeESeq(struct v32_modem *modem, unsigned short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
+	unsigned short code = (unsigned short)V32_ESEQ[rate];
 
-	return rate == V32_RATE_NONE ? V32_ESEQ_NONE
-				     : (unsigned short)V32_ESEQ[rate];
+	if (rate == V32_RATE_NONE)
+		return V32_ESEQ_NONE;
+
+	return code;
 }
 
 unsigned short
-CodeRateSeq(struct v32_modem *modem, unsigned short seq)
+CodeRateSeq(struct v32_modem *modem, short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 	unsigned short out = V32_RATE_SEQ_NONE;
@@ -863,7 +868,7 @@ CodeRateSeq(struct v32_modem *modem, unsigned short seq)
 }
 
 unsigned short
-CodeFinalRateSeq(struct v32_modem *modem, unsigned short seq)
+CodeFinalRateSeq(struct v32_modem *modem, short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 	unsigned short out = V32_RATE_SEQ_NONE;
@@ -922,9 +927,12 @@ TxNoCarrierV32(struct v32_modem *modem, const short *data, short *out,
 /*
  * Fill one block's worth of `out` with a clamped word and report the count.
  *
- * The counter is a SHORT and the loop tests it against -1, so a count of zero
- * writes nothing and a NEGATIVE count runs to 65535-ish writes rather than
- * none.  That is the object's loop and it is reproduced; D482 records it.
+ * The next arithmetic value is an int; the current counter narrows to a
+ * short at the shared test.  A zero count writes nothing and a negative
+ * count wraps through the word-sized sentinel rather than stopping early
+ * (D482).  Keep the captured counter separate from the tested next value:
+ * the latter dies at the comparison, allowing the period compiler to use
+ * the object's destructive INCW zero test.  F12111 records the pass evidence.
  *
  * `in` and `count` are never read.  Their types are `RxHdxNull`'s call and no
  * stronger -- the whole Rx state family takes the same four.
@@ -933,13 +941,21 @@ unsigned short
 RxClampV32(struct v32_modem *modem, short *in, short *out, unsigned short count)
 {
 	struct v32_hdx *hdx = HDX(modem);
+	int next;
 	short i;
 
 	(void)in;
 	(void)count;
 
-	for (i = (short)(hdx->symbol_len - 1); i != -1; i--)
-		*out++ = 0xff;
+	next = hdx->symbol_len - 1;
+	goto clamp_test;
+clamp_body:
+	*out++ = 0xff;
+	next = i - 1;
+clamp_test:
+	i = (short)next;
+	if ((short)next != -1)
+		goto clamp_body;
 
 	return hdx->symbol_len;
 }

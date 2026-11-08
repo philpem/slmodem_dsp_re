@@ -23,6 +23,11 @@ identifies the evidence and tools that need adapting for another target.
 
 ## Detailed method references
 
+[Function fidelity reporting](fidelity-reporting.md) explains EXACT, REGALLOC,
+NONMATCH, contiguous instruction runs and diagnostic byte-size records.
+Use [function difference vectors](metric-vector.md) for independent diagnostic
+axes; their counts and heuristic mappings do not award a grade.
+
 | file | what it is |
 |---|---|
 | [Recovery timeline](timeline.md) | Dated milestones, scoped progress figures and identifiable agent/tool provenance. |
@@ -39,13 +44,18 @@ identifies the evidence and tools that need adapting for another target.
 | [Native graph screen](native-graph-screen.md) | Bounded owner, predicate and local-stack timing nominations with explicit coverage. |
 | [Conformance plan](conformance-plan.md) | Independent standards checks and their limits. |
 | `CLAUDE.md.template` | the drop-in project instructions. Seven `<PLACEHOLDER>`s. Adapt after establishing your project's boundary. |
-| `tiers.md` | the five oracles and what each is structurally blind to |
-| `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
-| `gates.md` | the pattern behind every tooling defect this tree has found |
+| `tiers.md` | the current oracles and what each is structurally blind to; archived mutation results are labelled historical |
+| [Efficiency](efficiency.md) | Model usage, context isolation, free local computation and elapsed-time budgets. |
 | `refinement.md` | what actually closes the last bytes: every lever with its counterexample |
-| `agents.md` | parallel batches: briefs, shared data, numbering, merging |
+| [Byte bit tests](byte-bit-tests.md) | a measured narrow-operand source form for immediate bit-7 tests, with negative controls and transfer limits |
+| `placement-ledger.md` | causal linked-position ledger: why each function moved, and the first shift |
+| [Agent batches](agents.md) | Owned tasks, compact briefs, context costs, shared data and integration. |
 | `tools.md` | which tools are portable, and what each assumes about its host |
 | `recording.md` | how to write the record: naming, the scope of a quantity, correcting a pushed finding |
+
+The [historical working-instruction snapshot](working-instructions-history.md)
+preserves the examples formerly loaded at every agent startup. Its counts and
+queues are historical; [CLAUDE.md](../../CLAUDE.md) holds the active rules.
 
 ## The rule these were written under
 

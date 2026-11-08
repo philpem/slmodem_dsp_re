@@ -75,7 +75,7 @@ struct cid {
 	 * the object's own reuse and not two fields.  Finding F8710.
 	 */
 	short threshold;		/* +0x028 create_cid puts 2 here    */
-	short rate;			/* +0x02a 8000 or 9600, the LINE    */
+	unsigned short rate;		/* +0x02a 8000 or 9600, the LINE    */
 	/*
 	 * NAMED FROM USAGE, evidence rule 3 -- there is no format string or
 	 * typed caller, but the role is unanimous across every writer and the

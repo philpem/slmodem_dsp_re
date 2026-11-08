@@ -466,6 +466,12 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 	return status;
 }
 
+static int
+v8if_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /* ---- V8UpdateModemParameters  (v8jm.c) ---- */
 /*
  * Turn a received sequence into a call menu.
@@ -481,7 +487,7 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 {
 	struct v8_tx_sequence *seq = v->side != 0 ? &v->seq[0] : &v->seq[2];
 	int v90_mod = 0, digital_connection = 0, pcm_indication = 0;
-	int i;
+	short i;
 
 	out->b2 = (unsigned char)((out->b2 & 0xef)
 				  | (((unsigned char)v->quick_connect & 1) << 4));
@@ -545,7 +551,7 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 			if (top == 0x14) {
 				unsigned f = (w & 0xf) >> 1;
 
-				if ((f & 2) == 0)
+				if (v8if_flag_test((unsigned char)f, 0x02) == 0)
 					out->b0 &= 0xdf;
 				if ((f & 1) == 0)
 					out->b0 &= 0xbf;

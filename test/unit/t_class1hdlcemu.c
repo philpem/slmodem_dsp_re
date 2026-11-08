@@ -38,9 +38,9 @@ extern int ref_faxvmi_hdlc_unframe(struct faxvmi *, unsigned short *, short);
 extern unsigned int ref_dsplibs_debug_level;
 
 extern int ref__hdlc_emulate_receive_state(void *ctx, const short *rx,
-					   short *tx, int word3, int word4,
+					   short *tx, unsigned char *word3, const unsigned char *word4,
 					   int *rx_count, int *tx_count,
-					   int word7, int *word8);
+					   int *word7, int *word8);
 
 #define TX_MAX		160
 #define GUARD		16
@@ -188,11 +188,11 @@ run(void)
 		      cases[i].prev_state);
 
 		ra = ref__hdlc_emulate_receive_state(&ctx_a, rx_dummy, tx_a,
-		    (int)(long)dst_a, 0x22222222, &rxc_a, &txc_a,
-		    (int)(long)&w7_a, &w8_a);
+		    dst_a, (const unsigned char *)(long)0x22222222, &rxc_a, &txc_a,
+		    &w7_a, &w8_a);
 		rb = _hdlc_emulate_receive_state(&ctx_b, rx_dummy, tx_b,
-		    (int)(long)dst_b, 0x22222222, &rxc_b, &txc_b,
-		    (int)(long)&w7_b, &w8_b);
+		    dst_b, (const unsigned char *)(long)0x22222222, &rxc_b, &txc_b,
+		    &w7_b, &w8_b);
 
 		diff_eq_int("return (%ld)", rb, ra, tag);
 		compare(tag);
@@ -248,9 +248,9 @@ run_diagnostic(void)
 		dsplibs_debug_level = ref_dsplibs_debug_level = level;
 		dsplib_debug_capture_on = 1;
 		ra = ref__hdlc_emulate_receive_state(&ctx_a, rx_dummy, tx_a,
-		    (int)(long)dst_a, 0, &rxc_a, &txc_a, (int)(long)&w7_a, &w8_a);
+		    dst_a, 0, &rxc_a, &txc_a, &w7_a, &w8_a);
 		rb = _hdlc_emulate_receive_state(&ctx_b, rx_dummy, tx_b,
-		    (int)(long)dst_b, 0, &rxc_b, &txc_b, (int)(long)&w7_b, &w8_b);
+		    dst_b, 0, &rxc_b, &txc_b, &w7_b, &w8_b);
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 		diff_eq_int("diagnostic transcript (%ld)",
@@ -267,7 +267,8 @@ run_diagnostic(void)
 
 extern struct fax_class1 *ref_fax_class1_create(struct fax_class1 *, const struct fax_class1_cfg *);
 extern int ref_fax_class1_command(struct fax_class1 *, int, int, int);
-extern int ref_fax_class1_progress(struct fax_class1 *, short *, short *, int, int,
+extern int ref_fax_class1_progress(struct fax_class1 *, short *, short *, unsigned char *,
+	const unsigned char *,
                                  int *, int *, int *, int *);
 extern int ref_fax_class1_delete(struct fax_class1 *);
 
@@ -399,9 +400,9 @@ run_command_history(int framed)
                 dsplib_debug_capture_reset();
                 dsplibs_debug_level = ref_dsplibs_debug_level = level;
                 dsplib_debug_capture_on = 1;
-                ra = ref_fax_class1_progress(a, arx, tx_a, (int)(long)dst_a, 0,
+                ra = ref_fax_class1_progress(a, arx, tx_a, dst_a, 0,
                     &rxc_a, &txc_a, &w7_a, &w8_a);
-                rb = fax_class1_progress(b, brx, tx_b, (int)(long)dst_b, 0,
+                rb = fax_class1_progress(b, brx, tx_b, dst_b, 0,
                     &rxc_b, &txc_b, &w7_b, &w8_b);
                 dsplib_debug_capture_on = 0;
                 dsplibs_debug_level = ref_dsplibs_debug_level = 0;

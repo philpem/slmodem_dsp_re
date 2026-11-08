@@ -1439,6 +1439,125 @@ run_resetns(void)
 	return diff_end();
 }
 
+/* An initialized component subset with codes inside their declared table
+ * rows.  This does not establish the complete protocol code domain, and the
+ * broader byte-valued probes above remain useful on their own terms.  The
+ * mapping, detector and output objects are disjoint; no alias history or
+ * negotiated waveform reachability is claimed. */
+static int
+run_resetns_bounded(void)
+{
+	static const unsigned sizes[] = { 0u, 1u, 2u, 64u };
+	static const unsigned char codes[] = { 0, 1, 2, 63, 126, 127 };
+	unsigned char map_before[MAPP_SLOT];
+	int si, mode, hist, dbg, s, row, col;
+	int saw_low = 0, saw_high = 0, saw_equal = 0;
+	int saw_empty = 0, saw_full = 0;
+	long trial = 375000;
+
+	diff_begin("V90Demapper::resetNoSpectral, bounded component rows");
+	dsplib_debug_capture_on = 1;
+	for (si = 0; si < 4; si++)
+	  for (mode = 0; mode < 3; mode++)
+	    for (hist = 0; hist < 2; hist++)
+	      for (dbg = 0; dbg < 2; dbg++) {
+		unsigned n = sizes[si];
+		unsigned lf = 0x6d31u + 0x1a4bu * (unsigned)++trial;
+
+		dsplibs_debug_level = ref_dsplibs_debug_level = dbg ? 2u : 0u;
+		fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x11a7u);
+		adi_plant_maps(0, 0);
+		fill(parm_s, (int)PARM_SLOT, lf ^ 0x4c9u);
+		PARAMS->DEBUG_DEMAPPER_ERROR_HISTOGRAM = hist;
+		PARAMS->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM = 17;
+		fill(mapp_s, (int)MAPP_SLOT, lf ^ 0x3fe1u);
+		MAPP->word_0 = 24;
+		for (row = 0; row < V90DEMAPPER_CONSTELLATIONS; row++) {
+			ADI(0).altRbsFlag[row] = (short)
+			    (mode == 0 ? 0 : mode == 1 ? 1 : row & 1);
+			MAPP->constellationSize[row] = n;
+			for (col = 0; col < V90DEMAPPER_LEVELS; col++)
+				MAPP->constellation[row][col] =
+				    codes[(row + col) % 6];
+		}
+		for (s = 0; s < 2; s++) {
+			dem_setup(s, 0, 0, lf);
+			for (row = 0; row < V90DEMAPPER_CONSTELLATIONS; row++)
+				DEM(s).constellationSize[row] = 2;
+			DEM(s).signBitsPerFrame = 6;
+			DEM(s).signDecoder.prev_ = 0xa7;
+			DEM(s).histogramDelay = 0x5a5a;
+			DEM(s).histogramIntegration = 0x3c3c;
+			DEM(s).errorHistogramCount = 0;
+			memset(DEM(s).errorSum, 0, sizeof DEM(s).errorSum);
+			memset(DEM(s).errorCount, 0, sizeof DEM(s).errorCount);
+			memcpy(dem_before[s], dem_s[s], DEM_SLOT);
+		}
+		memcpy(map_before, mapp_s, sizeof map_before);
+		memcpy(adi_pre, adi_s[0], sizeof adi_pre);
+		dsplib_debug_capture_reset();
+		our_resetns(&DEM(0), MAPP);
+		ref_resetns(&DEM(1), MAPP);
+		cmp_obj("bounded reset object", skip_read, DEM_SIZE,
+		    "V90Demapper", trial);
+		diff_eq_obj("bounded mapping input", unsigned char[MAPP_SLOT],
+		    mapp_s, map_before, trial);
+		diff_eq_obj("bounded detector input", V90AutoDigitalImpDetector,
+		    &ADI(0), adi_pre, trial);
+		diff_eq_int("bounded reset transcript (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			dsplib_debug_capture_text(1)) == 0, 1, trial);
+		for (s = 0; s < 2; s++) {
+			unsigned decoder[7];
+			for (row = 0; row < V90DEMAPPER_CONSTELLATIONS; row++) {
+				short expected[V90DEMAPPER_LEVELS];
+				int doubled = ADI(0).altRbsFlag[row] != 0;
+				unsigned j;
+				memcpy(expected,
+				    ((V90Demapper *)dem_before[s])->constellation[row],
+				    sizeof expected);
+				for (j = 0; j < n; j++) {
+					unsigned code = MAPP->constellation[row][j];
+					short a = ADI(0).linMapp[row][code];
+					short b = ADI(0).linMappAlt[row][code];
+					if (doubled) {
+						expected[2 * j] = a >= b ? a : b;
+						expected[2 * j + 1] = a >= b ? b : a;
+						saw_low |= a < b;
+						saw_high |= a > b;
+						saw_equal |= a == b;
+					} else
+						expected[j] = a;
+				}
+				saw_empty |= n == 0;
+				saw_full |= doubled && n == 64;
+				decoder[row] = n;
+				diff_eq_obj("bounded constellation row",
+				    short[V90DEMAPPER_LEVELS],
+				    DEM(s).constellation[row], expected,
+				    trial * 12 + s * 6 + row);
+			}
+			decoder[6] = 18;
+			diff_eq_obj("bounded modulus snapshot", unsigned[7],
+			    &DEM(s).modulusDecoder, decoder, trial * 2 + s);
+			diff_eq_int("bounded frame bits (%ld)",
+			    DEM(s).bitsPerFrame, 24, trial * 2 + s);
+			diff_eq_int("bounded modulus bits (%ld)",
+			    DEM(s).modulusBitCount, 18, trial * 2 + s);
+			diff_eq_int("bounded sign state (%ld)",
+			    DEM(s).signDecoder.prev_, 0, trial * 2 + s);
+		}
+	      }
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+	diff_eq_int("bounded pairs include smaller normal values", saw_low, 1, 0);
+	diff_eq_int("bounded pairs include larger normal values", saw_high, 1, 0);
+	diff_eq_int("bounded pairs include equal values", saw_equal, 1, 0);
+	diff_eq_int("bounded rows include empty input", saw_empty, 1, 0);
+	diff_eq_int("bounded doubled rows fill all128 outputs", saw_full, 1, 0);
+	return diff_end();
+}
+
 /* -------------------------------------------------------------- reset --- */
 
 /*
@@ -2049,6 +2168,7 @@ main(void)
 	rc |= run_incrbs();
 	rc |= run_updconst();
 	rc |= run_resetns();
+	rc |= run_resetns_bounded();
 	rc |= run_reset();
 	rc |= run_lms();
 

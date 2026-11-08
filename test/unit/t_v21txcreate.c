@@ -54,6 +54,7 @@
 extern void *ref_V21TX_create(void *modem, const struct v21tx_cfg *params);
 extern void ref_V21TX_delete(void *modem);
 extern int ref_V21TX_control(void *modem, const struct v21tx_ctl *arg);
+extern int ref_V21TX_status(void *modem, struct v21_status *st);
 extern int ref_V21TX_modem(void *modem, unsigned short *in, short *out,
 			   unsigned short *count);
 extern short ref_TxHdxStartV21(void *modem, unsigned short *in, short *out,
@@ -309,6 +310,39 @@ build_cfg(struct v21tx_cfg *c, long k)
 	c->protocol = cases[k].protocol;
 }
 
+/* Status is sampled from valid constructor/control histories with a separate
+ * report object. These calls do not establish any overlapping-buffer contract.
+ * The byte pattern also observes fields that the original leaves untouched. */
+static void
+status_after_history(void *a, void *b, const char *label, long where)
+{
+	struct v21_tx *ta = (struct v21_tx *)a;
+	struct v21_tx *tb = (struct v21_tx *)b;
+	struct v21tx_cfg before_a = ta->cfg;
+	struct v21tx_cfg before_b = tb->cfg;
+	struct v21_status sa, sb;
+	int ra, rb;
+
+	memset(&sa, 0xa5, sizeof sa);
+	memset(&sb, 0xa5, sizeof sb);
+	rb = ref_V21TX_status(b, &sb);
+	ra = V21TX_status(a, &sa);
+
+	diff_eq_int("status history return (%ld)", ra, rb, where);
+	diff_eq_int("status history succeeded (%ld)", ra, 1, where);
+	diff_eq_obj(label, struct v21_status, &sa, &sb, where);
+	diff_eq_obj("status leaves source config", struct v21tx_cfg,
+		    &ta->cfg, &before_a, where);
+	diff_eq_obj("status leaves reference config", struct v21tx_cfg,
+		    &tb->cfg, &before_b, where);
+	diff_eq_int("status history protocol (%ld)", sa.protocol,
+		    before_a.protocol, where);
+	diff_eq_int("status history configured flag (%ld)", sa.flags,
+		    before_a.flags & V21_STATUS_BIT2, where);
+	diff_eq_int("status history adjacent bits preserved (%ld)",
+		    sa.flags1, 0xa4, where);
+}
+
 static int
 test_create_self_allocating(void)
 {
@@ -336,6 +370,7 @@ test_create_self_allocating(void)
 			continue;
 
 		compare_tree(cases[k].name, a, b, k);
+		status_after_history(a, b, "status after constructor", k);
 
 		/*
 		 * Fresh from `V21TX_create`, before anything has run:
@@ -720,6 +755,8 @@ test_control(void)
 			continue;
 		}
 
+		status_after_history(a, b, "status before control", 2 * k);
+
 		memset(&arga, 0, sizeof arga);
 		arga.int_0004 = tctl_cases[k].int_0004;
 		arga.scale = tctl_cases[k].scale;
@@ -734,6 +771,7 @@ test_control(void)
 		diff_eq_int("V21TX_control return (%ld)", ra, rb, k);
 
 		compare_tree_ex(tctl_cases[k].name, a, b, k, 0);
+		status_after_history(a, b, "status after control", 2 * k + 1);
 
 		V21TX_delete(a);
 		ref_V21TX_delete(b);

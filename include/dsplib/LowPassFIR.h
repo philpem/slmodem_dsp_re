@@ -172,11 +172,12 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 	if (coefficients != 0)
 		sysdep_free(coefficients);
 
+	/* Read the published count at the native points across these calls. */
 	if (window == 0) {
-		coefficients = (T *)sysdep_malloc(nTaps * sizeof(T));
-		hamming(coefficients, nTaps);
+		coefficients = (T *)sysdep_malloc(taps * sizeof(T));
+		hamming(coefficients, taps);
 	} else if (adopt == 0) {
-		coefficients = (T *)sysdep_malloc(nTaps * sizeof(T));
+		coefficients = (T *)sysdep_malloc(taps * sizeof(T));
 		for (i = 0; i < taps; i++)
 			coefficients[i] = window[i];
 	} else {
@@ -186,36 +187,36 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 
 	{
 		/*
-		 * x = -(nTaps - 1) * cutoff / 2, at extended precision, and
+		 * x = -(taps - 1) * cutoff / 2, at extended precision, and
 		 * the count comes in through `fildll` with the high word
 		 * zeroed -- x87 has no unsigned integer load.
 		 *
-		 * The association is the object's: (nTaps-1) * (-cutoff)
+		 * The association is the object's: (taps-1) * (-cutoff)
 		 * first, then * 0.5f.  0.5 is `.rodata.cst4+0x1f0`, a float.
 		 */
-		long double x = (long double)(unsigned long long)(nTaps - 1)
-			      * (long double)(-cutoff)
-			      * (long double)0.5f;
+		T x = (unsigned long long)(taps - 1)
+		      * (-cutoff) * 0.5f;
 
 		for (i = 0; i < taps; i++) {
 			/*
 			 * ROUNDED TO float EVERY ITERATION.  `fsts (%esp)`
 			 * puts it in sinc's argument slot and `fstps
 			 * 0x10(%esp)` in the slot the recurrence reloads --
-			 * two 4-byte stores of the same register.  A `long
-			 * double` running total would be a different filter.
+			 * two 4-byte stores of the same register.  The template-T home supplies the value reloaded
+			 * after the call; excess precision stays within each x87 expression.
 			 */
-			T xf = (T)x;
-			long double t;
+			/* Retain this iteration's pointer across sinc. */
+			T *coefs = coefficients;
+			T t;
 
-			t = (long double)sinc(xf) * (long double)cutoff;
+			t = sinc(x) * cutoff;
 
 			/* flds 0x10(%esp) ; fadds cutoff -- from the FLOAT. */
-			x = (long double)xf + (long double)cutoff;
+			x = x + cutoff;
 
 			/* One rounding, here, on (sinc*cutoff)*w[i]. */
-			coefficients[i] =
-			    (T)(t * (long double)coefficients[i]);
+			coefs[i] =
+			    (T)(t * coefs[i]);
 		}
 	}
 
@@ -231,11 +232,11 @@ int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
 		 * this is gain/0 = inf; the loop then writes 0*inf, the x87
 		 * indefinite, into every tap.  That is what the blob does.
 		 */
-		long double scale = (long double)gain / sum(coefficients, taps);
+		T scale = gain / sum(coefficients, taps);
 
 		for (i = 0; i < taps; i++)
 			coefficients[i] =
-			    (T)((long double)coefficients[i] * scale);
+			    (T)(coefficients[i] * scale);
 	}
 
 	return 0;

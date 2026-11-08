@@ -224,5 +224,5 @@ struct v27tx_cfg V27TX_CFG = {
 	1,			/* fifo_size_factor -- the FIFO's own size
 					multiplier, `v17tx_cfg`'s own name   */
 	0,			/* int_0018 -- V27TXP_TRAIN_LONG's source     */
-	0,			/* int_001c -- FPM_PPS_CFG's aux              */
+	0,			/* aux -- FPM_PPS_CFG's aux              */
 };

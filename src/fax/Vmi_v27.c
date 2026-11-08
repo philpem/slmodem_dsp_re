@@ -56,8 +56,8 @@ v27tx_create(struct faxvmi_link *dp, const struct v27tx_cfg *cfg)
 
 	local = (cfg != NULL) ? *cfg : V27TX_CFG;
 
-	handle = V27TX_create((void *)(long)dp->int_0014, &local);
-	dp->int_0014 = (int)(long)handle;
+	handle = V27TX_create(dp->modem, &local);
+	dp->modem = handle;
 
 	dp->pack_count = (local.bitrate == 2400) ? 24 : 32;
 	dp->unpack_width = 0;
@@ -72,8 +72,8 @@ v27rx_create(struct faxvmi_link *dp, const struct v27rx_cfg *cfg)
 
 	local = (cfg != NULL) ? *cfg : V27RX_CFG;
 
-	handle = V27RX_create((void *)(long)dp->int_0014, &local);
-	dp->int_0014 = (int)(long)handle;
+	handle = V27RX_create(dp->modem, &local);
+	dp->modem = handle;
 	dp->pack_count = 0;
 	dp->unpack_width = (local.bit_rate == 2400) ? 2 : 3;
 	dp->pack_width = 0;
@@ -82,20 +82,20 @@ v27rx_create(struct faxvmi_link *dp, const struct v27rx_cfg *cfg)
 void
 v27tx_delete(struct faxvmi_link *dp)
 {
-	V27TX_delete((void *)(long)dp->int_0014);
+	V27TX_delete(dp->modem);
 }
 
 void
 v27rx_delete(struct faxvmi_link *dp)
 {
-	V27RX_delete((void *)(long)dp->int_0014);
+	V27RX_delete(dp->modem);
 }
 
 int
 v27tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		     unsigned short *result)
 {
-	int status = V27TX_modem((void *)(long)dp->int_0014, dp->buf, out, count);
+	int status = V27TX_modem(dp->modem, dp->buf, out, count);
 	*result = *count;
 	*count = 0;
 	return status;
@@ -105,7 +105,7 @@ int
 v27rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		     unsigned short *count)
 {
-	int status = V27RX_modem((void *)(long)dp->int_0014, in, (short *)dp->buf, count);
+	int status = V27RX_modem(dp->modem, in, (short *)dp->buf, count);
 	*result = *count;
 	*count = 0;
 	return status;
@@ -114,23 +114,23 @@ v27rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 int
 v27tx_status(struct faxvmi_link *dp, void *status)
 {
-	return V27TX_status((const void *)(long)dp->int_0014, status);
+	return V27TX_status(dp->modem, status);
 }
 
 int
 v27rx_status(struct faxvmi_link *dp, void *status)
 {
-	return V27RX_status((void *)(long)dp->int_0014, status);
+	return V27RX_status(dp->modem, status);
 }
 
 int
 v27tx_control(struct faxvmi_link *dp, void *req)
 {
-	return V27TX_control((void *)(long)dp->int_0014, req);
+	return V27TX_control(dp->modem, req);
 }
 
 int
 v27rx_control(struct faxvmi_link *dp, void *req)
 {
-	return V27RX_control((void *)(long)dp->int_0014, req);
+	return V27RX_control(dp->modem, req);
 }

@@ -37,12 +37,12 @@ FPM_SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
 	const int amask = smc->cfg.amask;
 	const int pmask = smc->cfg.pmask;
 	const int rot_step = smc->cfg.rot_step;
-	const int rot_mod = smc->cfg.rot_mod;
+	const short rot_mod = smc->cfg.rot_mod;
 	short *sym = ring->sym;
-	const int len = ring->len;
+	const short len = ring->len;
 	short quad = smc->quad;
 	short acc = smc->acc;
-	int widx = ring->widx;
+	short widx = ring->widx;
 
 	while (count--) {
 		unsigned short word = *data++;

@@ -25,10 +25,14 @@ in this path. Deviation D53 records that original behaviour.
 The tree also contains `probe_preemp_shape`, a deliberate alternative that
 scores eleven filter templates against usable bins and selects the smallest
 residual variance. It can fall back to the original counter when there is
-insufficient evidence. `dsplib_v34_blob_preemp` defaults to one when
-`DSPLIB_REPRODUCE_BUGS` is defined and zero otherwise. Record both the build
-mode and this runtime flag when comparing results. A compile-time
-`DSPLIB_V34_TEST_PREEMP_INDEX` override is a separate experimental actuator.
+insufficient evidence. Normal builds retain `dsplib_v34_blob_preemp`: zero
+selects SHAPE with counter fallback, and one selects the counter.
+Reconstruction builds define `DSPLIB_REPRODUCE_BUGS`, exclude the SHAPE
+implementation and always use the counter, even if the exported flag is zero.
+Bench comparisons that need SHAPE must link normal objects. Record the build
+mode and, for normal builds, the runtime flag when comparing results. The
+compile-time `DSPLIB_V34_TEST_PREEMP_INDEX` override is a separate experimental
+actuator.
 
 The [historical training study](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/training.md)
 describes an earlier Theil–Sen fitter named `probe_preemp_fit`. That is not

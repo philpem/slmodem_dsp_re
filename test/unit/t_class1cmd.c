@@ -25,8 +25,8 @@ extern struct fax_class1 *ref_fax_class1_create(struct fax_class1 *existing,
 extern int ref_fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3,
 				  int arg4);
 extern int ref__answer_tone_state(void *ctx, const short *rx, short *tx,
-				  int word3, int word4, int *rx_count,
-				  int *tx_count, int word7, int *word8);
+				  unsigned char *word3, const unsigned char *word4, int *rx_count,
+				  int *tx_count, int *word7, int *word8);
 
 /*
  * FILE-LOCAL in the object, so class1.c defines it `static` and class1.h no
@@ -35,8 +35,8 @@ extern int ref__answer_tone_state(void *ctx, const short *rx, short *tx,
  * unchanged; the test tier links a globalized copy (tools/testvisible.py).
  */
 extern int _answer_tone_state(struct fax_class1 *ctx, const short *rx,
-			      short *tx, int word3, int word4,
-			      int *rx_count, int *tx_count, int word7,
+			      short *tx, unsigned char *word3, const unsigned char *word4,
+			      int *rx_count, int *tx_count, int *word7,
 			      int *word8);
 
 extern unsigned int ref_dsplibs_debug_level;

@@ -16,13 +16,22 @@ import tempfile
 
 FILES = ('gcc3_owner_trace.py', 'gcc3_search_width.py',
          'toolchain/byteident.py', 'toolchain/jumptable.py',
-         'toolchain/induction_jumptable.py', 'toolchain/readonly_copy.py')
+         'toolchain/induction_jumptable.py', 'toolchain/readonly_copy.py',
+         'toolchain/framefree.py', 'toolchain/fidelity.py',
+         'toolchain/guarded_switch.py', 'toolchain/callee_effects.py',
+         'toolchain/linkedcopies.py', 'ci/period_metrics.py')
 MODULES = {'gcc3_owner_trace': 'gcc3_owner_trace.py',
            'gcc3_search_width': 'gcc3_search_width.py',
            'byteident': 'toolchain/byteident.py',
            'jumptable': 'toolchain/jumptable.py',
            'induction_jumptable': 'toolchain/induction_jumptable.py',
-           'readonly_copy': 'toolchain/readonly_copy.py'}
+           'readonly_copy': 'toolchain/readonly_copy.py',
+           'framefree': 'toolchain/framefree.py',
+           'fidelity': 'toolchain/fidelity.py',
+           'guarded_switch': 'toolchain/guarded_switch.py',
+           'callee_effects': 'toolchain/callee_effects.py',
+           'linkedcopies': 'toolchain/linkedcopies.py',
+           'period_metrics': 'ci/period_metrics.py'}
 
 
 def require(condition, reason):
@@ -54,6 +63,9 @@ class HelperContext:
         # owner_trace handles stdlib dis shadowing before loading toolchain modules.
         previous_path = sys.path[:]
         try:
+            # byteident.body_digest imports this helper lazily. Preload its
+            # captured copy too, so a later call cannot consult live CI files.
+            sys.path.insert(0, str(self.tools / 'ci'))
             sys.path.insert(0, str(self.tools))
             self.owner = importlib.import_module('gcc3_owner_trace')
             for name in MODULES:

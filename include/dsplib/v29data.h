@@ -185,13 +185,13 @@ struct v29tx_cfg {
 		int fifo_size_factor; /* full template/configuration storage */
 		unsigned short fifo_size_factor_word; /* VMI low-word override */
 	};
-	int	int_0018;	/* +0x18  0; `V29TX_create` passes it as `FPM_PPS_CFG::aux`, itself unnamed -- retained neutral (Batch 27) */
+	void *aux;	/* +0x18 -> FPM_PPS_CFG::aux; init stores caller pointer */
 };
 typedef char v29tx_cfg_factor_at_14[__builtin_offsetof(struct v29tx_cfg,fifo_size_factor)==0x14?1:-1];
 typedef char v29tx_cfg_word_at_14[__builtin_offsetof(struct v29tx_cfg,fifo_size_factor_word)==0x14?1:-1];
 typedef char v29tx_cfg_factor_width4[sizeof(((struct v29tx_cfg*)0)->fifo_size_factor)==4?1:-1];
 typedef char v29tx_cfg_word_width2[sizeof(((struct v29tx_cfg*)0)->fifo_size_factor_word)==2?1:-1];
-typedef char v29tx_cfg_size[sizeof(struct v29tx_cfg)==28?1:-1];
+typedef char v29tx_cfg_size[(sizeof(void *) != 4 || sizeof(struct v29tx_cfg)==28)?1:-1];
 
 
 extern struct v29tx_cfg V29TX_CFG;

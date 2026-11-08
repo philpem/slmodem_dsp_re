@@ -130,7 +130,7 @@ void V22_PPS_init(struct v22_pps *state, const struct v22_pps_cfg *cfg,
 		  int fresh);
 
 /** @brief Release the V.22 transmit pulse shaper's history buffers. @param state The shaper state to tear down. */
-void V22_PPS_free(struct v22_pps *state);
+void V22_PPS_free(struct v22_pps *state, int unused);
 
 /**
  * @brief Interpolate `count` V.22 transmit symbols into passband samples.

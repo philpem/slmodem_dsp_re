@@ -3,7 +3,10 @@
 Agent workflow distilled from [GitHub #22](https://github.com/philpem/slmodem_dsp_re/issues/22).
 Use with [refinement.md](refinement.md), which describes the individual levers.
 Measured examples and commands live in [cid-dcr-audit.md](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/cid-dcr-audit.md);
-outstanding work lives in issues.
+current investigation state and next discriminators live in Hindsight. Historical
+issue links are provenance, not a progress queue. GitHub issues are reserved for
+demonstrated original-DSP bugs needing gated post-reconstruction repairs; see
+`AGENTS.md` for the current policy and autonomous startup workflow.
 
 ## The target is an object, not the minimum of a score
 
@@ -25,7 +28,27 @@ idiomatic source when equally supported spellings produce the same output.
 
 ## 1. Validate the experiment before interpreting it
 
-Read the issue's latest results and relevant audit section. Identify what is
+Experimental compilation uses local controls; full gates, global censuses and CI
+are not prerequisites for running a variant. Establish the unchanged full-TU
+baseline, preserve the compiler/profile and input evidence, then compare the
+affected functions and TU locally. Refresh linked proof inputs only when that
+comparison requires them. Discarded variants do not require a whole-tree gate,
+census, parity run, partial link or CI job.
+
+Use the maintained comparator's per-function APIs or affected-TU helpers; keep
+its proof rules intact. `byteident.py --limit` only limits printed rows and
+does not turn a global census into a local comparison.
+
+Use relevant focused period differentials to validate source selected for
+retention before committing it. Complete independent TU review and settle
+supported partials before the integration freeze. Run the full phase gate,
+global census, object parity, partial-link checks and PR/CI validation once for
+that reviewed candidate. A later retained-source change requires validation of
+the new tree. Experimental controls and final integration evidence serve
+different purposes; record their scopes separately.
+
+Read relevant Hindsight conclusions and the audit section; verify them against
+the current code/artifacts. Identify what is
 still open; do not restart an already exhausted experiment without new evidence.
 
 Use recovered Gentoo GCC 3.4.2-r2 and its selected period assembler/linker.
@@ -42,6 +65,13 @@ or STT_FILE changes are not a blanket excuse. Isolate profile outputs; do not
 reuse a source-timestamp-only cache after changing flags. Demonstrate a new
 generator/detector changing a known input, and report its denominator.
 
+An alternate comparison tree also needs the current selected partial-link
+proof context used by the grader. Set `TC_OUT` explicitly, rebuild that context
+and retain the relevant linked inputs. A scratch tree containing byte-identical
+objects can still yield incomplete evidence if those independent proof inputs
+are absent. Preserve such a run as invalid rather than waiving an unresolved
+verdict or changing source to satisfy it.
+
 Control drift, unexplained missing symbols, or empty results stop interpretation.
 Preserve invalid runs as invalid and rerun; do not repair their conclusions
 after the fact. #22 required reruns for omitted register renaming and omitted
@@ -53,7 +83,15 @@ and visibility before ruling out the profile globally or changing source just
 to make it compile. An incomplete build has no valid whole-object accuracy
 denominator; report compilation coverage and the failures separately.
 
-## 2. Cross explanations, rather than hill-climbing one axis
+## 2. Establish the compiler cause, then cross supported explanations
+
+When the emitter is unexplained, trace the first relevant difference through
+matching period GCC source and dumps before proposing code alternatives. Inspect
+actual inputs, pass admission/legality rules, dataflow and decisions. Do not
+replace an unknown cause with source/reorder/cast palettes. A measured current
+mechanism does not recover the original source graph, and a static admission
+barrier is not proof that removing it would produce the native result. Reproduce
+the unchanged baseline through any diagnostic compiler path before trusting it.
 
 Before compiling, write a prediction and a falsifier. Example: "If automatic
 inlining causes this mismatch, disabling it should restore the helper call;
@@ -75,6 +113,16 @@ V32 recovered four O2 losses with source static inline. Plain O2 recovered
 14 losses from the bundled O2/no-rerun-CSE profile. PCM needed web, automatic
 inlining **and unswitching** to reproduce its O3 object. A one-axis search
 could miss all three explanations.
+
+A pass control that restores a complete native body is an admission to the
+crossed inquiry. If it loses an existing exact neighbour, map that neighbour's
+native captures, callback epochs and dependencies before rejecting the profile.
+The old exact source may rely on a compensating optimisation. Conversely, an
+exact gain does not waive a neighbour's loss. Resolve or explicitly review every
+named obligation before retention; a diagnostic hit alone does not justify a
+new build exception. Confirm the original TU boundary, profile scope and actual
+period/comparison object parity. A command line need not be uniquely original
+to be a supported, accurately qualified reconstruction hypothesis.
 
 Keep alternative explanatory candidates, including useful losing ones. Prefer
 common-profile explanations, but do not manufacture per-file exceptions to
@@ -214,7 +262,8 @@ an explicit exclusion of `re/`. The parent reviews actual commands, independentl
 rescores results and inspects losses before adopting conclusions. Shared tools
 and instructions land on master; active branches merge/rebase it.
 
-Record this ledger in the issue or a linked artifact:
+Keep this ledger in the bounded scratch contract and artifacts. Batch its durable
+result into Hindsight; a permanent handover/wave report is not required:
 
 ```text
 Question and reference evidence:
@@ -228,5 +277,7 @@ Conclusion limited to this domain; alternatives still open:
 Next test OR stopping reason and evidence needed to reopen:
 ```
 
-Issues are the open-work queue; findings/deviations are the measured record.
-Link them so the next agent resumes rather than rediscovers the starting point.
+Hindsight carries resumable investigation state, closed domains and next controls.
+Findings/deviations preserve measured records. Issues are only for demonstrated
+original-DSP bugs needing post-reconstruction repair behind the established
+`DSPLIB_REPRODUCE_BUGS` gates. PRs retain code-review and validation evidence.

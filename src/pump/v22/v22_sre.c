@@ -326,7 +326,7 @@ sre_update(struct v22_sre *sre, short yq, short xq)
 
 	{
 		short p;
-		int acc = sre->pll_acc;
+		unsigned short acc = sre->pll_acc;
 
 		p = (short)(((SREv22_PLL_K1[m] * e) >> 12) + acc);
 		sre->pll_acc = (short)(((SREv22_PLL_K2[m] * e + 0x800) >> 12)
@@ -390,7 +390,8 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, unsigned short
 	short remaining = count;
 
 	while (remaining != 0) {
-		short y, tick, mode;
+		short y, mode;
+		unsigned short tick;
 		int d, acc_x, acc_y;
 
 		/*
@@ -432,9 +433,9 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, unsigned short
 		 * clock reference.  Note the y term SUBTRACTS.
 		 */
 		tick = sre->tick;
-		sre->tick = (short)(tick + 1);
-		acc_x = sre->acc_x + ((d * SREv22_xCLOCK[tick]) >> 3);
-		acc_y = sre->acc_y - ((d * SREv22_yCLOCK[tick]) >> 3);
+		sre->tick = tick + 1;
+		acc_x = sre->acc_x + ((d * SREv22_xCLOCK[(short)tick]) >> 3);
+		acc_y = sre->acc_y - ((d * SREv22_yCLOCK[(short)tick]) >> 3);
 
 		/* The envelope, and the only rounded smoother of the two. */
 		mode = sre->mode;
@@ -446,7 +447,7 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, unsigned short
 			sre->acc_x = acc_x;
 			sre->acc_y = acc_y;
 		} else {
-			short group = sre->group;
+			unsigned short group = sre->group;
 
 			sre->tick = 0;
 			if (sre->groups > (short)(group + 1)) {
@@ -488,13 +489,15 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, unsigned short
 						   > 0x62;
 				}
 
-				if (update)
+				if (update) {
+					sre->group = (short)(group + 1);
 					sre_update(sre, (short)yq, (short)xq);
+				}
 
 				/*
-				 * The original also stores group + 1 before
-				 * the update; every path from there reaches
-				 * this line, so that store is dead.
+				 * Publish group + 1 before the update call,
+				 * then clear it at the common group boundary
+				 * below, as the object does.
 				 */
 				sre->group = 0;
 				sre->acc_x = 0;
@@ -598,8 +601,9 @@ V22_SRE_init(struct v22_sre *sre, int fresh)
 }
 
 void
-V22_SRE_free(struct v22_sre *sre)
+V22_SRE_free(struct v22_sre *sre, int unused)
 {
+	(void)unused;
 	/* Reverse allocation order, and the pointers are left dangling. */
 	sysdep_free(sre->clk);
 	sysdep_free(sre->hist);

@@ -114,14 +114,14 @@ struct v22_sre {
 				 *       sections, each { now, previous }       */
 	int acc_x;		/* +0x24 discriminant . SREv22_xCLOCK           */
 	int acc_y;		/* +0x28 discriminant . SREv22_yCLOCK           */
-	short frac;		/* +0x2c sub-branch phase, 0 .. 2047            */
+	unsigned short frac;	/* +0x2c sub-branch phase, 0 .. 2047            */
 	short branch;		/* +0x2e polyphase branch, 0 .. 9               */
 	short groups;		/* +0x30 six-sample groups per PLL update: 3
 				 *       in modes 0 and 1, 12 in mode 2         */
 	short settle;		/* +0x32 update counter, 0 .. 65; at 64 the
 				 *       loop leaves mode 0 for mode 1          */
-	short group;		/* +0x34 groups counted since the last update   */
-	short tick;		/* +0x36 sample within the group, 0 .. 5;
+	unsigned short group;	/* +0x34 groups counted since the last update   */
+	unsigned short tick;	/* +0x36 sample within the group, 0 .. 5;
 				 *       indexes SREv22_xCLOCK / yCLOCK         */
 	short need;		/* +0x38 input samples owed before the next
 				 *       output; carried across calls           */
@@ -152,7 +152,7 @@ struct v22_sre {
 void V22_SRE_init(struct v22_sre *sre, int fresh);
 
 /** @brief Release the V.22 SRE's three buffers. Does not clear the pointers. @param sre The SRE state to tear down. */
-void V22_SRE_free(struct v22_sre *sre);
+void V22_SRE_free(struct v22_sre *sre, int unused);
 
 /**
  * @brief Recover symbol timing and resample `count` V.22 receive samples.

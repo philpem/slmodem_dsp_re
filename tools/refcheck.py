@@ -367,9 +367,12 @@ def tracked():
     # and a checker that miscounts in the case it was built for is one nobody
     # should have to second-guess.
     #
-    out = subprocess.run(["git", "ls-files"], capture_output=True, text=True)
+    out = subprocess.run(["git", "ls-files", "--", ".", ":(exclude)re/**"],
+                          capture_output=True, text=True)
     seen, paths = set(), []
     for p in out.stdout.split("\n"):
+        if p.startswith("re/"):
+            continue
         if p in seen or not p.endswith(SCAN_EXT) or not os.path.exists(p):
             continue
         seen.add(p)

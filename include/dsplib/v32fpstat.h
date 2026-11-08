@@ -113,7 +113,20 @@ struct v32_status {
 	 * `V32FP_status` both copy it straight back into the request they
 	 * build.  Not named for the same reason `ctl0`'s bits are not.
 	 */
-	unsigned char flags;	/* +0x14                                     */
+	/* Native byte SETE/shift producers establish this bitfield view. */
+	union {
+		unsigned char flags; /* +0x14 byte view */
+		struct {
+			unsigned char scrambler : 1;
+			unsigned char descrambler : 1;
+			unsigned char bit2 : 1;
+			unsigned char bit3 : 1;
+			unsigned char bit4 : 1;
+			unsigned char eq_frozen : 1; /* adaptation requested off */
+			unsigned char bit6 : 1;
+			unsigned char bit7 : 1;
+		} flag_bits;
+	};
 	unsigned char flags1;	/* +0x15 bit 0 <- obj + 0x11 bit 2           */
 	short r16;		/* +0x16 not written                         */
 	int r18;		/* +0x18 <- fp + 0x188                       */
@@ -121,6 +134,20 @@ struct v32_status {
 	int r20;		/* +0x20 always 0                            */
 	int r24;		/* +0x24 always 0                            */
 };
+
+typedef char v32_status_flags_at_14[
+	__builtin_offsetof(struct v32_status, flags) == 0x14 ? 1 : -1];
+typedef char v32_status_bit_view_at_14[
+	__builtin_offsetof(struct v32_status, flag_bits) == 0x14 ? 1 : -1];
+typedef char v32_status_bit_view_one_byte[
+	sizeof(((struct v32_status *)0)->flag_bits) == 1 ? 1 : -1];
+typedef char v32_status_flags1_at_15[
+	__builtin_offsetof(struct v32_status, flags1) == 0x15 ? 1 : -1];
+typedef char v32_status_r20_at_20[
+	__builtin_offsetof(struct v32_status, r20) == 0x20 ? 1 : -1];
+typedef char v32_status_r24_at_24[
+	__builtin_offsetof(struct v32_status, r24) == 0x24 ? 1 : -1];
+typedef char v32_status_size_28[sizeof(struct v32_status) == 0x28 ? 1 : -1];
 
 /* ------------------------------------------------------------------------ */
 

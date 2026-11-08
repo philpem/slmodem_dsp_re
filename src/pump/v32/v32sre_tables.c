@@ -128,6 +128,5 @@ const struct fpm_sre_cfg SREv32_CFG = {
 	200,			/* +0x2e err_lo      >> 3 =   25             */
 	1500,			/* +0x30 rms_min                             */
 	9,			/* +0x32 rms_len                             */
-	0,			/* +0x34 pad34                               */
-	0			/* +0x36 pad36                               */
+	0			/* +0x34 owner */
 };

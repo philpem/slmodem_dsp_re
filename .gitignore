@@ -1,3 +1,6 @@
+# Investigation-local scripts, inputs and temporary artifacts.
+/scratch/
+
 # build products
 *.o
 *.a

@@ -126,7 +126,7 @@ extern const signed char MMinTable[32];
 struct v34_shell {
 	unsigned char pad_000[0xa00];
 	short           span;			/* +0xa00 */
-	short           subframe_limit;			/* +0xa02 sub-frame limit  */
+	unsigned short  subframe_limit;			/* +0xa02 sub-frame limit  */
 	short           group_count;			/* +0xa04 */
 	short           remainder;			/* +0xa06 */
 	short           wide_accum;			/* +0xa08 an accumulator putFrame
@@ -172,7 +172,7 @@ struct v34_shell {
 	const short *   conv;			/* +0xa28 */
 	/* Six shorts preinitV34 clears and nothing read so far touches. */
 	short           conv_sr[6];		/* +0xa2c */
-	short           prev_k;			/* +0xa38 last quadrant   */
+	unsigned short  prev_k;			/* +0xa38 last quadrant   */
 	short           invert;			/* +0xa3a picks kkInvert  */
 	short           subframe_count;			/* +0xa3c sub-frame count */
 	short           frame_count;			/* +0xa3e frame count     */

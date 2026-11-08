@@ -315,13 +315,16 @@ V92Precoder::process(unsigned int *in, int a, int b, int *out, float *outf)
 			long double point, sum;
 			int j;
 
+			/* The original reloads tableA[n] inside each search arm
+			 * (0x57050, 0x57117), after any earlier out[i] store.
+			 * The bounds above use their separate initial step read. */
 			if (i > 2) {
 				int parity = (out[0] + out[1] + out[2] + b)
 					     & 1;
 
-				j = 2 * (k * step + x) + parity;
+				j = 2 * (k * tableA[n] + x) + parity;
 			} else {
-				j = k * step + x;
+				j = k * tableA[n] + x;
 			}
 
 			point = (j < 0) ? -(long double)table[-j - 1]

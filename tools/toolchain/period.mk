@@ -129,6 +129,12 @@ override TC_FLAGS += -DDSPLIB_REPRODUCE_BUGS
 # it is not evidence that the original file used these options.
 TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 
+# Shared V.17/V.27ter/V.29 transmitter-processing profile. Native countdown reloads
+# survive here; GCSE PRE removes them under the general profile. Source and
+# profile controls also preserve the native callback owner/budget lifetimes.
+TC_FAX_PROC_SRCS := src/fax/V17t_prc.c src/fax/V27t_prc.c src/fax/V29t_prc.c
+TC_FAX_PROC_FLAGS := -fno-gcse
+
 # Appended AFTER $(TC_EXTRA), exactly as `build.sh` ordered them, so the
 # override semantics above are unchanged.
 # The object's C++ square roots are bare fsqrt, with no errno fallback.
@@ -136,6 +142,17 @@ TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 # transcendental calls. period_inner.sh applies it to source, not fixtures;
 # this comparison build contains source objects only. See docs/issue19-inline-asm.md.
 TC_CXXONLY := -fno-exceptions -fno-rtti -fno-math-errno -ffast-math
+
+# Native V90 phase-4 calls recivedSUVtag (frontend cost 82), while its pumps
+# inline ordinary helpers through cost 65. Keep both contracts under O3.
+# This budget is a qualified TU profile, not a uniquely recovered flag (F12108).
+TC_V90P4_SRC := src/pump/v90/V90Phase4Modulator.cpp
+TC_V90P4_FLAGS := --param max-inline-insns-auto=80
+
+# Keep native enterRRN/enterDataPhase calls and Phase4/FPE expansions together.
+# A supported interior of the measured 33..58 interval, not unique flags (F12109).
+TC_V90DEMOD_SRC := src/pump/v90/V90Demodulator.cpp
+TC_V90DEMOD_FLAGS := --param max-inline-insns-auto=50
 
 #
 # THE SOURCE LIST HAS ONE HOME AND IT IS THE TOP-LEVEL MAKEFILE.  Re-deriving
@@ -242,8 +259,11 @@ tc: $(TC_OBJ) $(TC_GCCVER)
 FORCE:
 
 $(TC_STAMP): FORCE | $(TC_OUT) tc-image
-	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\n' \
-	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' > '$@.new'
+	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\nfaxproc %s\nfaxproc-sources %s\nv90p4 %s\nv90p4-source %s\nv90demod %s\nv90demod-source %s\n' \
+	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' \
+	        '$(TC_FAX_PROC_FLAGS)' '$(TC_FAX_PROC_SRCS)' \
+	        '$(TC_V90P4_FLAGS)' '$(TC_V90P4_SRC)' \
+	        '$(TC_V90DEMOD_FLAGS)' '$(TC_V90DEMOD_SRC)' > '$@.new'
 	@if cmp -s '$@.new' '$@'; then rm -f '$@.new'; else \
 	   mv '$@.new' '$@'; \
 	   echo "  TC-CFG  $(TC_IMAGE) $(if $(TC_EXTRA),TC_EXTRA=$(TC_EXTRA) ,)-- rebuilding every object"; \
@@ -289,14 +309,14 @@ tc-image:
 define TC_CC_RULE
 $(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
 	@echo '  TC-CC   $(1)'
-	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) -MMD -MP -MT '$$@' \
+	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) $(if $(filter $(TC_FAX_PROC_SRCS),$(1)),$(TC_FAX_PROC_FLAGS)) -MMD -MP -MT '$$@' \
 	    -MF '/out/.deps/$$(@F).d' -o '/out/$$(@F)' '$$<'
 endef
 
 define TC_CXX_RULE
 $(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
 	@echo '  TC-CXX  $(1)'
-	@$$(TC_RUN) g++ -c $$(TC_FLAGS) $$(TC_CXXONLY) -MMD -MP -MT '$$@' \
+	@$$(TC_RUN) g++ -c $$(TC_FLAGS) $$(TC_CXXONLY) $(if $(filter $(TC_V90P4_SRC),$(1)),$(TC_V90P4_FLAGS)) $(if $(filter $(TC_V90DEMOD_SRC),$(1)),$(TC_V90DEMOD_FLAGS)) -MMD -MP -MT '$$@' \
 	    -MF '/out/.deps/$$(@F).d' -o '/out/$$(@F)' '$$<'
 endef
 

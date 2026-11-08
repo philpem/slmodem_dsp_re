@@ -164,8 +164,8 @@ struct v22fp_params {
 	 * patched from the caller's configuration and bit 11 is read back
 	 * here.  Bits 4 and 6 are set in the template and read by nothing.
 	 *
-	 * Status reads bits 9 and 10 through byte +0x11. The typed view
-	 * reproduces those accesses under the measured period GCC/x86 layout;
+	 * Control and status access bits 9 and 10 through byte +0x11. The typed
+	 * view reproduces those accesses under the measured period GCC/x86 layout;
 	 * the whole-word view preserves configuration storage and templates.
 	 */
 	union {

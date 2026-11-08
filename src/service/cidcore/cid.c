@@ -189,7 +189,7 @@ void *
 cid_create(struct cid_modem *ctx, int cid_val, int mode)
 {
 	if (!ctx) {
-		ctx = sysdep_malloc(CID_MODEM_BYTES);
+		ctx = sysdep_malloc(sizeof(*ctx));
 		if (!ctx)
 			return 0;
 

@@ -26,18 +26,11 @@
  *                      enterPhase3 and DILdescriptorPacker over the embedded
  *                      descriptor at +0x004
  *
- * TWO DEAD THINGS ARE DELIBERATELY NOT REPRODUCED, and are recorded here so
- * that nobody "restores" them from the disassembly later:
- *
- *   - `setPhaseIIinfo` contains `inc %eax; cmp $0x3,%eax; jle` at 0xec90,
- *     a four-iteration loop WITH NO BODY.  It computes nothing and touches
- *     no memory.
- *   - `getUinfoValue` keeps a 25-entry float array on its own stack and
- *     stores into it twice per iteration (`fsts 0x30(%esp,%edx,4)`) and
- *     never reads it back.
- *
- * Neither is observable, and a differential test cannot see either, which is
- * exactly why they are written down rather than left to be rediscovered.
+ * The four-iteration empty loop in `setPhaseIIinfo` at 0xec90 remains
+ * absent: it computes nothing and touches no memory.  In `getUinfoValue`,
+ * the private 25-float staging array and both native write epochs are
+ * reconstructed even though the object never reloads that array.  Its final
+ * x87-to-L2 transfer still differs from the source-generated transfer.
  */
 
 #include <math.h>
@@ -530,12 +523,13 @@ VPcmFloModem::getV90CpBits(short *bits)
 
 	if (terminateCp != 0 && cpNotLoaded == 0 &&
 	    nofTransmitSequences >= minNofTransmitSequences) {
-		short live = nofBits;
-		int i;
+		short live;
+		unsigned short i;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("OK Time to move to CPNot " "TX...\r\n");
 
+		live = nofBits;
 		for (i = 0; i < live; i++)
 			cpBitVector[i] = bitVector[i];
 
@@ -1533,7 +1527,8 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	if (ecMode == VPCM_EC_RAMP_MODE) {			/* 0xe53c */
 		if (ecRampCounter != VPCM_EC_RAMP_SENTINEL)
 			ecRampCounter++;
-		rx[0] = (float)ecRampCounter;
+		/* Native 0xe550..0xe557 converts the +0x7f64 word with FILDL. */
+		rx[0] = (float)(int)ecRampCounter;
 	} else {						/* 0xe48b */
 		rx[0] = 0.0f;
 	}
@@ -1892,33 +1887,29 @@ void
 VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
 {
 	const int weight[7] = { 1, 2, 4, 8, 16, 32, 64 };
-	V90Phase2Info *p90;
-	V92Phase2Info *p92;
 	int i, power;
 
 	power = 0;
 	for (i = 0; i <= 4; i++)
 		power += info0[33 + i] * weight[i];
 
-	p90 = modem.phase2Info;
-	p90->maxTxPower = (unsigned char)power;
+	modem.phase2Info->maxTxPower = (unsigned char)power;
 
 	if (info0Layout != 0) {
-		p90->txPowerMeasurementPoint = (info0[38] != 0);
-		p90->pcmType = (info0[39] != 0);
+		modem.phase2Info->txPowerMeasurementPoint = (info0[38] != 0);
+		modem.phase2Info->pcmType = (info0[39] != 0);
 	}
 
-	p92 = v92modem.phase2Info;
-	p92->maxTxPower = p90->maxTxPower;
-	p92->txPowerMeasurementPoint = p90->txPowerMeasurementPoint;
-	p92->pcmType = p90->pcmType;
+	v92modem.phase2Info->maxTxPower = modem.phase2Info->maxTxPower;
+	v92modem.phase2Info->txPowerMeasurementPoint = modem.phase2Info->txPowerMeasurementPoint;
+	v92modem.phase2Info->pcmType = modem.phase2Info->pcmType;
 
 	if (info0Layout != 0) {
-		p92->shortPhase2Remote = (unsigned char)info0[26];
-		p92->v92CapabilitiesRemote = (unsigned char)info0[27];
+		v92modem.phase2Info->shortPhase2Remote = (unsigned char)info0[26];
+		v92modem.phase2Info->v92CapabilitiesRemote = (unsigned char)info0[27];
 	} else {
-		p92->shortPhase2Remote = (unsigned char)info0[27];
-		p92->v92CapabilitiesRemote = (unsigned char)info0[26];
+		v92modem.phase2Info->shortPhase2Remote = (unsigned char)info0[27];
+		v92modem.phase2Info->v92CapabilitiesRemote = (unsigned char)info0[26];
 	}
 
 	/*
@@ -1929,23 +1920,23 @@ VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("P2 REPORT : A_LAW or MU_LAW %d "
 				     "( 0 = Mu, 1 = A)\r\n",
-				     p90->pcmType == 1);
+				     modem.phase2Info->pcmType == 1);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("P2 REPORT : Tx power measurment point "
 				     "= %d ( 0 = digital modem terminal, "
 				     "1 = codec output)\r\n", info0[38]);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("P2 REPORT : Max tx power = %d\r\n",
-				     p90->maxTxPower);
+				     modem.phase2Info->maxTxPower);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("P2 REPORT : short phase2: local=%d , "
-				     "remote=%d\r\n", p92->shortPhase2Local,
-				     p92->shortPhase2Remote);
+				     "remote=%d\r\n", v92modem.phase2Info->shortPhase2Local,
+				     v92modem.phase2Info->shortPhase2Remote);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("P2 REPORT : V92 capabilities: local=%d , "
 				     "remote=%d , selected=%d\r\n",
-				     p92->v92CapabilitiesLocal,
-				     p92->v92CapabilitiesRemote,
+				     v92modem.phase2Info->v92CapabilitiesLocal,
+				     v92modem.phase2Info->v92CapabilitiesRemote,
 				     pcmSessionType != 0 ? 92 : 90);
 
 	/*
@@ -1954,19 +1945,19 @@ VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
 	 * reason it matters is that it makes the V.92 record's three later
 	 * pointers depend on the V.90 record's having been written.
 	 */
-	p90->array_10 = array_7dd8;
-	p90->array_14 = array_7e2c;
-	p90->L2 = L2;
-	p90->array_1c = array_7ed4;
+	modem.phase2Info->array_10 = array_7dd8;
+	modem.phase2Info->array_14 = array_7e2c;
+	modem.phase2Info->L2 = L2;
+	modem.phase2Info->array_1c = array_7ed4;
 
-	p92->array_18 = array_7dd8;
+	v92modem.phase2Info->array_18 = array_7dd8;
 
-	p90->rtd = rtd;
-	p92->rtd = rtd;
+	modem.phase2Info->rtd = rtd;
+	v92modem.phase2Info->rtd = rtd;
 
-	p92->array_1c = p90->array_14;
-	p92->L2 = p90->L2;
-	p92->array_24 = p90->array_1c;
+	v92modem.phase2Info->array_1c = modem.phase2Info->array_14;
+	v92modem.phase2Info->L2 = modem.phase2Info->L2;
+	v92modem.phase2Info->array_24 = modem.phase2Info->array_1c;
 
 	setPcmSessionType(pcmSessionType);
 }
@@ -2013,6 +2004,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 		1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1,
 		1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1
 	};
+	float probe_levels[VPCM_PROBE_TONES];
 	double *probe;
 	int *info0;
 	short rtd;
@@ -2036,11 +2028,12 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 
 			scaled = (float)((long double)probe[i]
 					 * 6.103515625e-05L);
-			decade = (float)log10l((long double)scaled);
+			probe_levels[i] = scaled;
+			decade = (float)log10l((long double)probe_levels[i]);
 
+			probe_levels[i] = (float)((long double)decade * 10.0L + 60.0L);
 			if (use[i])
-				L2[j++] = (float)((long double)decade * 10.0L
-						  + 60.0L);
+				L2[j++] = probe_levels[i];
 		}
 
 		if (DSPLIB_DEBUG_ON())

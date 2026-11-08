@@ -307,22 +307,22 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 		field_4c = (unsigned int)(t ^ over);
 
 		/* The complement above can leave the low limb borrowing. */
-		if (d > 0 && c < 0) {
+		if (d > 0 & c < 0) {
 			c = v92me_add(c, V92ME_HALF);
 			d = v92me_sub(d, 1);
 		}
 
 		if (d > 0) {
+			long long q = V92ME_HALF / field_18;
 			long long r = d % field_18;
 			long long s = v92me_mul(r, field_18);
-			long long q = V92ME_HALF / field_18;
 			long long e = 0;
 
 			if (s > 1) {
 				long long x;
 
 				n = 0;
-				while (v92me_mul(s, q >> n) > 0 && n <= 7)
+				while (v92me_mul(s, q >> n) > 0 & n <= 7)
 					n++;
 
 				if (n == 8)
@@ -356,9 +356,9 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 							d % field_18));
 
 				if (dq > 0) {
+					long long q1 = V92ME_HALF / field_1c;
 					long long r1 = dq % field_1c;
 					long long s1 = v92me_mul(r1, field_1c);
-					long long q1 = V92ME_HALF / field_1c;
 					long long e1 = 0;
 
 					if (s1 > 1) {
@@ -366,7 +366,7 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 
 						n = 0;
 						while (v92me_mul(s1, q1 >> n) >
-						       0 && n <= 7)
+						       0 & n <= 7)
 							n++;
 
 						if (n == 8)
@@ -396,8 +396,7 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 					v = v92me_add(v / field_1c,
 						      v92me_mul(V92ME_HALF /
 								field_1c,
-								dq %
-								field_1c));
+								r1));
 				} else {
 					out[1] = (unsigned int)(v % field_1c);
 					v = v92me_sub(v, out[1]) / field_1c;

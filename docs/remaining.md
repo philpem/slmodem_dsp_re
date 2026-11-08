@@ -23,21 +23,250 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-The current period-compiler identity result is **811 of 1,852 functions
-positionally byte-exact (43.8%)**. A further 52 are instruction-equivalent
-after consistent register renaming. The tool's displayed grade-0-or-1 total
-is 867 (46.8%), including four conservatively unresolved anonymous
-ordinary-rodata tables; the tool also reports no differing named relocation
-target, 86 same-size byte mismatches and 899 size mismatches. `byteident.py`
-ratchets the complete exact-name set, not just its cardinality, so an exact function
-cannot regress while an unrelated gain conceals it. F10207 explains why this
-stricter baseline adds seven real exact functions but removes three earlier
-false claims whose relocation addends had never been compared; F10208 records
-the first Phase-4 convergence batch. F10237 records the fresh aggregate
-checkpoint, with 35 exact names added and none lost since that batch. The
-full phase gate passes and the complete 810-name set is the enforced ratchet
-floor; one newer exact function is above that floor. Phase 4 remains in
-progress.
+The 18 October 2026 baseline at `6e650c6e2` has **1,109 of 1,852 functions
+positionally byte/relocation-exact (59.9%)**, covering **127,904 of 720,125
+original function bytes (17.8%)**. The remaining functions comprise 32
+`REGALLOC`, 78 `BYTES` and 633 `SIZE`; there are no `UNRESOLVED`, `RELOC` or
+`NODATA` results. Register-renaming equivalence is reported separately from
+byte identity. All 300 freshly rebuilt Gentoo GCC 3.4.2-r2 objects raw-match
+the independently measured `28ccee066` baseline; the intervening commits
+change no reconstruction source or headers. All 1,109 exact names match the
+checked-in ratchet.
+
+The ordered partial link remains different from the reference: 72,202 of
+943,398 positioned allocated bytes agree, 1,002 of 18,317 relocation records
+match, and NOBITS sizes are 2,840 candidate versus 2,836 reference bytes.
+These dimensions measure layout as well as content and are not a percentage
+of source recovered. Reproduce function identity with `make byteident` and
+the separate strict completion check with `make partial-compare-exact`.
+Record the compiler, source revision and ordered input manifest with either
+measurement.
+
+The `_init_receiver` shared-control checkpoint preserves that exact
+set: no gains or losses. Its body changes from 1,769 to 1,560 bytes against
+the original's 1,583, while the other four bodies in its translation unit and
+all allocated non-text contents remain unchanged. The ordered partial link
+then has 72,362 matching positioned bytes and 1,004 matching relocation
+records, with the same denominators above. It remains different from the
+reference; these aggregate changes are not new exact functions.
+
+The following fax field and pointer repairs make `_tx_nulls_state` exact at
+435 bytes: **1,110 of 1,852 exact functions**, covering **128,339 of 720,125
+original function bytes**, with no exact losses. The residual grades are 32
+`REGALLOC`, 77 `BYTES` and 633 `SIZE`. The ordered partial link has 72,220
+matching positioned bytes and 1,002 matching relocation records, with the
+same reference denominators above; it still differs. Pointer typing changes
+three nonexact constructor bodies and their following layout, so the
+positioned-match count decreases relative to the shared-control checkpoint.
+
+The subsequent V.90 parameter, fax RX owner and Caller ID allocation repairs
+preserve that exact set: **1,110 exact functions, zero gains or losses** from
+the field/pointer checkpoint. Of 300 period objects, 292 remain raw-identical;
+the eight changed translation units preserve their symbol interfaces and
+allocated non-text contents. The ordered partial link now matches 72,265 of
+943,398 positioned reference bytes and 1,002 of 18,317 relocation records. It
+still reports `DIFFERENT`; the small positioned-byte increase is not a new
+exact function. The merged gate passes 394 period fixtures, and the separate
+native component gate passes 207 checks. Native structures may grow; these
+repairs preserve the original layout only on 32-bit builds.
+
+The next V.32 batch makes `RetrainDetectV32` exact at 53 bytes by restoring
+its separate result and common exit: **1,111 of 1,852 exact functions**,
+covering **128,392 of 720,125 original function bytes**, with no exact losses.
+The residual grades are 32 `REGALLOC`, 77 `BYTES` and 632 `SIZE`.
+Two further source changes recover the unsigned count passed to V.32 SRE and
+V90CP's unsigned local list accumulator; both remain `SIZE`, and their size
+gaps grow. Their original argument/accumulator instructions, rather than size
+convergence, justify the changes. RX_L1's saved-gain member conversion leaves
+its complete object byte-identical. The ordered partial link still differs:
+72,235 of 943,398 positioned bytes and 1,004 of 18,317 relocation records match.
+
+The continuation recovers `V92Jd::unPackJdPhaseData`'s constant-index CRC
+shift and integer `abs` operation. The original promotes all sixteen CRC
+words across the payload loop; the recovered body grows from 532 to 956
+bytes against the original 987, reducing the size gap from 455 to 31 bytes.
+It remains `SIZE`. `V21RX_control` now captures its flag byte once across the
+HDX store, as the original does, and moves from `SIZE` to `BYTES` at 75 bytes.
+The exact set stays at **1,111/1,852**, with 32 `REGALLOC`, 78 `BYTES` and
+631 `SIZE`. No new reachable runtime defect is claimed. The post-0x441 V.34
+FSK/RTD audit found matching widths and read ages; its sole change corrects a
+fixture-control comment and preserves the whole object. The combined gate
+passes 394 period fixtures with zero failures; all 300 runtime objects match
+the canonical comparison objects. The ordered partial link still differs:
+72,330 of 943,398 positioned bytes and 1,001 of 18,317 relocations match. The phase-4
+five-byte wrapper discrepancy still lacks an independently supported source
+or translation-unit boundary change, so no edit is retained there.
+
+The following CRC operation pass preserves that exact set while bringing the
+V.90 and V.92 data unpackers closer in structure: their fixed CRC shifts and
+integer absolute residual checks now follow the original promoted loops.
+`V90Jd::unPackData` grows from 525 to 854 bytes against 879; the V.92 data
+unpacker grows from 590 to 988 against 1,003. Both remain `SIZE`. V90MP and
+V92CP also recover the original branchless absolute value operation; the MP
+size gap grows from 15 to 16 bytes, while the CP checker's halves from 32 to
+16. Its inlined decoder caller's gap grows, although the original absolute
+value loop is restored there too. These are operation recoveries, with no
+additional exact or register-allocation gains.
+
+The V.34 transmit dispatch and common tail now take the modem object directly,
+removing their synthetic-frame indirections. Sixteen field substitutions
+preserve their complete owner offsets and widths under the period compiler.
+The incoming state parameter and the conditional reload in mode 1 remain
+separate. A microstate-48 owner read also restores the reload after the trace
+call; its emitted untraced path still reloads rather than carrying the known
+constant, consistent with the remaining frame-pointer alias boundary. This is
+partial read-age recovery, with no reachable callback-mutation bug claimed.
+The original table/tail closure is 155 instructions over 666 disjoint bytes;
+its boundaries differ from the emitted source helpers, so their sizes are not
+an identity score. All nine exact functions in the translation unit remain
+exact. The new combined strict partial comparison still differs: 72,184 of
+943,398 positioned bytes and 1,002 of 18,317 relocations match.
+
+A later bounded microstate-48 change removes that remaining frame alias at
+this boundary: the helper takes the modem object directly and returns its
+short state value. The untraced threshold path now carries known state 5,
+while the trace path reloads the owner after its print call, as the original
+does. Only `v34handshak` changes among 52 TU functions, from 12,924 to 12,898
+bytes; return extension, counter conversion and the frame-state join remain
+code-generation differences. The combined gate passes 394 fixtures with zero
+failures; exact membership remains 1,111/1,852. Ordered partial comparison
+still differs: 72,401/943,398 positioned bytes and 1,001/18,317 relocations.
+
+The accompanying Jd audit found matching old-value dependencies for all
+sixteen CRC outputs. Two direct-tap recurrence controls reached smaller SIZE
+gaps but retained multiple CFG and allocation differences, with no supported
+source correction or identity gain; neither was adopted. The 32 REGALLOC
+bodies were also reviewed, including 30 source nominations, without finding
+an independent operation, ownership, width or read-age discrepancy. Further
+source changes in these domains need new evidence rather than nearby
+statement, local-type or register variants.
+
+The next detector-boundary pass makes `v22_org_rmloop2` exact at 1,050
+bytes: **1,112/1,852 EXACT**, covering **129,442/720,125 original bytes**,
+with zero exact losses. The residual grades are 32 `REGALLOC`, 77 `BYTES`
+and 631 `SIZE`. Reading the child owner and accumulator after the detector
+call restores the original instruction sequence. The same correction in
+`v22_local_loop` reduces 116 differing body bytes to four; it remains `BYTES`.
+Four full-TU controls preserve the other eight functions and non-text data.
+The existing fixtures establish synthetic component fidelity, not a public
+modem history demonstrating child replacement across these calls.
+
+Three further native-operation corrections remain `SIZE`: `modulatevector`
+restores signed remainder/subtract/redivide and quotient/product/subtract
+chains (2,877 -> 2,996 bytes against 3,388); `MTK_phasor` restores the signed
+16-bit integer-to-x87 carrier (255 -> 256 against 271); and
+`checkSignalStability` removes a zero-reference bypass absent from both
+original division paths (152 -> 154 against 196). Their other 24 TU bodies
+are unchanged. Valid nonzero shell divisors and positive V8 reference
+histories bound the differential evidence; no invalid-input safety claim.
+
+V34 answer microstates 49 and 50 now read the filter delay after resetting
+the filter, as the original does. The handshake body grows 12,898 -> 12,924
+bytes; compiler collateral shrinks `datapumpv34` from 1,035 to 1,005. The
+other 50 TU bodies and all nine exact functions remain unchanged. These
+changes restore witnessed reads without claiming full-handshake identity.
+The integrated gate passes 394 period fixtures with zero failures; all 300
+runtime objects raw-match the comparison builds. Of 300 objects, 295 remain
+raw-identical to the preceding checkpoint. Across the five changed TUs,
+82 of 89 function bodies preserve raw bytes and relocation tuples. Exports,
+named data and string contents remain preserved. The ordered partial object
+still differs: 72,205/943,398 positioned bytes, 997/18,317 relocation records
+and 457/2,931 symbol records match. Function identity improves while position
+changes reduce these whole-object counts; no whole-object identity is claimed.
+
+A further inverse-shell and PCM/precoder pass preserves that exact set:
+**1,112/1,852 EXACT**, with zero gains or losses. `demapFrame` restores two
+ordered parameter producers per iteration and signed low-word candidate
+products (1,350 -> 1,426 bytes against 1,569); `decodeDepth` restores short
+rounded coordinates before nudging (1,836 -> 1,862 against 2,075).
+`V92Precoder::process` now reads `tableA[n]` inside each search iteration,
+matching the original's load epochs (711 -> 723 against 738). Finally,
+`VPcmFloModem::runPcmModem` restores signed 32-bit integer-to-float conversion
+of the ramp counter (2,034 -> 2,025 against 2,041). Its size gap increases;
+the original FILDL instruction is the correction's independent evidence.
+All four functions remain `SIZE`. Runtime ramp values 0..177 fit signed int;
+the other fixtures establish component fidelity, with synthetic states
+explicitly retained as such. No caller-alias reachability claim is made.
+
+Across these three TUs, 51 of 55 function bodies preserve bytes and relocation
+tuples; all existing exact functions, interfaces, ordinary data and canonical
+call targets survive. Thirty PCM jump-table addends move by nine bytes while
+preserving their target owners. The bounded ring-detector audit retains no
+edit: Create's division counts reflect Reset inlining, while Process's eighth
+static division duplicates a reporting quotient across exclusive branches.
+All seven original arithmetic producers agree. These are checked negative
+findings, not a new whole-function equivalence proof.
+The final combined gate passes 394 period fixtures with zero failures and
+structural checks OK; all 300 runtime objects raw-match final comparison
+builds. Of 300 objects, 297 preserve raw bytes against the preceding head.
+Strict ordered partial comparison still differs: 72,468/943,398 positioned
+bytes, 1,005/18,317 relocation records and 457/2,931 symbol records match.
+No whole-object identity is claimed. The operation screen now has nine
+manually reviewed discrepancy names and 309 still unreviewed; the 234 names
+with equal operation counts remain unproved.
+
+The next coefficient-summary pass restores the read after a maximum-field
+store before testing the minimum. `V90Equalizer::enterDataPhase` changes
+1,576 -> 1,608 bytes against 1,688; `enterPhase4` changes 1,922 -> 1,970
+against 2,050. Both remain `SIZE`. The other 33 TU function bodies and all
+20 exact functions are unchanged. All 51 moved jump-table entries preserve
+their destination function and relative offset; ordinary data, interfaces
+and canonical call targets survive. The final combined gate passes 394 period
+fixtures with zero failures and structural checks OK. All 300 runtime objects
+raw-match comparison builds; 299 objects preserve raw bytes against the
+preceding head. The exact set remains **1,112/1,852**, with zero gains or losses.
+No public caller-alias history is established by the existing component tests.
+
+The broader uncached-magnitude control was rejected because it introduced a
+helper call absent from the original. The retained control changes only the
+read across the output store, without forcing inlining or rotating source
+spellings. Bounded Uinfo, phase2 print, VTB, DTMF and V34 microstate reviews
+retain no other source edit. Their negative ledgers distinguish x87 consumer
+lifetimes, strength reduction and historically closed source forms from
+missing operations. Nineteen discrepancy names have now been manually reviewed;
+299 remain unreviewed, and equal operation counts still do not prove equivalence.
+The strict ordered partial object remains different: 72,403/943,398 positioned
+bytes, 1,001/18,317 relocations and 457/2,931 symbol records match.
+
+After PR305 and PR308 landed, the next batch starts from `5a09b5ca7`.
+Two bounded source recoveries preserve **1,112/1,852 EXACT**, with zero
+exact gains or losses and unchanged residual grades. The V.32 differential
+lookup now uses a signed-short counter, restoring INC/CWTL/CMP16 in both
+`FSE_decision_4pt` (436 -> 440 bytes against 468) and `FSE_decision_AB`
+(627 -> 633 against 678). Its complete counter domain is 0..16; no runtime
+overflow defect is claimed. The other seven TU bodies remain unchanged.
+
+`V90Phase3Modulator::generateDIL` now reads sequence indices after companding,
+matching the original byte loads at `0x2b0dd` and `0x2b0fc` and the four
+inlined DIL arms in the two symbol generators. The bodies change from
+362 -> 346, 1,755 -> 1,727 and 1,934 -> 1,906 bytes, against 426, 1,790 and
+2,044 respectively. These size gaps increase; the restored post-call reads
+are the independent reconstruction evidence. All three remain `SIZE`; the
+other 25 TU bodies and its 19 exact functions survive. Repeated-predicate
+and code-load expression controls remain evidence-only. Existing fixtures
+do not establish a history in which companding changes the cursors.
+
+The combined period gate passes 394 fixtures with zero failures and structural
+checks OK. All 300 runtime objects raw-match comparison builds; 298 preserve
+raw bytes against the merged baseline. Across the changed TUs, 32 of 37
+function bodies are unchanged. Interfaces, ordinary data and canonical call
+targets survive. All 68 phase-3 jump-table entries retain their dispatch
+mapping: 64 entry blocks compare unchanged and four identify the reviewed DIL
+cases; a deliberately wrong destination within the same function is rejected.
+Strict ordered partial comparison remains different: 72,536/943,398 positioned
+bytes, 998/18,317 relocation records and 457/2,931 symbols match. The refreshed
+[V.34 typed comparison](method/ghidra-assisted.md#current-v34-baseline-refresh)
+provides a bounded reset-loop width target for the next source investigation.
+The frozen operation screen now has 24 manually reviewed discrepancy names
+(14 supported partial recoveries and ten no-edit reviews), leaving 294 of
+its original 318 names unreviewed. These are progress counts for that screen,
+not a fresh opcode census or a whole-function equivalence result.
+
+`byteident.py` checks exact-name membership, so an unrelated gain cannot hide
+a loss. An explained loss still requires the original-source and complete-TU
+review described in the [refinement method](method/refinement.md#review-exact-losses-against-source-fidelity).
+F10207, F10208 and F10237 retain the earlier comparator and convergence
+checkpoints; their counts are historical.
 
 This is a function-level `.text` measurement, not yet proof that the
 partially-linked object is byte-for-byte identical. The final objective also
@@ -48,9 +277,10 @@ code-generation improvement may not weaken the differential evidence.
 
 ## Byte-exact convergence plan
 
-1. **Secure the measurement — done.** Refuse partial test-object trees,
-   regenerate the tested baseline from all 374 drivers, and ratchet exact
-   symbol membership rather than the headline count.
+1. **Establish the current baseline.** Build all source objects with the
+   Gentoo period compiler, record their hashes and configuration, and compare
+   the complete exact-name set. A cached census is usable only when its inputs
+   reproduce. Run `make phase` for the period differential and structural gate.
 2. **Clear named-relocation mismatches — done.** The single case,
    `FPM_FSM_init`, is exact after correcting the shared `FPM_TONE_CFG`
    representation. The complete period, behavioural and SpanDSP interop gates
@@ -58,27 +288,36 @@ code-generation improvement may not weaken the differential evidence.
    assumptions uncovered when the aggregate gate first reached that tier.
 3. **Resolve ambiguous section relocations — done.** All seven original cases
    are exact. Relocation addends are now part of the identity proof, which also
-   exposed three anonymous ordinary-rodata tables the old tool had incorrectly
-   called exact; they remain explicit `UNRESOLVED` rather than being accepted
-   by an unsafe byte-prefix heuristic.
-4. **Close same-size byte mismatches — in progress.** The constrained
-   batches have reduced `BYTES` from 138 to 86, with additional exact gains
-   from other grades; work the remainder from the smallest differing-byte
-   count, always diffing the complete exact set.
-5. **Recover translation-unit emission order.** Use the 53 `REGALLOC`
-   functions and their neighbours to infer definition/declaration order and
-   GCC 3.4.2's carried allocation state; retain only changes that improve the
-   whole translation unit.
-6. **Partition the size mismatches.** Split the 899 `SIZE` functions by
-   instruction delta, source-shape family and translation unit, taking the
-   smallest constrained domains before the large algorithmic cases.
+   exposed anonymous ordinary-rodata cases requiring further identity proofs.
+   The current census has no unresolved case; retain conservative refusal and
+   the comparator's positive and negative controls.
+4. **Screen the full residual set.** Inventory all 743 nonexact names and all
+   defining copies, including C++, fax and large functions. The historical
+   value-timing filter admits only 367 of these names. Group the 633 `SIZE`
+   functions by witnessed control flow, calls, widths and value ownership;
+   byte or instruction-count gaps alone do not establish a source discrepancy.
+   Expand same-TU helper and tail-call closures before interpreting apparent
+   missing operations.
+5. **Select bounded source hypotheses.** Require an original operand,
+   caller/callee or lifetime witness before trying another source form. Trace
+   the earliest differing compiler stage, state a prediction and falsifier,
+   and review every changed body in the complete TU. Previously closed
+   declaration-order, loop-spelling and option domains need new evidence.
+   Keep whole-handshake V.34 restructuring separate from this residual queue.
+6. **Validate each retained recovery.** Use valid component histories and the
+   period differential oracle, then run `make phase`. Report exact names gained
+   and lost, data/binding/relocation collateral and partial-link changes.
+   Distinguish supported partial source recovery from a newly exact function.
 7. **Converge the partially-linked object.** The first
    section/data/relocation/layout comparator now exists alongside function
    identity; use its independent dimensions to recover input and definition
    order, close direct-test naming gaps where a real observable exists, and
    keep `make period` authoritative throughout.
 
-### Immediate execution order (2026-09-08)
+### Historical execution order (2026-09-08)
+
+This dated sequence records earlier scheduling and tool counts. Use the
+current plan above; mutation infrastructure has since been removed.
 
 The partially-linked objective changes the order of the remaining refinement
 work. A locally exact function is not progress if it moves the aggregate's
@@ -387,8 +626,8 @@ explicitly says that milestone remains open.
 The source-reconstruction phase is therefore complete. Work that remains is
 deliberately a different kind of work:
 
-- close differential-test and mutation-coverage gaps where a real observable
-  path can be constructed;
+- close differential-test gaps where a real observable path can be
+  constructed;
 - improve period-compiler object-code identity without changing behaviour;
 - finish the V.90 digital-side experiment far enough to terminate a live 56k
   call; and
@@ -398,13 +637,13 @@ The detailed wave record below explains how the reconstruction reached this
 state and preserves the evidence behind decisions that still constrain those
 follow-up tasks.
 
-## Mutation maintenance policy, 2026-10-18
+## Mutation system retirement, 2026-10-18
 
-Issue #296 retires mandatory mutation snapshot checks, refreshes and whole-tree
-campaigns. Historical mutation counts and deferred-refresh plans below are
-retained as dated evidence, not outstanding release obligations. Targeted
-mutation remains optional for named fixture-sensitivity questions; `refs`
-retains structural anchor validation. See [policy](method/mutation-policy.md).
+The mutation runner, suites, snapshots and anchor-maintenance tools have been
+removed. Mutation counts and plans in the dated wave history below remain
+historical evidence; they are not current test coverage or outstanding work.
+The current checks are differential, period-codegen and structural/provenance
+checks. `refs` checks references and conflict markers only.
 
 ## Superseded 2026-09-03 snapshot
 

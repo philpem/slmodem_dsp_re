@@ -92,6 +92,11 @@
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
 #include "dsplib/VPcmFloModem.h"
+#include "dsplib/dp.h"
+extern "C" {
+#include "dsplib/dp_param.h"
+}
+#include "dsplib/modem_params.h"
 
 extern "C" {
 
@@ -104,6 +109,19 @@ unsigned long ref_VPcmV34GetVisualDiagnostics(void *obj, int what,
     asm("ref_VPcmV34GetVisualDiagnostics");
 
 extern unsigned int ref_dsplibs_debug_level;
+
+void dp_vpcm_init(void);
+void ref_dp_vpcm_init(void);
+void *ref_dp_runtime_create(void *modem);
+void ref_dp_runtime_delete(void *runtime);
+void ref_V34EchoCleanUp(struct v34_echo *e);
+void ref_V34EchoUpdateDelayLine(struct v34_echo *e, short sample);
+int ref_V34EchoFilter(struct v34_echo *e, short lag);
+void ref_V34EchoAdapt(struct v34_echo *e, short err);
+void ref_V34EqualizerCleanUp(struct v34_equalizer *q);
+void ref_V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re,
+                                    short im);
+void ref_V34EqualizerAdapt(struct v34_equalizer *q, short re, short im);
 
 /*
  * THE ELEVEN ACCESSORS, CALLED BY NAME RATHER THAN THROUGH THE DISPATCHER.
@@ -358,7 +376,7 @@ setup(int n, const struct trial *t)
 
 		o->status = t->status;
 		o->p3548 = x;
-		o->tx_pwr_reduction = pr_v[t->pi];
+		o->tx.tx_pwr_reduction = pr_v[t->pi];
 		o->v90_timing_offset = fac_v[t->fi];
 
 		RX(side)->sig_energy = snr_v[t->si].num;
@@ -1439,6 +1457,2845 @@ run_members(void)
 	return diff_end();
 }
 
+/*
+ * Native-constructed owners, then an explicit DSP-component boundary.
+ *
+ * This is separate from setup_visual's synthetic grid. Both registered create
+ * operations really construct their own graphs (9600 Hz, 48-sample fragment,
+ * V.34 id, caller). The host supplies a zero dsp_info, codec 4, rates 300..56000
+ * and zero I/O delay through the existing parameter apparatus. No callback or
+ * live object is fabricated/copied. vpcm_create's root+0x2c and Create's status
+ * 0 / role 0x65 stores are independent native anchors, not inferred from the
+ * diagnostic's output. Pointers are translated only in comparison snapshots.
+ *
+ * The narrower boundary is intentional: the caller supplies short echo-history
+ * samples, lag 0 and a short adaptation error through the exported echo APIs;
+ * likewise complex short samples/errors through the equalizer APIs. This proves
+ * component input histories, NOT that a modem handshake generated these errors.
+ * All samples lie within the native transmit caller's half-short range. One
+ * complete delay-line fill makes lag 0's read initialized and in bounds. Reset
+ * clears the histories/taps before use; no count, pointer or coefficient store
+ * is planted. Zero/one are output capacities, never forged filter lengths.
+ *
+ * Native anchors: init 0x71d70 sets taps 144/dlen 1656 and the five pointers;
+ * EchoFilter 0x71ec0 shifts history and appends cursor+lag+taps-1; EchoAdapt
+ * 0x71f50 adds hist*err to split 32-bit taps. Thus after one Filter/Adapt the
+ * last near/far taps are +4/-8 and all earlier taps remain zero. Equalizer
+ * cleanup 0x727e0 clears 0x3cc bytes and writes unity 4096 at +0x190. Adapt
+ * 0x729a0 on 80 copies of (1024,-1024), error (256,128), subtracts 2 from
+ * every real tap and 6 from every imaginary tap. These integer known answers
+ * are independent of the visual implementation. Visual 0x7364 reads signed
+ * shorts at owner+0x770/+0x810 and doubles them; echo arms use signed shorts
+ * from the separately installed banks. Separate output storage cannot alias.
+ *
+ * PCM status 2 and selector 8's nontrivial status/role paths are NOT covered.
+ */
+static void
+history_owners(struct v34_object *a, struct v34_object *b, long tag)
+{
+	int bank, side;
+	struct v34_object *o[2] = { a, b };
+	static unsigned char s[2][0x1080];
+	static const unsigned int off[2][5] = {
+		{ 0x81f8, 0x81f8, 0x9018, 0x80d8, 0x8ee8 },
+		{ 0x9278, 0x9278, 0xa098, 0x9158, 0x9f68 }
+	};
+
+	for (bank = 0; bank < 2; bank++) {
+		for (side = 0; side < 2; side++) {
+			struct v34_echo *e = bank ? &o[side]->echo1 :
+						    &o[side]->echo0;
+			unsigned int k;
+
+			memcpy(s[side], e, sizeof s[side]);
+			for (k = 0; k < 5; k++) {
+				unsigned int p;
+
+				memcpy(&p, s[side] + 4 * k, 4);
+				p -= (unsigned int)(size_t)o[side];
+				diff_eq_int("history: echo pointer owner (%ld)",
+					    p, off[bank][k],
+					    tag * 100 + side * 10 + bank);
+				memcpy(s[side] + 4 * k, &p, 4);
+			}
+			diff_eq_int("history: native tap count (%ld)",
+				    e->taps, 144, tag);
+			diff_eq_int("history: native delay length (%ld)",
+				    e->dlen, 1656, tag);
+		}
+		diff_eq_obj_(__FILE__, __LINE__, "history echo owner",
+			     "0x1080 bytes", s[0], s[1], sizeof s[0],
+			     tag * 10 + bank);
+	}
+	diff_eq_obj("history equalizer owner", struct v34_equalizer,
+		    &a->receiver.equalizer, &b->receiver.equalizer, tag);
+}
+
+static int
+run_visual_history(void)
+{
+	struct dp_operations *ops[2] = { 0, 0 };
+	struct dp *root[2] = { 0, 0 };
+	void *runtime[2] = { 0, 0 };
+	struct v34_object *o[2];
+	struct dsp_info info[2];
+	static unsigned char before[2][0xd258];
+	static const int selector[] = { 1, 5, 6 };
+	static const unsigned long capacity[] = { 0, 1, 7, 192 };
+	static struct int_complex expected[PTS_SLOT];
+	int side, i, stage, sel, cap, calls = 0;
+	int producer_calls = 0;
+
+	diff_begin("visual lifecycle: V.34 constructed owner / DSP component inputs");
+	set_level(0);
+	harness_reg_reset();
+	dp_vpcm_init();
+	ref_dp_vpcm_init();
+	for (i = 0; i < harness_reg_ours.count; i++)
+		if (harness_reg_ours.id[i] == 34)
+			ops[0] = (struct dp_operations *)harness_reg_ours.ops[i];
+	for (i = 0; i < harness_reg_ref.count; i++)
+		if (harness_reg_ref.id[i] == 34)
+			ops[1] = (struct dp_operations *)harness_reg_ref.ops[i];
+	diff_eq_int("history: both native operation tables registered",
+		    ops[0] != 0 && ops[1] != 0, 1, 0);
+	if (!ops[0] || !ops[1])
+		return diff_end();
+
+	for (side = 0; side < 2; side++) {
+		harness_param_reset();
+		memset(&info[side], 0, sizeof info[side]);
+		harness_param_set(MDMPRM_DSPINFO, (long)(size_t)&info[side]);
+		harness_param_set(MDMPRM_CODECTYPE, 4);
+		runtime[side] = side ? ref_dp_runtime_create(&info[side]) :
+				      dp_runtime_create(&info[side]);
+		diff_eq_int("history: runtime constructed (%ld)",
+			    runtime[side] != 0, 1, side);
+		if (!runtime[side])
+			break;
+		harness_param_set(MDMPRM_DPRUNTIME, (long)(size_t)runtime[side]);
+		harness_param_set(MDMPRM_MIN_RATE, 300);
+		harness_param_set(MDMPRM_MAX_RATE, 56000);
+		harness_param_set(MDMPRM_IODELAY, 0);
+		root[side] = ops[side]->create(&info[side], 34, 1, 9600, 48,
+					     ops[side]);
+		diff_eq_int("history: graph constructed (%ld)",
+			    root[side] != 0, 1, side);
+		if (!root[side])
+			break;
+		diff_eq_int("history: native root extent (%ld)",
+			    harness_alloc_reqsize(root[side]), 0xd258, side);
+		o[side] = (struct v34_object *)
+			  ((unsigned char *)root[side] + 0x2c);
+		diff_eq_int("history: Create established V.34 status (%ld)",
+			    o[side]->status, 0, side);
+		diff_eq_int("history: Create established caller role (%ld)",
+			    o[side]->role, 0x65, side);
+	}
+	if (root[0] && root[1]) {
+		history_owners(o[0], o[1], -1);
+		for (stage = 0; stage < 2; stage++) {
+			for (side = 0; side < 2; side++) {
+				struct v34_equalizer *q = &o[side]->receiver.equalizer;
+
+				if (stage == 0) {
+					if (side) {
+						ref_V34EchoCleanUp(&o[side]->echo0);
+						ref_V34EchoCleanUp(&o[side]->echo1);
+						ref_V34EqualizerCleanUp(q);
+					} else {
+						V34EchoCleanUp(&o[side]->echo0);
+						V34EchoCleanUp(&o[side]->echo1);
+						V34EqualizerCleanUp(q);
+					}
+					producer_calls += 3;
+				} else {
+					/* Real producers; no internal field writes. */
+					for (i = 0; i < 1656; i++) {
+						if (side) {
+							ref_V34EchoUpdateDelayLine(&o[side]->echo0, 1024);
+							ref_V34EchoUpdateDelayLine(&o[side]->echo1, -2048);
+						} else {
+							V34EchoUpdateDelayLine(&o[side]->echo0, 1024);
+							V34EchoUpdateDelayLine(&o[side]->echo1, -2048);
+						}
+					}
+					if (side) {
+						diff_eq_int("history: first near filter is zero",
+							    ref_V34EchoFilter(&o[side]->echo0, 0), 0, side);
+						diff_eq_int("history: first far filter is zero",
+							    ref_V34EchoFilter(&o[side]->echo1, 0), 0, side);
+						ref_V34EchoAdapt(&o[side]->echo0, 256);
+						ref_V34EchoAdapt(&o[side]->echo1, 256);
+					} else {
+						diff_eq_int("history: first near filter is zero",
+							    V34EchoFilter(&o[side]->echo0, 0), 0, side);
+						diff_eq_int("history: first far filter is zero",
+							    V34EchoFilter(&o[side]->echo1, 0), 0, side);
+						V34EchoAdapt(&o[side]->echo0, 256);
+						V34EchoAdapt(&o[side]->echo1, 256);
+					}
+					for (i = 0; i < 80; i++) {
+						if (side)
+							ref_V34EqualizerUpdateDelayLine(q, 1024, -1024);
+						else
+							V34EqualizerUpdateDelayLine(q, 1024, -1024);
+					}
+					if (side)
+						ref_V34EqualizerAdapt(q, 256, 128);
+					else
+						V34EqualizerAdapt(q, 256, 128);
+					producer_calls += 3312 + 4 + 80 + 1;
+				}
+			}
+			history_owners(o[0], o[1], stage);
+			for (sel = 0; sel < 3; sel++)
+			for (cap = 0; cap < 4; cap++) {
+				unsigned long got[2], k, n = capacity[cap];
+				unsigned long bound = sel == 0 ? 80 : 144;
+				long tag = stage * 100 + selector[sel] * 10 + cap;
+
+				if (n > bound)
+					n = bound;
+				memset(expected, 0x5a, sizeof expected);
+				memcpy(pts[0], expected, sizeof expected);
+				memcpy(pts[1], expected, sizeof expected);
+				for (k = 0; k < n; k++) {
+					if (sel == 0) {
+						expected[k].re = (k == 40 ? 8192 : 0) - stage * 4;
+						expected[k].im = -stage * 12;
+					} else {
+						expected[k].re = 0;
+						expected[k].im = stage && k == 143 ?
+								 (sel == 1 ? 4 : -8) : 0;
+					}
+				}
+				for (side = 0; side < 2; side++)
+					memcpy(before[side], root[side], sizeof before[side]);
+				got[0] = VPcmV34GetVisualDiagnostics(o[0], selector[sel],
+							   pts[0], capacity[cap]);
+				got[1] = ref_VPcmV34GetVisualDiagnostics(o[1], selector[sel],
+							       pts[1], capacity[cap]);
+				calls += 2;
+				for (side = 0; side < 2; side++) {
+					diff_eq_int("history: anchored count (%ld)",
+						    got[side], n, tag * 2 + side);
+					diff_eq_obj_(__FILE__, __LINE__, "history output + guard",
+						     "native integer known answer", pts[side],
+						     expected, sizeof expected, tag * 2 + side);
+					diff_eq_obj_(__FILE__, __LINE__, "history: root unchanged",
+						     "0xd258 bytes, pointers intact", root[side],
+						     before[side], sizeof before[side], tag * 2 + side);
+				}
+				diff_eq_obj_(__FILE__, __LINE__, "history differential output",
+					     "points + guard", pts[0], pts[1], sizeof pts[0], tag);
+			}
+		}
+	}
+	for (side = 0; side < 2; side++) {
+		if (root[side])
+			ops[side]->destroy(root[side]);
+		if (runtime[side]) {
+			if (side)
+				ref_dp_runtime_delete(runtime[side]);
+			else
+				dp_runtime_delete(runtime[side]);
+		}
+	}
+	harness_param_reset();
+	diff_eq_int("history: executed diagnostic calls (both implementations)",
+		    calls, 48, 0);
+	diff_eq_int("history: explicit component init/input calls (both implementations)",
+		    producer_calls, 6800, 0);
+	printf("visual lifecycle denominator: 2 constructed graphs, 3 selectors, "
+	       "2 stages, 4 capacities; %d diagnostic calls, %d component calls\n",
+	       calls, producer_calls);
+	return diff_end();
+}
+
+/*
+ * INFO0 at the registered sample-buffer boundary (wave43, contract 6451157725).
+ *
+ * Each endpoint has its own real runtime and id-34 constructed graph. Caller
+ * inputs are the peer's actual short outputs through a 288-sample delay, with
+ * codec 4, rates 2400..33600, I/O delay 216, 9600 Hz and max fragment 48. Four
+ * samples per process call are a legal subdivision of that fragment. No state,
+ * callback, message, receiver count or history is planted or copied into an
+ * owner. Existing visual fixtures above retain their separate input domains.
+ *
+ * Native TX54 counts to ten (0x6410b..0x6411e), selects TX24 and calls
+ * V34SetINFO0aBits on O+0xa94c (0x685b8..0x685d1). The record has words ff,84,0,
+ * length17, CRC ffff and lead-in ff72. Native FSK supplies the recovered bits;
+ * 0x66944..0x66950 requires length+16 before the halfword CRC comparison at
+ * 0x6bda4. The polynomial is 1021, MSB first (0x66907/0x66922). Acceptance at
+ * step445 moves the caller microstate44->58, with both transmitters already
+ * 24->60. The received payload is ff,84,0 (17 bits), CRC 8fd9. Received word2
+ * also contains CRC bits, so it must not be treated as a third payload byte.
+ *
+ * The second case erases only external caller input at steps390..410, after
+ * payload completion at382. It preserves the payload and reaches count33, but
+ * native CRC rejection at442 resets the register before observation. The last
+ * invalid-frame bit is therefore UNKNOWN; either completion of its observed
+ * fifteen-bit CRC prefix must disagree. Rejection/restart is a passing case.
+ *
+ * This proves one INFO0 component recipe and one channel-error case. It does
+ * not establish INFO1, progress1/2, negotiated PCM/K56 status2/3 or telephone
+ * interoperability. The positive history continues through the first saved
+ * L1 block returned after its native output FIFO; CRC rejection is unchanged.
+ */
+enum { INFO0_STEPS = 446, INFO0_DELAY = 288, INFO0_PAYLOAD = 17,
+	INFO0_BITS = 33 };
+
+/* Pointer-free observations. Pointers are normalised only in these copies. */
+struct info0_projection {
+	int rc, status, progress, role, micro, rx, tx;
+	int count, pending, sr, rx_record, rx_length, rx_crc;
+	int tx_record, tx_length, tx_pos, tx_crc, tx_avail, tx_repeats;
+	int tx_word[3], rx_word[3];
+	unsigned tx_acc;
+};
+
+struct info0_events {
+	int sync_step, tx_start_step[2], tx_done_step[2];
+	int terminal_step, accepts, rejects, consumed, observed;
+	int bit[INFO0_BITS], bit_step[INFO0_BITS];
+	unsigned payload, computed_crc, received_crc, crc_prefix;
+	int payload_step, payload_crc, unexpected_returns, nonzero_status_progress;
+};
+
+static void
+info0_project(struct info0_projection *p, struct v34_object *o, int rc)
+{
+	const struct v34_bitsource *r =
+		(const struct v34_bitsource *)o->paa70;
+	const struct v34_bitsource *t =
+		(const struct v34_bitsource *)o->paa6c;
+	int i;
+
+	memset(p, 0, sizeof *p);
+	p->rc = rc;
+	p->status = o->status;                 /* O+0, not E+0 */
+	p->progress = o->progress;             /* E=O+4 */
+	p->role = o->role;
+	p->micro = o->microstate;
+	p->rx = o->rxstate;
+	p->tx = o->txstate;
+	p->count = o->short_aa78;
+	p->pending = o->fsk.nbits;
+	p->sr = o->fsk.sr;
+	p->rx_record = r ? (int)((size_t)r - (size_t)o) : -1;
+	p->tx_record = t ? (int)((size_t)t - (size_t)o) : -1;
+	/* Read only the native-owned records, even on a failing pointer check. */
+	if (r == &o->msgrec[1]) {
+		p->rx_length = r->nbits;
+		p->rx_crc = (unsigned short)r->crc;
+		for (i = 0; i < 3; i++)
+			p->rx_word[i] = (unsigned short)r->word[i];
+	}
+	if (t == &o->msgrec[0]) {
+		p->tx_length = t->nbits;
+		p->tx_pos = t->pos;
+		p->tx_crc = (unsigned short)t->crc;
+		p->tx_avail = t->avail;
+		p->tx_repeats = t->repeats;
+		p->tx_acc = (unsigned)t->acc;
+		for (i = 0; i < 3; i++)
+			p->tx_word[i] = (unsigned short)t->word[i];
+	}
+}
+
+static unsigned
+info0_crc_bit(unsigned crc, unsigned bit)
+{
+	unsigned feedback = (crc >> 15) ^ bit;
+
+	crc = (crc << 1) & 0xffff;
+	return feedback ? crc ^ 0x1021 : crc;
+}
+
+static void
+info0_observe(struct info0_events *e, const struct info0_projection *p,
+	      const struct info0_projection *prev, const char *text,
+	      int step, int ep, int side)
+{
+	long tag = side * 10000 + ep * 1000 + step;
+	int n = 0, bit = p->sr & 1;
+
+	e->unexpected_returns += p->rc != DPSTAT_OK;
+	e->nonzero_status_progress += p->status != 0 || p->progress != 0;
+	if (prev->tx == 54 && p->tx == 24 && e->tx_start_step[ep] < 0)
+		e->tx_start_step[ep] = step;
+	if (prev->tx == 24 && p->tx == 60 && e->tx_done_step[ep] < 0)
+		e->tx_done_step[ep] = step;
+	if (step == 145) {
+		static const int words[3] = { 0xff, 0x84, 0 };
+
+		diff_eq_int("INFO0: generated record owner (%ld)", p->tx_record,
+			    0xa94c, tag);
+		diff_eq_obj("INFO0 generated words", int[3], p->tx_word, words, tag);
+		diff_eq_int("INFO0: generated length (%ld)", p->tx_length, 17, tag);
+		diff_eq_int("INFO0: initial producer CRC (%ld)", p->tx_crc, 0xffff, tag);
+		diff_eq_int("INFO0: lead-in accumulator (%ld)", p->tx_acc, 0xff72, tag);
+		diff_eq_int("INFO0: lead-in bit count (%ld)", p->tx_avail, 16, tag);
+		diff_eq_int("INFO0: initial producer position (%ld)", p->tx_pos, 0, tag);
+	}
+	if (ep != 0)
+		return;                         /* primary receive role: caller */
+	if (prev->micro == 41 && p->micro == 44 && e->sync_step < 0) {
+		e->sync_step = step;
+		diff_eq_int("INFO0: receive record owner (%ld)", p->rx_record,
+			    0xa97c, tag);
+		diff_eq_int("INFO0: receive length (%ld)", p->rx_length, 17, tag);
+		diff_eq_int("INFO0: receive CRC starts at ffff (%ld)",
+			    p->rx_crc, 0xffff, tag);
+		diff_eq_int("INFO0: receive count starts at zero (%ld)", p->count, 0, tag);
+	}
+	if (prev->micro == 44 && p->micro != 44) {
+		/* Acceptance clears the counter; rejection clears CRC and sr. */
+		n = prev->count + 1;
+		e->terminal_step = step;
+		e->accepts += strstr(text, "info0 received in DET_INFO") != 0;
+		e->rejects += strstr(text, "info0 CRC not received properly in DET_INFO") != 0;
+		if (p->micro == 41)
+			bit = -1;
+		else
+			e->received_crc = p->sr; /* read-only caller acceptance observer */
+	} else if (prev->micro == 44 && p->count != prev->count) {
+		diff_eq_int("INFO0: one recovered bit per consumption (%ld)",
+			    p->count, prev->count + 1, tag);
+		n = p->count;
+	}
+	if (n == 0)
+		return;
+	diff_eq_int("INFO0: contiguous consumed count (%ld)", n, e->consumed + 1, tag);
+	diff_eq_int("INFO0: consumed count in message bound (%ld)",
+		    n >= 1 && n <= INFO0_BITS, 1, tag);
+	if (n < 1 || n > INFO0_BITS)
+		return;
+	e->consumed = n;
+	e->bit[n - 1] = bit;
+	e->bit_step[n - 1] = step;
+	e->observed += bit >= 0;
+	if (n <= INFO0_PAYLOAD && bit >= 0) {
+		e->payload = (e->payload << 1) | (unsigned)bit;
+		e->computed_crc = info0_crc_bit(e->computed_crc, (unsigned)bit);
+		diff_eq_int("INFO0: native payload CRC clock (%ld)", p->rx_crc,
+			    e->computed_crc, tag);
+		if (n == INFO0_PAYLOAD) {
+			e->payload_step = step;
+			e->payload_crc = p->rx_crc;
+		}
+	} else if (n < INFO0_BITS && bit >= 0) {
+		/* Fifteen CRC bits remain observable even on native rejection. */
+		e->crc_prefix = (e->crc_prefix << 1) | (unsigned)bit;
+	}
+}
+
+static int
+info0_tx_ring_index(const struct v34_object *o, const void *p)
+{
+	long offset = (long)((size_t)p - (size_t)o) - 0x2228;
+	return offset >= 0 && offset < V34_TXQ_RING * 4 && (offset & 3) == 0 ?
+		(int)(offset / 4) : -1;
+}
+
+static int
+info0_rx_ring_index(const struct v34_object *o, const void *p)
+{
+	long offset = (long)((size_t)p - (size_t)&o->receiver) - 0x0c;
+	return offset >= 0 && offset < V34_RXQ_RING * 4 && (offset & 3) == 0 ?
+		(int)(offset / 4) : -1;
+}
+
+static int
+info0_l1_arrival(struct dp_operations **ops, struct dp *root[2][2],
+                 struct v34_object *o[2][2], struct info0_projection prev[2][2],
+                 short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4])
+{
+	/* Continue the same constructed channel after return1127. Its288
+	 * samples delay the saved peer frame72 calls to1199. Preserve the
+	 * measured RX72/tone-response prefix through2692, then compare process
+	 * returns/outputs and direct V34 status/progress projections until the
+	 * native wrapper's call-count deadline3132 or an earlier difference.
+	 * The saved complex pairs enter RX72 demodulation one call after arrival.
+	 * This does not establish later negotiation/protocol completion. */
+	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
+	int eligible_detector_frames[2] = { 0, 0 };
+	int public_pairs=0,public_calls=0,public_samples=0,public_stop=0,public_step=-1,public_ep=-1;
+	struct deadline_projection {
+		int before_stall,stall,mode,status,nbits,inq,outq,mute,rc;
+		short before_fifo[4],returned[4],after_fifo[4];
+	} deadline[2][2];
+	int detector_edge[2] = { -1, -1 };
+	struct arrival_projection {
+		struct info0_projection state;
+		short input[4];
+	} p[2][2];
+	short in[2][2][4], out[2][2][4], emitted[2][4];
+	short saved_pairs[2][4][2];
+	int saved_origin[2] = { -1, -1 };
+	struct pipeline_projection {
+		int rd_before, rd_after, wr_before, wr_after, count_before, count_after;
+		int rms_before, rms_after;
+		short echo_before, echo_after, pairs[4][2], rms[4], hilbert[5];
+	} pipe[2];
+	struct correlation_bin {
+		short phase, inc;
+		int acc_re, acc_im;
+		double sum_re, sum_im;
+	};
+	struct correlation_projection {
+		int counter, nsamples;
+		short samples[4];
+		struct correlation_bin bank[2][4];
+	} correlation[2], measurement_before[2];
+	struct terminal_projection {
+		int cursor_before, cursor_after, micro_before, micro_after;
+		int rx_before, rx_after, tx_before, tx_after, counter_before, counter_after;
+		int wr_before, wr_after, rd_before, rd_after, count_before, count_after;
+		int scale, caller_counter;
+		unsigned words[4];
+	} terminal[2], undoubled[2];
+	struct nl_measure_bin {
+		short phase, inc;
+		int acc_re, acc_im;
+		short energy, shift;
+		double sum_re, sum_im, denergy;
+	};
+	struct nl_measure_projection {
+		int counter, nsamples, noise, signal, ratio;
+		short samples[4];
+		struct nl_measure_bin bank[2][4];
+	} measurement[2];
+	struct pb_projection {
+		int counter, nsamples, noise, signal, ratio;
+		short samples[4];
+		struct nl_measure_bin bins[25], noise_bins[4];
+		short thresholds[25][2];
+	} probe[2][2];
+	struct probe_done_projection {
+		int counter,micro,rx,tx,role,flags,gain,saved_gain,timing,rtd_scaled;
+		short count,phase,increment,wrap,period,sr,nbits;
+		struct nl_measure_bin bins[25];
+	} done[2][2];
+	struct tone_route_projection {
+		int wr_before,wr_after,rd_before,rd_after,count_before,count_after,rx_origin,rx_rd;
+		unsigned words[16];
+		short returned[4],arrived[4],pairs[4][2],gained[4];
+		float floating[4],fifo[4];
+	} route[2];
+	struct detector_decision_projection {
+		int before_count,before_armed,before_level;
+		int polarity,armed,count,limit,state,low,high,level,flags,nsamples;
+		int micro,rx,tx,cursor,counter,gain,saved_gain,sr,nbits,phase,next;
+		short samples[4];
+	} decision[2];
+	struct peer_episode_projection {
+		struct tone_route_projection route[2];
+		int channel_slot[2],counter_before,selector_before,counter,selector,micro,rx,tx,sr,nbits,phase,next;
+	} episode[2];
+	struct caller_fsk_projection {
+		int micro,rx,tx,counter,sr,nbits,phase,next,nsamples;
+		short burst[4];
+	} caller_fsk[2][3];
+	int polarity_edge[2]={-1,-1},caller_fsk_edge[2]={-1,-1};
+	int gh_peer_counter[2]={0,0},peer162_edge[2]={-1,-1};
+	struct caller_wait_projection {
+		int micro,rx,tx,counter,sr,nbits,phase,next,bit_len,resync,filtdelay,nsamples;
+	} waiting[2];
+	struct peer_finish_projection {
+		int before,counter,micro,rx,tx,selector,sr,nbits,phase,next;
+	} finish[2];
+	struct bit_response_projection {
+		int before_counter,before_sr,before_nbits,before_phase,before_next,before_previous;
+		int micro,rx,tx,counter,filtdelay,sr,nbits,phase,next,previous,flags,gate,nsamples;
+		short samples[4];
+	} response[2];
+	struct peer_wait_projection {int micro,rx,tx,counter,sr,nbits,phase,next;} peer_wait[2];
+	int caller_bit_edge[2]={-1,-1};
+	int terminal_step[2] = { -1, -1 };
+	int arrival[2] = { -1, -1 };
+	int step, side, ep, i, calls = 0;
+
+	for (side = 0; side < 2; side++) {
+		memcpy(emitted[side], last_out[side][1], sizeof emitted[side]);
+		diff_eq_obj("L1 arrival saved emitted peer frame", short[4], last_out[side][1], first_block, side);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	wp = (wp + 4) % INFO0_DELAY;
+	memset(route,0,sizeof route);
+	memset(decision,0,sizeof decision);
+	memset(episode,0,sizeof episode);
+	memset(caller_fsk,0,sizeof caller_fsk);
+	memset(waiting,0,sizeof waiting);
+	memset(finish,0,sizeof finish);
+	memset(response,0,sizeof response);
+	memset(deadline,0,sizeof deadline);
+	memset(peer_wait,0,sizeof peer_wait);
+	for (step = 1128; step <= 3133; step++) {
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+
+		if(step>2692) {
+			/* Continue the unchanged constructor/channel recipe with public
+			 * process returns/outputs and direct V34 status/progress projections only. Native
+			 * vpcm_run reaches its call-count deadline at3132; it still
+			 * writes four fresh output samples before returning literal-1. */
+			for(ep=0;ep<2;ep++) {
+				int rc[2],fail_before;short observed[4];
+				for(side=0;side<2;side++) {
+					struct deadline_projection *d=0;
+					if(ep==0 && (step==3131 || step==3132)) {
+						d=&deadline[side][step-3131];
+						memcpy(&d->before_stall,(char *)root[side][ep]+0x20,4);
+						memcpy(d->before_fifo,(char *)root[side][ep]+0xd17c,sizeof d->before_fifo);
+					}
+					rc[side]=ops[side]->process(root[side][ep],in[side][ep],out[side][ep],4);calls++;public_calls++;
+					info0_project(&p[side][ep].state,o[side][ep],rc[side]);prev[side][ep]=p[side][ep].state;
+					if(d) {
+						/* All accesses belong to the actual vpcm root, not
+						 * its embedded V.34 owner at root+0x2c. Widths4/2. */
+						memcpy(&d->stall,(char *)root[side][ep]+0x20,4);memcpy(&d->mode,(char *)root[side][ep]+0x18,4);
+						memcpy(&d->status,(char *)root[side][ep]+0x14,4);memcpy(&d->nbits,(char *)root[side][ep]+0x1c,4);
+						memcpy(&d->inq,(char *)root[side][ep]+0xd1e4,4);memcpy(&d->outq,(char *)root[side][ep]+0xd178,4);
+						memcpy(&d->mute,(char *)root[side][ep]+0xd250,4);d->rc=rc[side];
+						memcpy(d->returned,out[side][ep],sizeof d->returned);memcpy(d->after_fifo,(char *)root[side][ep]+0xd17c,sizeof d->after_fifo);
+					}
+				}
+				memcpy(observed,out[0][ep],sizeof observed);
+				fail_before=diff_failures;public_pairs++;public_samples+=4;public_step=step;public_ep=ep;
+				diff_eq_int("reciprocal history process return",rc[0],rc[1],step*2+ep);
+				diff_eq_int("reciprocal history V34 status projection",p[0][ep].state.status,p[1][ep].state.status,step*2+ep);
+				diff_eq_int("reciprocal history V34 progress projection",p[0][ep].state.progress,p[1][ep].state.progress,step*2+ep);
+				diff_eq_obj("reciprocal history process output including native error tail",short[4],observed,out[1][ep],step*2+ep);
+				public_stop=diff_failures!=fail_before || rc[0]!=DPSTAT_OK || rc[1]!=DPSTAT_OK || p[0][ep].state.status || p[1][ep].state.status || p[0][ep].state.progress || p[1][ep].state.progress;
+				if(ep==0 && (step==3131 || step==3132)) {
+					static const struct deadline_projection native_boundary[2]={
+						{2999,3000,0,0,0,0,4,0,0,{3145,177,-8888,2633},{3145,177,-8888,2633},{-2028,-5955,4968,9261}},
+						{3000,3001,-1,0,0,0,4,0,-1,{-2028,-5955,4968,9261},{-2028,-5955,4968,9261},{4606,4630,2484,-2978}}
+					};
+					for(side=0;side<2;side++)
+						diff_eq_obj("native real-history wrapper deadline and fresh-output known answer",struct deadline_projection,&deadline[side][step-3131],&native_boundary[step-3131],step*2+side);
+					diff_eq_obj("wrapper deadline pointer-free root projection",struct deadline_projection,&deadline[0][step-3131],&deadline[1][step-3131],step);
+				}
+				if(public_stop)break;
+			}
+			if(public_stop)break; /* no peer3132 call and no call after API error */
+			for(side=0;side<2;side++)for(ep=0;ep<2;ep++)for(i=0;i<4;i++)wire[side][ep][(wp+i)%INFO0_DELAY]=out[side][1-ep][i];
+			wp=(wp+4)%INFO0_DELAY;
+			continue;
+		}
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct arrival_projection *q = &p[side][ep];
+				long tag = step * 4 + ep * 2 + side;
+				int rc;
+				memset(q, 0, sizeof *q);
+				if (ep == 0 && step >= 1199 && step <= 1200) {
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					struct pipeline_projection *z = &pipe[side];
+					memset(z, 0, sizeof *z);
+					z->rd_before = info0_rx_ring_index(o[side][ep], rx->rxq.rd);
+					z->wr_before = info0_rx_ring_index(o[side][ep], rx->rxq.wr);
+					z->count_before = rx->rxq.count;
+					z->rms_before = rx->rms_idx;
+					z->echo_before = o[side][ep]->echo_correction;
+				}
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (ep == 0 && arrival[side] < 0 &&
+				    memcmp(q->input, emitted[side], sizeof q->input) == 0) {
+					arrival[side] = step;
+					diff_eq_obj("L1 arrival saved peer block at caller process input", short[4], q->input, first_block, tag);
+				}
+				if (ep == 0 && step == 1199)
+					diff_eq_obj("L1 arrival channel-delay provenance", short[4], q->input, emitted[side], tag);
+				if (ep == 0 && step == 1562) measurement_before[side] = correlation[side];
+				if (ep == 1 && (step == 1505 || step == 1506)) {
+					struct terminal_projection *t = step == 1505 ? &terminal[side] : &undoubled[side];
+					struct v34_object *v = o[side][ep];
+					memset(t, 0, sizeof *t);
+					t->cursor_before = v->vect_idx;
+					t->micro_before = v->microstate; t->rx_before = v->rxstate; t->tx_before = v->txstate;
+					t->counter_before = v->short_aa78;
+					t->scale = v->tx.tx_scale;
+					t->wr_before = info0_tx_ring_index(v, v->tx.txq.wr);
+					t->rd_before = info0_tx_ring_index(v, v->tx.txq.rd);
+					t->count_before = v->tx.txq.count;
+				}
+
+				if(ep==0 && step==2268) {
+					struct tone_route_projection *r=&route[side];
+					r->wr_before=info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.wr);
+					r->rd_before=info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd);
+					r->count_before=o[side][ep]->tx.txq.count;
+				}
+				if(ep==0 && step==2272) {
+					struct tone_route_projection *r=&route[side];
+					diff_eq_int("TX60 saved queue origin firstpop (%ld)",info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd),r->wr_before,tag);
+					for(i=0;i<4;i++)diff_eq_int("TX60 saved queue words before firstpop (%ld)",o[side][ep]->tx.txq.rd[i],r->words[i],tag+i);
+				}
+				if(ep==1 && step==2345) {
+					struct tone_route_projection *r=&route[side];
+					r->rx_origin=info0_rx_ring_index(o[side][ep],o[side][ep]->receiver.rxq.wr);
+					memcpy(r->arrived,in[side][ep],sizeof r->arrived);
+					diff_eq_obj("TX60 saved returned frame arrives through actual channel",short[4],r->arrived,r->returned,tag);
+				}
+				if(ep==1 && step>=2346 && step<=2463) {
+					struct detector_decision_projection *d=&decision[side];struct v34_object *v=o[side][ep];
+					memset(d,0,sizeof *d);d->before_count=v->detector.count;d->before_armed=v->detector.armed;d->before_level=v->detector.level;
+				}
+
+				if(ep==1 && step>=2464 && step<=2602) {
+					episode[side].counter_before=o[side][ep]->short_aa78;
+					episode[side].selector_before=o[side][ep]->short_358c;
+				}
+				if(ep==1 && (step==2464 || step==2584)) {
+					struct tone_route_projection *r=&episode[side].route[step==2584];
+					r->wr_before=info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.wr);
+					r->rd_before=info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd);r->count_before=o[side][ep]->tx.txq.count;
+				}
+				if(ep==1 && (step==2468 || step==2588)) {
+					struct tone_route_projection *r=&episode[side].route[step==2588];
+					diff_eq_int("peer TX60 own saved queue origin pop epoch (%ld)",info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd),r->wr_before,tag);
+					for(i=0;i<4;i++)diff_eq_int("peer TX60 saved origin before pop (%ld)",o[side][ep]->tx.txq.rd[i],r->words[i],tag+i);
+				}
+				if(ep==0 && step==2541) {
+					struct tone_route_projection *r=&episode[side].route[0];
+					memcpy(r->arrived,in[side][ep],sizeof r->arrived);
+					diff_eq_int("peer TX60 original returned frame channel slot (%ld)",wp/4,episode[side].channel_slot[0],tag);
+					diff_eq_obj("peer TX60 own initial frame actually arrives at caller",short[4],r->arrived,r->returned,tag);
+				}
+				if(ep==1 && step>2602 && step<=2625)finish[side].before=o[side][ep]->short_aa78;
+
+				if(ep==0 && step>2625 && step<=2692) {
+					struct bit_response_projection *r=&response[side];struct v34_object *v=o[side][ep];
+					memset(r,0,sizeof *r);r->before_counter=v->short_aa78;r->before_sr=v->fsk.sr;r->before_nbits=v->fsk.nbits;
+					r->before_phase=v->fsk.phase;r->before_next=v->fsk.next;r->before_previous=v->fsk.prev;
+				}
+				if(ep==0 && step==2661) {
+					struct tone_route_projection *r=&episode[side].route[1];memcpy(r->arrived,in[side][ep],sizeof r->arrived);
+					diff_eq_int("peer postflip2589 actual arrival2661 channel epoch (%ld)",wp/4,episode[side].channel_slot[1],tag);
+					diff_eq_obj("peer postflip2589 returned quartet actually arrives2661",short[4],r->arrived,r->returned,tag);
+				}
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				if (ep == 0 && step == 1199) {
+					/* Native400c FILD signed input;400f FSTP root+ac78.
+					 * 4031/4048 pass that float stage to VPcmV34Progress.
+					 * Observe the real wrapper stage after the same call;
+					 * this does not establish downstream queue/detector use. */
+					float staged[4], expected[4];
+					int remainder;
+					for (i = 0; i < 4; i++) expected[i] = (float)emitted[side][i];
+					memcpy(staged, (unsigned char *)root[side][ep] + 0xac78, sizeof staged);
+					memcpy(&remainder, (unsigned char *)root[side][ep] + 0xd1e4, sizeof remainder);
+					diff_eq_int("L1 arrival wrapper private owner (%ld)", root[side][ep]->dp_data == root[side][ep], 1, tag);
+					diff_eq_int("L1 arrival no retained input remainder (%ld)", remainder, 0, tag);
+					diff_eq_obj("L1 arrival signed input reaches real float stage", float[4], staged, expected, tag);
+				}
+
+				if(ep==0 && step==2268) {
+					static const unsigned native_words[16]={0,2989,4227,2988,0,62549,61312,62549,0,2988,4226,2989,0,62548,61309,62547};
+					struct tone_route_projection *r=&route[side];struct v34_object *v=o[side][ep];
+					r->wr_after=info0_tx_ring_index(v,v->tx.txq.wr);r->rd_after=info0_tx_ring_index(v,v->tx.txq.rd);r->count_after=v->tx.txq.count;
+					for(i=0;i<16;i++)memcpy(&r->words[i],(char *)v+0x2228+4*((r->wr_before+i)%V34_TXQ_RING),4);
+					diff_eq_int("TX60 native first16-sample producer epoch (%ld)",v->txstate,60,tag);
+					diff_eq_int("TX60 native16 queued samples (%ld)",(r->wr_after-r->wr_before+V34_TXQ_RING)%V34_TXQ_RING,16,tag);
+					diff_eq_int("TX60 actual four pops in producer call (%ld)",(r->rd_after-r->rd_before+V34_TXQ_RING)%V34_TXQ_RING,4,tag);
+					diff_eq_int("TX60 queue count conserves16produced4popped (%ld)",r->count_after-r->count_before,12,tag);
+					diff_eq_obj("TX60 native first16 queued samples",unsigned[16],r->words,native_words,tag);
+				}
+				if(ep==0 && step==2272) {
+					struct tone_route_projection *r=&route[side];float expected[4];
+					for(i=0;i<4;i++)expected[i]=(float)(short)r->words[i];
+					memcpy(r->floating,(char *)root[side][ep]+0xaef8,sizeof r->floating);
+					/* FIFO stores shorts. Copy and widen into pointer-free projection. */
+					for(i=0;i<4;i++){short v;memcpy(&v,(char *)root[side][ep]+0xd17c+2*i,2);r->fifo[i]=v;}
+					diff_eq_int("TX60 origin queue four slots actually consumed (%ld)",info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd),(r->wr_before+4)%V34_TXQ_RING,tag);
+					diff_eq_obj("TX60 saved origin dequeues to float stage",float[4],r->floating,expected,tag);
+					diff_eq_obj("TX60 saved origin reaches retained FIFO",float[4],r->fifo,expected,tag);
+				}
+				if(ep==0 && step==2273) {
+					struct tone_route_projection *r=&route[side];short expected[4];
+					for(i=0;i<4;i++)expected[i]=(short)r->words[i];
+					memcpy(r->returned,out[side][ep],sizeof r->returned);
+					diff_eq_obj("TX60 saved origin actual public returned frame",short[4],r->returned,expected,tag);
+				}
+				if(ep==1 && step==2345) {
+					static const short known_pairs[4][2]={{0,0},{-2,0},{-9,0},{-20,0}};
+					struct tone_route_projection *r=&route[side];struct v34_object *v=o[side][ep];float actual[4],expected[4];
+					for(i=0;i<4;i++){int idx=(r->rx_origin+i)%V34_RXQ_RING;memcpy(r->pairs[i],(char *)v+0x270+4*idx,4);expected[i]=r->arrived[i];}
+					memcpy(actual,(char *)root[side][ep]+0xac78,sizeof actual);
+					diff_eq_obj("TX60 arrived signed frame reaches native float stage",float[4],actual,expected,tag);
+					diff_eq_obj("TX60 arrived native residual/FIR queue projection",short[4][2],r->pairs,known_pairs,tag);
+					diff_eq_int("TX60 arrived queue origin remains next AGC input (%ld)",info0_rx_ring_index(v,v->receiver.rxq.rd),r->rx_origin,tag);
+				}
+				if(ep==1 && step==2346) {
+					static const short known_gained[4]={0,-3,-10,-22};
+					struct tone_route_projection *r=&route[side];struct v34_object *v=o[side][ep];
+					r->rx_rd=info0_rx_ring_index(v,v->receiver.rxq.rd);
+					memcpy(r->gained,v->receiver.burst,sizeof r->gained);
+					diff_eq_int("TX60 actual arrived quartet consumed by RX53 AGC (%ld)",r->rx_rd,(r->rx_origin+4)%V34_RXQ_RING,tag);
+					diff_eq_int("TX60 native AGC nonempty detector span (%ld)",(int)(v->receiver.rx_samples-v->receiver.burst),4,tag);
+					diff_eq_obj("TX60 native first nonzero RX53 detector input",short[4],r->gained,known_gained,tag);
+					for(i=0;i<4;i++)diff_eq_int("TX60 native AGC consumes saved FIR samples (%ld)",r->gained[i],(1079*(int)r->pairs[i][0])>>10,tag+i);
+				}
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				if(ep==1 && step==2602)gh_peer_counter[side]=o[side][ep]->short_aa78;
+				if(ep==1 && step>2602 && q->state.micro!=48 && peer162_edge[side]<0)peer162_edge[side]=step;
+				if(ep==0 && step>2463 && q->state.micro!=59 && caller_fsk_edge[side]<0)caller_fsk_edge[side]=step;
+				if (ep == 1 && prev[side][ep].micro == 51 && q->state.micro == 52 && terminal_step[side] < 0)
+					terminal_step[side] = step;
+				if (ep == 1 && step == 1505) {
+					/* Native TX51 writes four samples at62ce9, then requires
+					 * microstate51 and terminal cursor1536 at62cf5/62d03.
+					 * 62d2b writes micro52;62d34 clears cursor. RX53 and
+					 * TX51 remain unchanged: this is not L2 production. */
+					static const short last_probe[4] = { -2867, -8421, 7026, 13097 };
+					static const unsigned known_words[4] = { 63508, 59581, 4968, 9261 };
+					unsigned expected_words[4];
+					struct terminal_projection *t = &terminal[side];
+					struct v34_object *v = o[side][ep];
+					t->cursor_after = v->vect_idx;
+					t->micro_after = v->microstate; t->rx_after = v->rxstate; t->tx_after = v->txstate;
+					t->counter_after = v->short_aa78;
+					t->wr_after = info0_tx_ring_index(v, v->tx.txq.wr);
+					t->rd_after = info0_tx_ring_index(v, v->tx.txq.rd);
+					t->count_after = v->tx.txq.count;
+					t->caller_counter = o[side][0]->short_aa78;
+					for (i = 0; i < 4; i++) expected_words[i] = (unsigned short)((((int)last_probe[i] * 2) * t->scale) >> 14);
+					diff_eq_int("peer terminal owned write origin (%ld)", t->wr_before >= 0, 1, tag);
+					if (t->wr_before >= 0)
+					for (i = 0; i < 4; i++)
+						memcpy(&t->words[i], (unsigned char *)v + 0x2228 + ((t->wr_before+i)%V34_TXQ_RING)*4, 4);
+					diff_eq_int("peer terminal producer enters micro51 (%ld)", t->micro_before, 51, tag);
+					diff_eq_int("peer terminal pre-increment cursor (%ld)", t->cursor_before, 1532, tag);
+					diff_eq_int("peer terminal four increments satisfy native equality (%ld)", t->cursor_before + 4, 1536, tag);
+					diff_eq_int("peer terminal cursor reset (%ld)", t->cursor_after, 0, tag);
+					diff_eq_int("peer terminal microstate becomes52 (%ld)", t->micro_after, 52, tag);
+					diff_eq_int("peer terminal receive state retained (%ld)", t->rx_after, t->rx_before, tag);
+					diff_eq_int("peer terminal receive state53 (%ld)", t->rx_after, 53, tag);
+					diff_eq_int("peer terminal transmit selector retained (%ld)", t->tx_after, t->tx_before, tag);
+					diff_eq_int("peer terminal transmit selector still51 (%ld)", t->tx_after, 51, tag);
+					diff_eq_int("peer terminal shared counter retained (%ld)", t->counter_after, t->counter_before, tag);
+					diff_eq_int("peer terminal shared counter42 (%ld)", t->counter_after, 42, tag);
+					diff_eq_int("peer terminal scale known answer (%ld)", t->scale, 5793, tag);
+					diff_eq_int("peer terminal four samples enqueued (%ld)", (t->wr_after-t->wr_before+V34_TXQ_RING)%V34_TXQ_RING, 4, tag);
+					diff_eq_int("peer terminal four samples dequeued (%ld)", (t->rd_after-t->rd_before+V34_TXQ_RING)%V34_TXQ_RING, 4, tag);
+					diff_eq_int("peer terminal queue depth retained (%ld)", t->count_after, t->count_before, tag);
+					diff_eq_obj("peer terminal actual final doubled probe words", unsigned[4], t->words, expected_words, tag);
+					diff_eq_obj("peer terminal native final producer known answer", unsigned[4], t->words, known_words, tag);
+					diff_eq_int("peer terminal earlier caller RX72 count327 (%ld)", t->caller_counter, 327, tag);
+				}
+
+				if (ep == 1 && step == 1506) {
+					/* Native micro52 retains TX51 but selects its undoubled
+					 * probe loop62c8d. RX53 later sees cursor4<=0x5db,
+					 * bypassing tone detection; no TX52 selector is assumed. */
+					static const short first_probe[4] = { 13027, 13097, 7026, -8421 };
+					static const unsigned known_words[4] = { 4606, 4630, 2484, 62558 };
+					unsigned expected_words[4];
+					struct terminal_projection *t = &undoubled[side];
+					struct v34_object *v = o[side][ep];
+					t->cursor_after = v->vect_idx;
+					t->micro_after = v->microstate; t->rx_after = v->rxstate; t->tx_after = v->txstate;
+					t->counter_after = v->short_aa78;
+					t->wr_after = info0_tx_ring_index(v, v->tx.txq.wr);
+					t->rd_after = info0_tx_ring_index(v, v->tx.txq.rd);
+					t->count_after = v->tx.txq.count;
+					t->caller_counter = o[side][0]->short_aa78;
+					for (i = 0; i < 4; i++) expected_words[i] = (unsigned short)(((int)first_probe[i] * t->scale) >> 14);
+					diff_eq_int("micro52 owned producer origin (%ld)", t->wr_before >= 0, 1, tag);
+					if (t->wr_before >= 0)
+					for (i = 0; i < 4; i++)
+						memcpy(&t->words[i], (unsigned char *)v + 0x2228 + ((t->wr_before+i)%V34_TXQ_RING)*4, 4);
+					diff_eq_int("micro52 native entry selector (%ld)", t->micro_before, 52, tag);
+					diff_eq_int("micro52 retained selector (%ld)", t->micro_after, 52, tag);
+					diff_eq_int("micro52 first undoubled cursor origin (%ld)", t->cursor_before, 0, tag);
+					diff_eq_int("micro52 first undoubled cursor result (%ld)", t->cursor_after, 4, tag);
+					diff_eq_int("micro52 retained receive state (%ld)", t->rx_after, 53, tag);
+					diff_eq_int("micro52 retained transmit state51 (%ld)", t->tx_after, 51, tag);
+					diff_eq_int("micro52 retained shared counter (%ld)", t->counter_after, 42, tag);
+					diff_eq_int("micro52 four samples produced (%ld)", (t->wr_after-t->wr_before+V34_TXQ_RING)%V34_TXQ_RING, 4, tag);
+					diff_eq_int("micro52 four samples dequeued (%ld)", (t->rd_after-t->rd_before+V34_TXQ_RING)%V34_TXQ_RING, 4, tag);
+					diff_eq_int("micro52 retained queue depth (%ld)", t->count_after, t->count_before, tag);
+					diff_eq_obj("micro52 actual undoubled probe words", unsigned[4], t->words, expected_words, tag);
+					diff_eq_obj("micro52 native undoubled known answer", unsigned[4], t->words, known_words, tag);
+				}
+				if (ep == 0 && step >= 1199 && step <= 1200) {
+					/* Native bd43/bd50 passes each signed input to modem_serrint;
+					 * 5d3d4 Hilbert output becomes a complex queue pair.
+					 * RX72 calls rxtiming (65524); its private EAX-argument
+					 * V34demodulate reads OLD rd (5af19/5af26), recording
+					 * the ungained real half at rms_idx (5af3b onward).
+					 * Native instruction probes witness the four pairs written
+					 * at 1199 being read at 1200, after four older pairs. */
+					static const short known_pairs[4][2] = {
+						{ 14, 45 }, { -32, 94 }, { -50, 63 }, { -71, 81 }
+					};
+					static const short known_hilbert[5] = { 0, -7693, 3482, 8381, 8982 };
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					struct pipeline_projection *z = &pipe[side];
+					int origin = step == 1199 ? z->wr_before : saved_origin[side];
+					z->rd_after = info0_rx_ring_index(o[side][ep], rx->rxq.rd);
+					z->wr_after = info0_rx_ring_index(o[side][ep], rx->rxq.wr);
+					z->count_after = rx->rxq.count;
+					z->rms_after = rx->rms_idx;
+					z->echo_after = o[side][ep]->echo_correction;
+					memcpy(z->hilbert, o[side][ep]->hilbert, sizeof z->hilbert);
+					diff_eq_int("L1 pipeline owned queue origin (%ld)", origin >= 0, 1, tag);
+					if (origin >= 0)
+					for (i = 0; i < 4; i++)
+						memcpy(z->pairs[i], (unsigned char *)rx + 0x0c +
+						       ((origin + i) % V34_RXQ_RING) * 4, 4);
+					for (i = 0; i < 4; i++) z->rms[i] = rx->rms_buf[(z->rms_before + i) % 36];
+					diff_eq_int("L1 pipeline stays RX72 (%ld)", q->state.rx, 72, tag);
+					diff_eq_int("L1 pipeline four writes (%ld)", (z->wr_after-z->wr_before+V34_RXQ_RING)%V34_RXQ_RING, 4, tag);
+					diff_eq_int("L1 pipeline four reads (%ld)", (z->rd_after-z->rd_before+V34_RXQ_RING)%V34_RXQ_RING, 4, tag);
+					diff_eq_int("L1 pipeline four RMS records (%ld)", (z->rms_after-z->rms_before+36)%36, 4, tag);
+					diff_eq_int("L1 pipeline retained queue depth (%ld)", z->count_after, 4, tag);
+					if (step == 1199) {
+						short corrected[4], expected_head[5] = { 0, 0, 0, 0, 0 };
+						short correction = z->echo_before;
+						for (i = 0; i < 4; i++) {
+							corrected[i] = (short)((unsigned short)emitted[side][i] + (unsigned short)correction);
+							correction = (short)(((int)corrected[i] * 0xed8 - (int)emitted[side][i] * 4096) >> 12);
+							expected_head[4-i] = corrected[i];
+						}
+						diff_eq_int("L1 pipeline echo feed disabled (%ld)", o[side][ep]->tx.tx_flags & V34_EC_FEED, 0, tag);
+						diff_eq_int("L1 pipeline entrance filter disabled (%ld)", ((VPcmFloModem *)o[side][ep]->p3548)->entranceFilterApplied, 0, tag);
+						diff_eq_int("L1 pipeline residual recurrence (%ld)", z->echo_after, correction, tag);
+						diff_eq_obj("L1 pipeline actual arrived samples enter Hilbert history", short[5], z->hilbert, expected_head, tag);
+						diff_eq_obj("L1 pipeline native residual known answer", short[5], z->hilbert, known_hilbert, tag);
+						diff_eq_obj("L1 pipeline native complex output known answer", short[4][2], z->pairs, known_pairs, tag);
+						saved_origin[side] = origin;
+						memcpy(saved_pairs[side], z->pairs, sizeof z->pairs);
+					} else {
+						short expected_rms[4];
+						for (i = 0; i < 4; i++) expected_rms[i] = saved_pairs[side][i][0];
+						diff_eq_int("L1 pipeline saved write origin becomes read origin (%ld)", z->rd_before, saved_origin[side], tag);
+						diff_eq_obj("L1 pipeline saved pairs remain at consumed origin", short[4][2], z->pairs, saved_pairs[side], tag);
+						diff_eq_obj("L1 pipeline consumed real halves reach ungained RMS", short[4], z->rms, expected_rms, tag);
+					}
+				}
+				if (ep == 0 && step >= 1201 && step<=2602) {
+					/* RX72 increments +aa78 once per observed call. Native
+					 * count64 arms two four-bin nonlinear banks; count65
+					 * calls dftupdate twice on burst+370 with four samples.
+					 * The signal bank overlays probe_bins[0..3]; this is
+					 * not the later 25-bin line-probe accumulation. */
+					static const struct correlation_bin initialized[2][4] = {
+					{
+						{ 0, 1792, 0, 0, 0.0, 0.0 },
+						{ 0, 2304, 0, 0, 0.0, 0.0 },
+						{ 0, 3328, 0, 0, 0.0, 0.0 },
+						{ 0, 4352, 0, 0, 0.0, 0.0 }
+					},
+					{
+						{ 0, 1536, 0, 0, 0.0, 0.0 },
+						{ 0, 2048, 0, 0, 0.0, 0.0 },
+						{ 0, 3072, 0, 0, 0.0, 0.0 },
+						{ 0, 4096, 0, 0, 0.0, 0.0 }
+					}
+					};
+					static const struct correlation_bin accumulated[2][4] = {
+					{
+						{ 7168, 1792, 1659913, -1437048, 106234526.0, -91970891.0 },
+						{ 9216, 2304, 1009754, -2197729, 64624406.0, -140654509.0 },
+						{ 13312, 3328, -1210598, -2097597, -77478133.0, -134246084.0 },
+						{ 1024, 4352, -1846470, 51065, -118173964.0, 3268331.0 }
+					},
+					{
+						{ 6144, 1536, 1770548, -1013828, 113315167.0, -64884879.0 },
+						{ 8192, 2048, 1405140, -1850295, 89929085.0, -118418748.0 },
+						{ 12288, 3072, -672448, -2386677, -43036624.0, -152747254.0 },
+						{ 0, 4096, -1968840, -515529, -126005718.0, -32993822.0 }
+					}
+					};
+					static const short known_samples[4] = { 3554, 3626, 1540, -4065 };
+					struct correlation_projection *c = &correlation[side];
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					int bank, bin;
+					memset(c, 0, sizeof *c);
+					c->counter = o[side][ep]->short_aa78;
+					c->nsamples = (int)(rx->rx_samples - rx->burst);
+					memcpy(c->samples, rx->burst, sizeof c->samples);
+					for (bank = 0; bank < 2; bank++)
+					for (bin = 0; bin < 4; bin++) {
+						const struct v34_dftbin *b = bank ? &o[side][ep]->nl_noise_bins[bin] : &o[side][ep]->probe_bins[bin];
+						struct correlation_bin *d = &c->bank[bank][bin];
+						d->phase = b->phase; d->inc = b->inc;
+						d->acc_re = b->acc_re; d->acc_im = b->acc_im;
+						d->sum_re = b->sum_re; d->sum_im = b->sum_im;
+					}
+					diff_eq_int("RX72 correlation native counter trajectory (%ld)", c->counter, step - 1178, tag);
+					diff_eq_int("RX72 correlation live receive state (%ld)", q->state.rx, step>=2602?43:72, tag);
+					if (c->counter == 64)
+						diff_eq_obj("RX72 correlation first four-bin bank initialization", struct correlation_bin[2][4], c->bank, initialized, tag);
+					if (c->counter == 65) {
+						diff_eq_int("RX72 correlation actual nonempty sample count (%ld)", c->nsamples, 4, tag);
+						diff_eq_obj("RX72 correlation actual timing burst known answer", short[4], c->samples, known_samples, tag);
+						diff_eq_obj("RX72 correlation first accumulation known answer", struct correlation_bin[2][4], c->bank, accumulated, tag);
+					}
+				}
+				if (ep == 0 && step == 1562) {
+					/* Counter384 performs the last four-sample update,
+					 * noise energy(scale6), signal energy(scale2), then
+					 * stores NL totals and rearms phases/integer sums.
+					 * Native6c9b3 executes the zero-noise ratio store.
+					 * Energy fields and double sums survive the rearm. */
+					static const struct nl_measure_bin known_rearmed[2][4] = {
+					{
+						{ 0, 1792, 0, 0, 1519, 6, -9692952620.0, 3944591040.0, 1.0951312896641314e+20 },
+						{ 0, 2304, 0, 0, 1530, 6, 5666010300.0, -8839659500.0, 1.1024325279564635e+20 },
+						{ 0, 3328, 0, 0, 1542, 6, -6267338440.0, -8476651260.0, 1.1113314770516122e+20 },
+						{ 0, 4352, 0, 0, 1552, 6, -10218752460.0, 2723374380.0, 1.1183966985239644e+20 }
+					},
+					{
+						{ 0, 1536, 0, 0, 0, 20, 639380.0, 437300.0, 600038074400.0 },
+						{ 0, 2048, 0, 0, 0, 20, 843920.0, -827180.0, 1396427718800.0 },
+						{ 0, 3072, 0, 0, 0, 20, -460200.0, 791220.0, 837813128400.0 },
+						{ 0, 4096, 0, 0, 0, 20, -327660.0, 327680.0, 214735258000.0 }
+					}
+					};
+					static const short known_samples[4] = { 2671, -452, -4316, 3771 };
+					struct nl_measure_projection *m = &measurement[side];
+					struct v34_object *v = o[side][ep];
+					struct v34_receiver *rx = &v->receiver;
+					int bank, bin;
+					memset(m, 0, sizeof *m);
+					m->counter = v->short_aa78;
+					m->nsamples = (int)(rx->rx_samples - rx->burst);
+					m->noise = v->nl_noise; m->signal = v->nl_signal; m->ratio = v->nl_ratio;
+					memcpy(m->samples, rx->burst, sizeof m->samples);
+					for (bank = 0; bank < 2; bank++)
+					for (bin = 0; bin < 4; bin++) {
+						const struct v34_dftbin *b = bank ? &v->nl_noise_bins[bin] : &v->probe_bins[bin];
+						struct nl_measure_bin *d = &m->bank[bank][bin];
+						d->phase = b->phase; d->inc = b->inc;
+						d->acc_re = b->acc_re; d->acc_im = b->acc_im;
+						d->energy = b->energy; d->shift = b->shift;
+						d->sum_re = b->sum_re; d->sum_im = b->sum_im; d->denergy = b->denergy;
+					}
+					diff_eq_int("NL measurement accumulated predecessor counter (%ld)", measurement_before[side].counter, 383, tag);
+					diff_eq_int("NL measurement native counter384 (%ld)", m->counter, 384, tag);
+					diff_eq_int("NL measurement actual nonempty final burst (%ld)", m->nsamples, 4, tag);
+					diff_eq_obj("NL measurement final timing burst known answer", short[4], m->samples, known_samples, tag);
+					diff_eq_int("NL measurement native integer noise zero (%ld)", m->noise, 0, tag);
+					diff_eq_int("NL measurement native scaled signal (%ld)", m->signal, 1572608, tag);
+					diff_eq_int("NL measurement native zero-noise ratio branch (%ld)", m->ratio, 0, tag);
+					diff_eq_obj("NL measurement preserved energies/doubles and rearmed integer fields", struct nl_measure_bin[2][4], m->bank, known_rearmed, tag);
+				}
+
+				if (ep == 0 && (step == 1946 || step == 1947)) {
+					/* Original counter768 measures four-bin overlay then
+					 * clears the full25 bank, including double sums. The
+					 * next actual four-sample burst accumulates all25 bins. */
+					static const struct nl_measure_bin native_reset[25] = {
+						{ 0, 256, 0, 0, 379, 8, 0.0, 0.0, 0.0 },
+						{ 0, 512, 0, 0, 382, 8, 0.0, 0.0, 0.0 },
+						{ 0, 768, 0, 0, 385, 8, 0.0, 0.0, 0.0 },
+						{ 0, 1024, 0, 0, 388, 8, 0.0, 0.0, 0.0 },
+						{ 0, 1280, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 1536, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 1792, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 2048, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 2304, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 2560, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 2816, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 3072, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 3328, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 3584, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 3840, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 4096, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 4352, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 4608, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 4864, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 5120, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 5376, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 5632, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 5888, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 6144, 0, 0, 0, 0, 0.0, 0.0, 0.0 },
+						{ 0, 6400, 0, 0, 0, 0, 0.0, 0.0, 0.0 }
+					};
+					static const struct nl_measure_bin native_accumulated[25] = {
+						{ 1024, 256, 616248, 6741, 379, 8, 39440028.0, 431523.0, 0.0 },
+						{ 2048, 512, 671311, -7981, 382, 8, 42964021.0, -510689.0, 0.0 },
+						{ 3072, 768, 747553, -61685, 385, 8, 47843525.0, -3947758.0, 0.0 },
+						{ 4096, 1024, 824282, -164213, 388, 8, 52754128.0, -10509553.0, 0.0 },
+						{ 5120, 1280, 877843, -316020, 0, 0, 56182077.0, -20225164.0, 0.0 },
+						{ 6144, 1536, 885674, -507203, 0, 0, 56683267.0, -32460885.0, 0.0 },
+						{ 7168, 1792, 830321, -718889, 0, 0, 53140692.0, -46008773.0, 0.0 },
+						{ 8192, 2048, 702878, -925585, 0, 0, 44984319.0, -59237342.0, 0.0 },
+						{ 9216, 2304, 505107, -1099363, 0, 0, 32326968.0, -70359123.0, 0.0 },
+						{ 10240, 2560, 249850, -1213905, 0, 0, 15990565.0, -77689845.0, 0.0 },
+						{ 11264, 2816, -40463, -1249006, 0, 0, -2589507.0, -79936268.0, 0.0 },
+						{ 12288, 3072, -336308, -1193885, 0, 0, -21523628.0, -76408540.0, 0.0 },
+						{ 13312, 3328, -605487, -1049305, 0, 0, -38751067.0, -67155390.0, 0.0 },
+						{ 14336, 3584, -817737, -828220, 0, 0, -52335061.0, -53006013.0, 0.0 },
+						{ 15360, 3840, -948894, -554075, 0, 0, -60729084.0, -35460651.0, 0.0 },
+						{ 0, 4096, -984804, -258021, 0, 0, -63027434.0, -16513294.0, 0.0 },
+						{ 1024, 4352, -923630, 25375, 0, 0, -59112224.0, 1624191.0, 0.0 },
+						{ 2048, 4608, -776297, 263162, 0, 0, -49682957.0, 16842529.0, 0.0 },
+						{ 3072, 4864, -564991, 428273, 0, 0, -36159303.0, 27409642.0, 0.0 },
+						{ 4096, 5120, -320419, 503704, 0, 0, -20506752.0, 32237151.0, 0.0 },
+						{ 5120, 5376, -77233, 484800, 0, 0, -4942795.0, 31027324.0, 0.0 },
+						{ 6144, 5632, 130782, 380126, 0, 0, 8370113.0, 24328173.0, 0.0 },
+						{ 7168, 5888, 275325, 209825, 0, 0, 17620920.0, 13428963.0, 0.0 },
+						{ 8192, 6144, 337952, 3155, 0, 0, 21628959.0, 201996.0, 0.0 },
+						{ 9216, 6400, 312457, -206255, 0, 0, 19997372.0, -13200195.0, 0.0 }
+					};
+					static const struct nl_measure_bin native_noise[4] = {
+						{ 0, 1536, 11960, -13480, 0, 20, 1442120.0, -392880.0, 2234064788800.0 },
+						{ 0, 2048, 16740, 8380, 0, 20, 1941100.0, -266000.0, 3838625210000.0 },
+						{ 0, 3072, 1600, -13260, 0, 20, -331260.0, -27000.0, 110462187600.0 },
+						{ 0, 4096, 4980, -20640, 0, 20, 0.0, -983000.0, 966289000000.0 }
+					};
+					static const short bursts[2][4] = { {1336,-225,-2158,1886}, {1778,1814,770,-2033} };
+					struct pb_projection *m = &probe[side][step-1946];
+					struct v34_object *v = o[side][ep];
+					int bin;
+					memset(m, 0, sizeof *m);
+					m->counter=v->short_aa78;
+					m->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);
+					m->noise=v->pb_noise; m->signal=v->pb_signal; m->ratio=v->pb_ratio;
+					memcpy(m->samples,v->receiver.burst,sizeof m->samples);
+					for (bin=0;bin<29;bin++) {
+						const struct v34_dftbin *b=bin<25 ? &v->probe_bins[bin] : &v->nl_noise_bins[bin-25];
+						struct nl_measure_bin *d=bin<25 ? &m->bins[bin] : &m->noise_bins[bin-25];
+						d->phase=b->phase;d->inc=b->inc;d->acc_re=b->acc_re;d->acc_im=b->acc_im;
+						d->energy=b->energy;d->shift=b->shift;d->sum_re=b->sum_re;d->sum_im=b->sum_im;d->denergy=b->denergy;
+						if(bin<25){m->thresholds[bin][0]=b->thresh_lo;m->thresholds[bin][1]=b->thresh_hi;}
+					}
+					diff_eq_int("probe first25 counter trajectory (%ld)",m->counter,step-1178,tag);
+					diff_eq_int("probe first25 actual nonempty timing samples (%ld)",m->nsamples,4,tag);
+					diff_eq_obj("probe first25 timing burst known answer",short[4],m->samples,bursts[step-1946],tag);
+					diff_eq_int("probe overlay native noise zero (%ld)",m->noise,0,tag);
+					diff_eq_int("probe overlay native scaled signal (%ld)",m->signal,392704,tag);
+					diff_eq_int("probe overlay native zero-noise ratio (%ld)",m->ratio,0,tag);
+					diff_eq_obj("probe full25 reset or first accumulation native projection",struct nl_measure_bin[25],m->bins,step==1946?native_reset:native_accumulated,tag);
+					diff_eq_obj("probe full25 reset preserves measured noise bank",struct nl_measure_bin[4],m->noise_bins,native_noise,tag);
+					for(bin=0;bin<25;bin++) {
+						diff_eq_int("probe threshold low retained zero (%ld)",m->thresholds[bin][0],0,tag+bin);
+						diff_eq_int("probe threshold high retained zero (%ld)",m->thresholds[bin][1],0,tag+bin);
+					}
+				}
+				if (ep == 1 && step >= 1880 && step <= 1946) {
+					/* Native guard admits these67 calls, with n4 zeros
+					 * after AGC, and all67 original tone_detect returns0. */
+					static const short silence[4] = { 0, 0, 0, 0 };
+					struct v34_receiver *rx = &o[side][ep]->receiver;
+					eligible_detector_frames[side]++;
+					diff_eq_int("RX53 eligible detector cursor trajectory (%ld)",o[side][ep]->vect_idx,1500+4*(step-1880),tag);
+					diff_eq_int("RX53 eligible actual detector sample count (%ld)",(int)(rx->rx_samples-rx->burst),4,tag);
+					diff_eq_obj("RX53 eligible native detector zero burst",short[4],rx->burst,silence,tag);
+				}
+
+				if(ep==0 && (step==2266 || step==2267)) {
+					/* The next counter is1089: original69611 reduces all25
+					 * actual accumulated bins and selectsTX60. Stop on that
+					 * process return; generated-tone provenance remains a new boundary. */
+					static const struct nl_measure_bin native_terminal[25] = {
+						{ 0, 256, -11605320, 31191660, 62, 11, -742700700.0, 1996304180.0, 4.5368347088659625e+18 },
+						{ 0, 512, 74919400, -17183120, 335, 8, 4794873780.0, -1099683420.0, 2.4200118190354383e+19 },
+						{ 0, 768, -47149520, -63856340, 358, 8, -3017531000.0, -4086769840.0, 2.5807181061094625e+19 },
+						{ 0, 1024, 44623220, -68274340, 378, 8, 2855914460.0, -4369533160.0, 2.7249067439176675e+19 },
+						{ 0, 1280, 78728740, 19846260, 374, 8, 5038678720.0, 1270195900.0, 2.700168086775765e+19 },
+						{ 0, 1536, 11960, -13480, 0, 20, 802740.0, -830180.0, 1333590340000.0 },
+						{ 0, 1792, -75722960, 30822900, 379, 8, -4846233680.0, 1972703140.0, 2.7377538559732204e+19 },
+						{ 0, 2048, 16740, 8380, 0, 20, 1097180.0, 561180.0, 1518726944800.0 },
+						{ 0, 2304, 44268180, -69064660, 382, 8, 2833203360.0, -4420101440.0, 2.7564338019005362e+19 },
+						{ 0, 2560, 79510660, 21693060, 385, 8, 5088721220.0, 1388389740.0, 2.7822709725015556e+19 },
+						{ 0, 2816, -2938380, -82167180, 384, 8, -188021560.0, -5258662960.0, 2.7688888233900794e+19 },
+						{ 0, 3072, 1600, -13260, 0, 20, 128940.0, -818220.0, 686109492000.0 },
+						{ 0, 3328, -48972440, -66217100, 385, 8, -3134199080.0, -4237855100.0, 2.7782619721668858e+19 },
+						{ 0, 3584, 48847020, -66335280, 385, 8, 3126242100.0, -4245422180.0, 2.7796999154248364e+19 },
+						{ 0, 3840, -77918700, -27199420, 387, 8, -4986758220.0, -1740723760.0, 2.7897876753366106e+19 },
+						{ 0, 4096, 4980, -20640, 0, 20, 327660.0, -1310680.0, 1825243138000.0 },
+						{ 0, 4352, -79882520, 21273160, 388, 8, -5112445980.0, 1361515820.0, 2.7990829226528432e+19 },
+						{ 0, 4608, 43538680, 69702400, 383, 8, 2786509180.0, 4460992260.0, 2.766508535400418e+19 },
+						{ 0, 4864, 54259660, -62491700, 389, 8, 3472649760.0, -3999431040.0, 2.805474499934354e+19 },
+						{ 0, 5120, -75016300, -33305800, 383, 8, -4801015220.0, -2131538280.0, 2.7593202581777007e+19 },
+						{ 0, 5376, 9996380, -82339860, 391, 8, 639803120.0, -5269716620.0, 2.817926128746596e+19 },
+						{ 0, 5632, 80555160, -14353360, 380, 8, 5155563940.0, -918581620.0, 2.742363173203015e+19 },
+						{ 0, 5888, 37933720, 74096800, 393, 8, 2427793280.0, 4742235660.0, 2.8382979265388794e+19 },
+						{ 0, 6144, 58492040, -56688760, 377, 8, 3743515580.0, -3628056400.0, 2.7176702139283698e+19 },
+						{ 0, 6400, 72454700, 39993200, 389, 8, 4637137440.0, 2559601880.0, 2.805460542154929e+19 }
+					};
+					struct probe_done_projection *d=&done[side][step-2266];
+					struct v34_object *v=o[side][ep];
+					struct v34_receiver *rx=&v->receiver;
+					int bin;
+					memset(d,0,sizeof *d);
+					d->counter=v->short_aa78;d->micro=v->microstate;d->rx=v->rxstate;d->tx=v->txstate;d->role=v->role;
+					d->flags=rx->flags;d->gain=rx->agc_gain;d->saved_gain=rx->short_264;d->timing=rx->timing_offset;d->rtd_scaled=v->rtd_scaled;
+					d->count=rx->out_count;d->phase=rx->phase_frac;d->increment=rx->phase_inc;d->wrap=rx->phase_wrap;d->period=rx->symbol_period;
+					d->sr=v->fsk.sr;d->nbits=v->fsk.nbits;
+					for(bin=0;bin<25;bin++) {
+						const struct v34_dftbin *n=&v->probe_bins[bin];struct nl_measure_bin *q=&d->bins[bin];
+						q->phase=n->phase;q->inc=n->inc;q->acc_re=n->acc_re;q->acc_im=n->acc_im;q->energy=n->energy;q->shift=n->shift;q->sum_re=n->sum_re;q->sum_im=n->sum_im;q->denergy=n->denergy;
+					}
+					diff_eq_int("probe terminal native counter trajectory (%ld)",d->counter,step-1178,tag);
+					diff_eq_int("probe terminal originating role (%ld)",d->role,0x65,tag);
+					diff_eq_int("probe terminal native TX selection (%ld)",d->tx,step==2266?5:60,tag);
+					diff_eq_int("probe terminal native flag transition (%ld)",d->flags,step==2266?0x1200:0x1a00,tag);
+					diff_eq_int("probe terminal native gain transition (%ld)",d->gain,step==2266?537:1079,tag);
+					if(step==2267) {
+						diff_eq_int("probe terminal native micro retained (%ld)",d->micro,59,tag);
+						diff_eq_int("probe terminal native RX retained (%ld)",d->rx,72,tag);
+						diff_eq_int("probe terminal saved gain restored (%ld)",d->gain,d->saved_gain,tag);
+						diff_eq_int("probe terminal copied timing offset (%ld)",d->rtd_scaled,d->timing,tag);
+						diff_eq_int("probe terminal demod count (%ld)",d->count,4,tag);
+						diff_eq_int("probe terminal demod phase (%ld)",d->phase,8000,tag);
+						diff_eq_int("probe terminal demod increment (%ld)",d->increment,16000,tag);
+						diff_eq_int("probe terminal demod wrap (%ld)",d->wrap,16000,tag);
+						diff_eq_int("probe terminal symbol period (%ld)",d->period,16000,tag);
+						diff_eq_int("probe terminal FSK shift-register reset (%ld)",d->sr,-1,tag);
+						diff_eq_int("probe terminal FSK bitcount reset (%ld)",d->nbits,0,tag);
+						diff_eq_obj("probe terminal all25 native reduced bins",struct nl_measure_bin[25],d->bins,native_terminal,tag);
+						for(bin=0;bin<25;bin++) {
+							struct nl_measure_bin *p=&done[side][0].bins[bin],*q=&d->bins[bin];
+							diff_eq_int("probe terminal actual prior accumulation nonzero (%ld)",p->acc_re!=0||p->acc_im!=0,1,tag+bin);
+							diff_eq_int("probe terminal preserves integer real accumulator (%ld)",q->acc_re,p->acc_re,tag+bin);
+							diff_eq_int("probe terminal preserves integer imag accumulator (%ld)",q->acc_im,p->acc_im,tag+bin);
+						}
+					}
+				}
+
+				if(ep==1 && step>=2346 && step<=2463) {
+					/* Native presence detector arms2357, first qualifies2363,
+					 * and returns1 at2463 when100 becomes101. Original69888
+					 * then selects micro48/RX43/TX60, followed by69989's
+					 * FSK rearm. Stop on that first peer state boundary. */
+					static const short native_levels[118]={
+						1,0,0,1,0,0,1,8,31,88,187,341,
+						551,824,1152,1542,1987,2488,3038,3638,4278,4961,5675,6424,
+						7198,8000,8820,9661,10513,11379,12250,13131,14012,14899,15783,16668,
+						17547,18421,19285,20145,20994,21835,22662,23480,23871,23704,24058,23847,
+						24182,23942,24268,24004,24325,24044,24364,24585,24873,24419,24738,24307,
+						24646,24233,24587,24183,24549,24572,24928,24401,24784,24289,24688,24213,
+						24622,24163,24579,24486,24901,24336,24770,24238,24685,24176,24629,24136,
+						24590,24426,24880,24293,24762,24206,24681,24148,24627,24112,24589,24380,
+						24864,24260,24755,24183,24680,24131,24627,24098,24591,24350,24851,24237,
+						24747,24164,24676,24118,24628,24089,24593,24333,24846,24225
+					};
+					struct detector_decision_projection *d=&decision[side];struct v34_object *v=o[side][ep];
+					d->polarity=v->detector.polarity;d->armed=v->detector.armed;d->count=v->detector.count;d->limit=v->detector.limit;
+					d->state=v->detector.state;d->low=v->detector.thresh_lo;d->high=v->detector.thresh_hi;d->level=v->detector.level;
+					d->flags=v->receiver.flags;d->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);memcpy(d->samples,v->receiver.burst,sizeof d->samples);
+					d->micro=v->microstate;d->rx=v->rxstate;d->tx=v->txstate;d->cursor=v->vect_idx;d->counter=v->short_aa78;
+					if(d->micro!=52 && detector_edge[side]<0)detector_edge[side]=step;
+					d->gain=v->receiver.agc_gain;d->saved_gain=v->receiver.short_264;
+					d->sr=v->fsk.sr;d->nbits=v->fsk.nbits;d->phase=v->fsk.phase;d->next=v->fsk.next;
+					diff_eq_int("RX53 actual presence polarity (%ld)",d->polarity,0,tag);
+					diff_eq_int("RX53 actual presence low threshold (%ld)",d->low,2048,tag);
+					diff_eq_int("RX53 actual presence high threshold (%ld)",d->high,0,tag);
+					diff_eq_int("RX53 actual presence count limit (%ld)",d->limit,100,tag);
+					diff_eq_int("RX53 actual detector running state (%ld)",d->state,2,tag);
+					diff_eq_int("RX53 actual detector nonempty input (%ld)",d->nsamples,4,tag);
+					diff_eq_int("RX53 native first arming trajectory (%ld)",d->armed,step>=2357,tag);
+					diff_eq_int("RX53 native qualifying count trajectory (%ld)",d->count,step>=2363?step-2362:0,tag);
+					diff_eq_int("RX53 native integrated level trajectory (%ld)",d->level,native_levels[step-2346],tag);
+					if(step==2357) {
+						diff_eq_int("RX53 native before arming not armed (%ld)",d->before_armed,0,tag);
+						diff_eq_int("RX53 native arming starts below floor (%ld)",d->before_level,187,tag);
+						diff_eq_int("RX53 native arming crosses floor (%ld)",d->level,341,tag);
+						diff_eq_int("RX53 arming call resets count (%ld)",d->count,0,tag);
+					}
+					if(step>=2363) {
+						diff_eq_int("RX53 native qualifying level above low (%ld)",d->level>d->low,1,tag);
+						diff_eq_int("RX53 qualified call increments once (%ld)",d->count,d->before_count+1,tag);
+					}
+					if(step==2463) {
+						diff_eq_int("RX53 native before first positive is exactly limit (%ld)",d->before_count,100,tag);
+						diff_eq_int("RX53 native first count over limit (%ld)",d->count,101,tag);
+						diff_eq_int("RX53 native terminal micro48 selection (%ld)",d->micro,48,tag);
+						diff_eq_int("RX53 native terminal RX43 selection (%ld)",d->rx,43,tag);
+						diff_eq_int("RX53 native terminal TX60 selection (%ld)",d->tx,60,tag);
+						diff_eq_int("RX53 native terminal cursor clear (%ld)",d->cursor,0,tag);
+						diff_eq_int("RX53 native terminal shared counter clear (%ld)",d->counter,0,tag);
+						diff_eq_int("RX53 native terminal pending flag rearmed (%ld)",d->flags,0x1a04,tag);
+						diff_eq_int("RX53 native terminal saved gain restored (%ld)",d->gain,d->saved_gain,tag);
+						diff_eq_int("RX53 native FSK shift register clear (%ld)",d->sr,0,tag);
+						diff_eq_int("RX53 native FSK bit count clear (%ld)",d->nbits,0,tag);
+						diff_eq_int("RX53 native FSK phase clear (%ld)",d->phase,0,tag);
+						diff_eq_int("RX53 native FSK next rearm (%ld)",d->next,6,tag);
+					}
+				}
+
+				if(ep==1 && (step==2464 || step==2584)) {
+					/* These are the peer's own two producer epochs. The
+					 * counter120 polarity flip has not reached the caller
+					 * at2602: its first returned frame is2589, not2469. */
+					static const unsigned native_queue[2][16]={ {62548,62547,2989,2988,62548,62549,2987,2987,62549,62548,2988,2989,62547,62548,2989,2989},{62548,62547,2989,2988,62548,62549,2987,2989,62548,62550,2985,2983,62554,62556,2979,2979} };
+					int ix=step==2584;struct tone_route_projection *r=&episode[side].route[ix];struct v34_object *v=o[side][ep];
+					r->wr_after=info0_tx_ring_index(v,v->tx.txq.wr);r->rd_after=info0_tx_ring_index(v,v->tx.txq.rd);r->count_after=v->tx.txq.count;
+					for(i=0;i<16;i++)memcpy(&r->words[i],(char *)v+0x2228+4*((r->wr_before+i)%V34_TXQ_RING),4);
+					diff_eq_int("peer TX60 own16-sample production (%ld)",(r->wr_after-r->wr_before+V34_TXQ_RING)%V34_TXQ_RING,16,tag);
+					diff_eq_int("peer TX60 own production count conservation (%ld)",r->count_after-r->count_before,12,tag);
+					diff_eq_obj("peer TX60 actual initial/postflip producer known answers",unsigned[16],r->words,native_queue[ix],tag);
+				}
+				if(ep==1 && (step==2468 || step==2588)) {
+					struct tone_route_projection *r=&episode[side].route[step==2588];float expected[4];
+					for(i=0;i<4;i++)expected[i]=(float)(short)r->words[i];
+					memcpy(r->floating,(char *)root[side][ep]+0xaef8,sizeof r->floating);
+					for(i=0;i<4;i++){short v;memcpy(&v,(char *)root[side][ep]+0xd17c+2*i,2);r->fifo[i]=v;}
+					diff_eq_int("peer TX60 saved quartet actually popped (%ld)",info0_tx_ring_index(o[side][ep],o[side][ep]->tx.txq.rd),(r->wr_before+4)%V34_TXQ_RING,tag);
+					diff_eq_obj("peer TX60 saved quartet float-stage provenance",float[4],r->floating,expected,tag);
+					diff_eq_obj("peer TX60 saved quartet FIFO provenance",float[4],r->fifo,expected,tag);
+				}
+				if(ep==1 && (step==2469 || step==2589)) {
+					int ix=step==2589;struct tone_route_projection *r=&episode[side].route[ix];short expected[4];
+					for(i=0;i<4;i++)expected[i]=(short)r->words[i];
+					memcpy(r->returned,out[side][ep],sizeof r->returned);episode[side].channel_slot[ix]=wp/4;
+					diff_eq_obj("peer TX60 saved quartet public-return provenance",short[4],r->returned,expected,tag);
+				}
+				if(ep==0 && step==2541) {
+					float staged[4],expected[4];for(i=0;i<4;i++)expected[i]=episode[side].route[0].arrived[i];
+					memcpy(staged,(char *)root[side][ep]+0xac78,sizeof staged);
+					diff_eq_obj("peer TX60 saved initial frame native caller float input",float[4],staged,expected,tag);
+				}
+				if(ep==1 && step>=2464 && step<=2602) {
+					struct peer_episode_projection *e=&episode[side];struct v34_object *v=o[side][ep];
+					e->counter=v->short_aa78;e->selector=v->short_358c;e->micro=v->microstate;e->rx=v->rxstate;e->tx=v->txstate;
+					e->sr=v->fsk.sr;e->nbits=v->fsk.nbits;e->phase=v->fsk.phase;e->next=v->fsk.next;
+					if(e->selector!=e->selector_before && polarity_edge[side]<0)polarity_edge[side]=step;
+					diff_eq_int("peer micro48 actual counter trajectory (%ld)",e->counter,step-2463,tag);
+					diff_eq_int("peer micro48 actual once-per-call increment (%ld)",e->counter,e->counter_before+1,tag);
+					diff_eq_int("peer micro48 native polarity trajectory (%ld)",e->selector,step>=2583,tag);
+					diff_eq_int("peer micro48 retained receive selector (%ld)",e->rx,43,tag);
+					diff_eq_int("peer micro48 retained transmit selector (%ld)",e->tx,60,tag);
+					diff_eq_int("peer micro48 retained microstate (%ld)",e->micro,48,tag);
+					if(step==2583) {
+						diff_eq_int("peer micro48 native preflip selector (%ld)",e->selector_before,0,tag);
+						diff_eq_int("peer micro48 native exact polarity edge counter (%ld)",e->counter,120,tag);
+						diff_eq_int("peer micro48 native flip FSK bitcount (%ld)",e->nbits,30,tag);
+					}
+				}
+				if(ep==0 && (step==2583 || step==2601 || step==2602)) {
+					static const struct caller_fsk_projection native_predicates[3]={
+						{59,72,60,1405,-128,78,82,90,4,{4680,-175,-4681,174}},
+						{59,72,60,1423,-2048,82,136,138,4,{4680,-175,-4681,174}},
+						{62,43,60,1424,-4096,83,139,150,4,{4680,-175,-4681,174}}
+					};
+					int ix=step==2583?0:(step==2601?1:2);struct caller_fsk_projection *f=&caller_fsk[side][ix];struct v34_object *v=o[side][ep];
+					f->micro=v->microstate;f->rx=v->rxstate;f->tx=v->txstate;f->counter=v->short_aa78;
+					f->sr=(short)v->fsk.sr;f->nbits=v->fsk.nbits;f->phase=v->fsk.phase;f->next=v->fsk.next;
+					f->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);memcpy(f->burst,v->receiver.burst,sizeof f->burst);
+					diff_eq_obj("caller actual FSK blocked/positive native predicates",struct caller_fsk_projection,f,&native_predicates[ix],tag);
+					if(step==2602) {
+						diff_eq_int("caller actual FSK more than20 decoded bits (%ld)",f->nbits>20,1,tag);
+						diff_eq_int("caller actual FSK twelve low bits zero (%ld)",f->sr&0xfff,0,tag);
+						diff_eq_int("caller terminal input predates flipped producer output (%ld)",step-72<2589,1,tag);
+					}
+				}
+
+				if(ep==0 && step>2602 && step<=2625) {
+					/* Original65c81's byte-bit0 guard remains false while
+					 * the caller waits; micro62 preserves its shared counter. */
+					struct caller_wait_projection *w=&waiting[side];struct v34_object *v=o[side][ep];int d=step-2602;
+					memset(w,0,sizeof *w);w->micro=v->microstate;w->rx=v->rxstate;w->tx=v->txstate;w->counter=v->short_aa78;
+					w->sr=v->fsk.sr;w->nbits=v->fsk.nbits;w->phase=v->fsk.phase;w->next=v->fsk.next;w->bit_len=v->fsk.bit_len;w->resync=v->fsk.resync_next;
+					w->filtdelay=v->filtdelay;w->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);
+					diff_eq_int("caller micro62 native negative byte-bit0 predicate (%ld)",w->sr&1,0,tag);
+					diff_eq_int("caller micro62 native frozen shared counter (%ld)",w->counter,1424,tag);
+					diff_eq_int("caller micro62 retained microstate (%ld)",w->micro,62,tag);
+					diff_eq_int("caller micro62 retained RX43 (%ld)",w->rx,43,tag);
+					diff_eq_int("caller micro62 retained TX60 (%ld)",w->tx,60,tag);
+					diff_eq_int("caller micro62 actual nonempty receive burst (%ld)",w->nsamples,4,tag);
+					diff_eq_int("caller micro62 native FSK bitclock count (%ld)",w->nbits,83+d/4,tag);
+					diff_eq_int("caller micro62 native FSK phase (%ld)",w->phase,139+3*d,tag);
+					diff_eq_int("caller micro62 native FSK next sampling instant (%ld)",w->next,150+12*(d/4),tag);
+					diff_eq_int("caller micro62 actual bit length (%ld)",w->bit_len,12,tag);
+					diff_eq_int("caller micro62 actual resync instant (%ld)",w->resync,6,tag);
+					diff_eq_int("caller micro62 native pending counter reload (%ld)",w->filtdelay,89,tag);
+				}
+				if(ep==1 && step>2602 && step<=2625) {
+					struct peer_finish_projection *f=&finish[side];struct v34_object *v=o[side][ep];
+					f->counter=v->short_aa78;f->micro=v->microstate;f->rx=v->rxstate;f->tx=v->txstate;f->selector=v->short_358c;
+					f->sr=v->fsk.sr;f->nbits=v->fsk.nbits;f->phase=v->fsk.phase;f->next=v->fsk.next;
+					if(step<2625) {
+						diff_eq_int("peer native micro48 terminal-window predecessor (%ld)",f->before,step-2464,tag);
+						diff_eq_int("peer native micro48 terminal-window count (%ld)",f->counter,step-2463,tag);
+						diff_eq_int("peer native micro48 terminal-window microstate (%ld)",f->micro,48,tag);
+						diff_eq_int("peer native micro48 terminal-window receive selector (%ld)",f->rx,43,tag);
+						diff_eq_int("peer native micro48 terminal-window transmit selector (%ld)",f->tx,60,tag);
+						diff_eq_int("peer native micro48 terminal-window polarity (%ld)",f->selector,1,tag);
+					} else if(step==2625) {
+						/* Original6c670 sees162 between this process call's
+						 * predecessor161 and returned counter0. Its actual
+						 * selected states/FSk projection are a new boundary. */
+						static const struct peer_finish_projection native_terminal={161,0,50,43,5,1,0,40,470,474};
+						diff_eq_int("peer native exact terminal162 guard (%ld)",f->before+1,162,tag);
+						diff_eq_obj("peer native counter162 selected states and reset known answer",struct peer_finish_projection,f,&native_terminal,tag);
+					}
+				}
+
+				if(ep==0 && step==2661) {
+					float staged[4],expected[4];for(i=0;i<4;i++)expected[i]=episode[side].route[1].arrived[i];
+					memcpy(staged,(char *)root[side][ep]+0xac78,sizeof staged);
+					diff_eq_obj("peer postflip actual caller float input2661",float[4],staged,expected,tag);
+				}
+				if(ep==0 && step>2625 && step<=2692) {
+					struct bit_response_projection *r=&response[side];struct v34_object *v=o[side][ep];
+					r->micro=v->microstate;r->rx=v->rxstate;r->tx=v->txstate;r->counter=v->short_aa78;r->filtdelay=v->filtdelay;
+					r->sr=v->fsk.sr;r->nbits=v->fsk.nbits;r->phase=v->fsk.phase;r->next=v->fsk.next;r->previous=v->fsk.prev;
+					r->flags=v->receiver.flags;r->gate=v->receiver.retrain_gate;r->nsamples=(int)(v->receiver.rx_samples-v->receiver.burst);memcpy(r->samples,v->receiver.burst,sizeof r->samples);
+					if(r->micro!=62 && caller_bit_edge[side]<0)caller_bit_edge[side]=step;
+					diff_eq_int("caller actual FSK low-bit-set trajectory (%ld)",r->sr&1,step==2692,tag);
+					diff_eq_int("caller actual FSK nonempty four-sample input (%ld)",r->nsamples,4,tag);
+					diff_eq_int("caller actual FSK processing gate open (%ld)",r->gate,0,tag);
+					diff_eq_int("caller actual retained receive selector (%ld)",r->rx,43,tag);
+					diff_eq_int("caller actual retained transmit selector (%ld)",r->tx,60,tag);
+					if(step<2692) {
+						diff_eq_int("caller native micro62 wait retained (%ld)",r->micro,62,tag);
+						diff_eq_int("caller native micro62 counter remains frozen (%ld)",r->counter,1424,tag);
+					} else {
+						/* Nativefskdetect consumes the actual four samples and
+						 * returns {-767,-661,-513}; fskdemodulate consumes
+						 * previous=-819 at phase6,next6, emitting bit_lo1.
+						 * Original65c81 then takes its byte-bit0 branch and
+						 * 65d2b selects micro56 after reloading filtdelay89. */
+						static const struct bit_response_projection native_terminal={1424,0,104,6,6,-819,56,43,60,89,89,1,105,9,18,-513,0x1a00,0,4,{-4506,167,4519,-169}};
+						diff_eq_obj("caller native first low-bit-set and micro56 reload known answer",struct bit_response_projection,r,&native_terminal,tag);
+						diff_eq_int("caller native FSK decoded one actual new bit (%ld)",r->nbits,r->before_nbits+1,tag);
+						diff_eq_int("caller native micro56 counter reload uses actual filtdelay (%ld)",r->counter,r->filtdelay,tag);
+					}
+				}
+				if(ep==1 && step>2625 && step<=2692) {
+					struct peer_wait_projection *w=&peer_wait[side];struct v34_object *v=o[side][ep];
+					w->micro=v->microstate;w->rx=v->rxstate;w->tx=v->txstate;w->counter=v->short_aa78;w->sr=v->fsk.sr;w->nbits=v->fsk.nbits;w->phase=v->fsk.phase;w->next=v->fsk.next;
+					diff_eq_int("peer actual micro50 retained while caller responds (%ld)",w->micro,50,tag);
+					diff_eq_int("peer actual RX43 retained while caller responds (%ld)",w->rx,43,tag);
+					diff_eq_int("peer actual TX5 retained while caller responds (%ld)",w->tx,5,tag);
+					diff_eq_int("peer actual micro50 counter trajectory (%ld)",w->counter,step-2625,tag);
+					if(step==2692) {
+						static const struct peer_wait_projection native_terminal={50,43,5,67,0,57,671,678};
+						diff_eq_obj("peer actual full terminal frame2692 known answer",struct peer_wait_projection,w,&native_terminal,tag);
+					}
+				}
+				diff_eq_int("L1 arrival live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("L1 arrival engine progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("L1 arrival process return OK (%ld)", rc, DPSTAT_OK, tag);
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("L1 arrival selected state and input", struct arrival_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("L1 arrival four-sample process output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if(step==2661)
+			diff_eq_obj("peer postflip actual arrived quartet pointer-free projection",short[4],episode[0].route[1].arrived,episode[1].route[1].arrived,step);
+		if(step>2625 && step<=2692) {
+			diff_eq_obj("caller actual FSK bit response pointer-free projection",struct bit_response_projection,&response[0],&response[1],step);
+			diff_eq_obj("peer actual micro50 wait pointer-free projection",struct peer_wait_projection,&peer_wait[0],&peer_wait[1],step);
+		}
+		if(step>2602 && step<=2625)
+			diff_eq_obj("peer native counter162 episode pointer-free projection",struct peer_finish_projection,&finish[0],&finish[1],step);
+		if(step>2602 && step<=2625)
+			diff_eq_obj("caller micro62 native wait pointer-free projection",struct caller_wait_projection,&waiting[0],&waiting[1],step);
+		if(step>=2464 && step<=2602)
+			diff_eq_obj("peer micro48 producer/channel/polarity pointer-free projection",struct peer_episode_projection,&episode[0],&episode[1],step);
+		if(step==2583 || step==2601 || step==2602) {
+			int ix=step==2583?0:(step==2601?1:2);
+			diff_eq_obj("caller FSK pointer-free predicate and boundary",struct caller_fsk_projection,&caller_fsk[0][ix],&caller_fsk[1][ix],step);
+		}
+		if(step>=2346 && step<=2463)
+			diff_eq_obj("RX53 actual detector decision pointer-free projection",struct detector_decision_projection,&decision[0],&decision[1],step);
+		if(step==2346)
+			diff_eq_obj("TX60 source-to-detector pointer-free provenance",struct tone_route_projection,&route[0],&route[1],step);
+		if(step==2266 || step==2267)
+			diff_eq_obj("probe terminal pointer-free projection",struct probe_done_projection,&done[0][step-2266],&done[1][step-2266],step);
+		if (step == 1946 || step == 1947)
+			diff_eq_obj("probe full25 pointer-free native projection",struct pb_projection,&probe[0][step-1946],&probe[1][step-1946],step);
+		if (step == 1506)
+			diff_eq_obj("micro52 pointer-free first undoubled producer projection", struct terminal_projection, &undoubled[0], &undoubled[1], step);
+		if (step == 1562) {
+			diff_eq_obj("NL measurement pointer-free accumulated predecessor", struct correlation_projection, &measurement_before[0], &measurement_before[1], step);
+			diff_eq_obj("NL measurement pointer-free result and rearm projection", struct nl_measure_projection, &measurement[0], &measurement[1], step);
+		}
+		if (step == 1505)
+			diff_eq_obj("peer terminal pointer-free queue and microstate projection", struct terminal_projection, &terminal[0], &terminal[1], step);
+		if (step >= 1201 && step<=2602)
+			diff_eq_obj("RX72 correlation pointer-free sample and bank projection", struct correlation_projection, &correlation[0], &correlation[1], step);
+		if (step >= 1199 && step <= 1200)
+			diff_eq_obj("L1 pipeline pointer-free queue provenance", struct pipeline_projection, &pipe[0], &pipe[1], step);
+		if(step<2692) {
+		if(step>=2464 && (p[0][0].state.rx!=(step>=2602?43:72) || p[1][0].state.rx!=(step>=2602?43:72) ||
+		    p[0][0].state.tx!=60 || p[1][0].state.tx!=60 || p[0][1].state.tx!=(step>=2625?5:60) || p[1][1].state.tx!=(step>=2625?5:60)))break;
+		if (((arrival[0] >= 0 || arrival[1] >= 0) && step >= 2698) ||
+		    p[0][0].state.micro != (step<2602?59:62) || p[1][0].state.micro != (step<2602?59:62) ||
+		    p[0][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : (step < 2625 ? 48 : 50))) || p[1][1].state.micro != (step < 1505 ? 51 : (step < 2463 ? 52 : (step < 2625 ? 48 : 50))) ||
+		    (step > 1505 && (p[0][1].state.rx != (step < 2463 ? 53 : 43) || p[1][1].state.rx != (step < 2463 ? 53 : 43)))) break;
+		}
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	for (side = 0; side < 2; side++)
+		diff_eq_int("L1 arrival first saved peer frame input step (%ld)", arrival[side], 1199, side);
+	for (side = 0; side < 2; side++)
+		diff_eq_int("peer terminal first micro51-to52 edge step (%ld)", terminal_step[side], 1505, side);
+	for (side = 0; side < 2; side++)
+		diff_eq_int("RX53 eligible native-witness detector prefix denominator (%ld)",eligible_detector_frames[side],67,side);
+	for(side=0;side<2;side++) {
+		diff_eq_int("RX53 first actual peer state edge reached (%ld)",detector_edge[side],2463,side);
+		diff_eq_int("RX53 actual terminal selected micro reached (%ld)",decision[side].micro,48,side);
+		diff_eq_int("RX53 actual terminal qualified count reached (%ld)",decision[side].count,101,side);
+	}
+	for(side=0;side<2;side++) {
+		diff_eq_int("peer first native polarity edge reached (%ld)",polarity_edge[side],2583,side);
+		diff_eq_int("caller first native FSK state edge reached (%ld)",caller_fsk_edge[side],2602,side);
+		diff_eq_int("peer terminal same-frame call observed (%ld)",gh_peer_counter[side],139,side);
+	}
+	for(side=0;side<2;side++)
+		diff_eq_int("peer first actual counter162 state edge reached (%ld)",peer162_edge[side],2625,side);
+	for(side=0;side<2;side++)
+		diff_eq_int("caller first actual low-bit-set state edge reached (%ld)",caller_bit_edge[side],2692,side);
+	diff_eq_int("reciprocal history first return/projection boundary step",public_step,3132,0);
+	diff_eq_int("reciprocal history stops on caller endpoint",public_ep,0,0);
+	diff_eq_int("reciprocal history paired process-call denominator",public_pairs,879,0);
+	diff_eq_int("reciprocal history process-call denominator",public_calls,1758,0);
+	diff_eq_int("reciprocal history fresh-output sample denominator",public_samples,3516,0);
+	for(side=0;side<2;side++) {
+		int peer_stall,peer_mode;
+		memcpy(&peer_stall,(char *)root[side][1]+0x20,4);memcpy(&peer_mode,(char *)root[side][1]+0x18,4);
+		diff_eq_int("reciprocal history uncalled terminal peer stall",peer_stall,3000,side);
+		diff_eq_int("reciprocal history uncalled terminal peer mode",peer_mode,0,side);
+	}
+	printf("reciprocal process/projection denominator:2693..3132,439 complete frames and terminal caller pair; 879 process-call pairs,1758 invocations,3516 fresh samples,3516 return/output/V34-projection checks; native wrapper deadline, no call after literal-1\n");
+	diff_eq_int("L1 arrival process-call denominator", calls, 8018, 0);
+	printf("L1 arrival denominator: 1 unchanged channel recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample frame windows (terminal caller only), %d process calls; saved returned peer frame reaches caller input; "
+	       "peer micro52 undoubled producer, NL/PB measurements384/768, full25-bin accumulation769 and terminal reduction1089/TX60 selection and actual tone delivery and RX53 positive boundary, peer counter120 polarity edge and caller FSK-positive selector edge and peer counter162 terminal and actual caller low-bit-set/micro56 response; no negotiation-completion claim\n", (calls + 3) / 4, calls);
+	return calls;
+}
+
+static int
+info0_l1_output(struct dp_operations **ops, struct dp *root[2][2],
+		struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4],
+		short sent[2][INFO0_DELAY / 4][4], int origin[INFO0_DELAY / 4],
+		const int saved_index[2], const unsigned saved[2][4], const int produced_step[2])
+{
+	/* Native5cfd2 reads OLD rd low16,5cfda stores tx_sample;bd67 FILDs that
+	 * signed short and bd74 stores float before refill. The wrapper appends at
+	 * FIFO+4+2*old_count (3eca), returns oldest samples (3f77), then shifts the
+	 * retained tail (3f98). In this recipe four FIFO samples survive each call.
+	 * Thus saved block pops1126 but returns1127. The initial empty-FIFO timing
+	 * hypothesis was falsified in scratch; this bound includes the observed FIFO.
+	 */
+	static const short first_block[4] = { 9212, 9261, 4968, -5955 };
+	struct output_projection {
+		struct info0_projection state;
+		int private_self, rd_before, rd, wr, queue_count, cursor, tx_sample;
+		int fifo_before, fifo_after, remainder_before, remainder_after, input_origin;
+		unsigned head[4], saved[4];
+		float floating[4];
+		short popped[4], fifo_head_before[4], fifo_head_after[4], returned[4], input[4];
+	} p[2][2];
+	struct output_events {
+		int producer_step, saved_index, pop_step, float_step, fifo_step, return_step;
+		int pop_rd_before, pop_rd_after, return_rd_before, return_rd_after;
+		int fifo_count, fifo_delay, return_tx_sample;
+		short popped[4], returned[4];
+	} event[2];
+	short in[2][2][4], out[2][2][4], previous_fifo[2][2][4];
+	int step, side, ep, i, slot = wp / 4, calls = 0;
+
+	memset(event, 0, sizeof event);
+	memset(previous_fifo, 0, sizeof previous_fifo);
+	for (side = 0; side < 2; side++) {
+		event[side].producer_step = produced_step[side];
+		event[side].saved_index = saved_index[side];
+		event[side].pop_step = event[side].float_step = event[side].fifo_step = -1;
+		event[side].return_step = -1;
+		diff_eq_int("L1 output: saved producer epoch (%ld)", produced_step[side], 1122, side);
+		diff_eq_int("L1 output: saved ring origin (%ld)", saved_index[side], 66, side);
+		memcpy(sent[side][slot], last_out[side][0], sizeof sent[side][slot]);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	origin[slot] = 1122; wp = (wp + 4) % INFO0_DELAY;
+	dsplib_debug_capture_on = 1; set_level(2);
+	for (step = 1123; step <= 1127; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct output_projection *q = &p[side][ep];
+				struct output_events *e = &event[side];
+				float expected_float[4];
+				long tag = step * 4 + ep * 2 + side;
+				int rc, returned_saved = 1;
+
+				memset(q, 0, sizeof *q);
+				q->private_self = root[side][ep]->dp_data == root[side][ep];
+				q->rd_before = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->input_origin = origin[slot];
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (q->private_self) {
+					memcpy(&q->fifo_before, (unsigned char *)root[side][ep] + 0xd178, 4);
+					memcpy(&q->remainder_before, (unsigned char *)root[side][ep] + 0xd1e4, 4);
+					memcpy(q->fifo_head_before, (unsigned char *)root[side][ep] + 0xd17c, sizeof q->fifo_head_before);
+				}
+				if (q->rd_before >= 0)
+				for (i = 0; i < 4; i++) {
+					memcpy(&q->head[i], (unsigned char *)o[side][ep] + 0x2228 +
+					       ((q->rd_before + i) % V34_TXQ_RING) * 4, 4);
+					q->popped[i] = (short)q->head[i];
+				}
+				for (i = 0; i < 4; i++) expected_float[i] = (float)q->popped[i];
+				if (ep == 1) {
+					diff_eq_int("L1 output: actual source input frame (%ld)", q->input_origin, step - 72, tag);
+					diff_eq_obj("L1 output actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+					if (saved_index[side] >= 0 && saved_index[side] < V34_TXQ_RING)
+					for (i = 0; i < 4; i++)
+						memcpy(&q->saved[i], (unsigned char *)o[side][ep] + 0x2228 +
+						       ((saved_index[side] + i) % V34_TXQ_RING) * 4, 4);
+					diff_eq_obj("L1 output saved raw block remains intact", unsigned[4], q->saved, saved[side], tag);
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->rd = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->wr = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.wr);
+				q->queue_count = o[side][ep]->tx.txq.count;
+				q->cursor = o[side][ep]->vect_idx;
+				q->tx_sample = o[side][ep]->tx_sample;
+				memcpy(q->returned, out[side][ep], sizeof q->returned); /* read-only returned-sample mapping observer */
+				if (q->private_self) {
+					memcpy(&q->fifo_after, (unsigned char *)root[side][ep] + 0xd178, 4);
+					memcpy(&q->remainder_after, (unsigned char *)root[side][ep] + 0xd1e4, 4);
+					memcpy(q->fifo_head_after, (unsigned char *)root[side][ep] + 0xd17c, sizeof q->fifo_head_after);
+					memcpy(q->floating, (unsigned char *)root[side][ep] + 0xaef8, sizeof q->floating);
+				}
+				diff_eq_int("L1 output: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("L1 output: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("L1 output: status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("L1 output: progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("L1 output: wrapper private owner is root (%ld)", q->private_self, 1, tag);
+				diff_eq_int("L1 output: queue pointers owned (%ld)", q->rd_before >= 0 && q->rd >= 0 && q->wr >= 0, 1, tag);
+				diff_eq_int("L1 output: four queue entries dequeued (%ld)", (q->rd - q->rd_before + V34_TXQ_RING) % V34_TXQ_RING, 4, tag);
+				diff_eq_int("L1 output: input remainder before (%ld)", q->remainder_before, 0, tag);
+				diff_eq_int("L1 output: input remainder after (%ld)", q->remainder_after, 0, tag);
+				diff_eq_int("L1 output: retained FIFO before (%ld)", q->fifo_before, 4, tag);
+				diff_eq_int("L1 output: retained FIFO after (%ld)", q->fifo_after, 4, tag);
+				diff_eq_obj("L1 output signed queue pops to exact float stage", float[4], q->floating, expected_float, tag);
+				diff_eq_obj("L1 output current pops become next FIFO head", short[4], q->fifo_head_after, q->popped, tag);
+				diff_eq_obj("L1 output returned samples map previous FIFO head", short[4], q->returned, q->fifo_head_before, tag);
+				diff_eq_int("L1 output: tx_sample retains last signed queue pop (%ld)", q->tx_sample, q->popped[3], tag);
+				if (step > 1123)
+					diff_eq_obj("L1 output retained FIFO continuity", short[4], q->fifo_head_before, previous_fifo[side][ep], tag);
+				memcpy(previous_fifo[side][ep], q->fifo_head_after, sizeof q->fifo_head_after);
+				if (ep == 0) {
+					diff_eq_int("L1 output: caller stays micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("L1 output: caller stays TX silence (%ld)", q->state.tx, 5, tag);
+					diff_eq_int("L1 output: caller counter (%ld)", q->state.count, step - 961, tag);
+				} else {
+					diff_eq_int("L1 output: peer stays micro51 (%ld)", q->state.micro, 51, tag);
+					diff_eq_int("L1 output: peer remains TX51 (%ld)", q->state.tx, 51, tag);
+					diff_eq_int("L1 output: peer remains RX53 (%ld)", q->state.rx, 53, tag);
+					diff_eq_int("L1 output: RX53 bypass holds count42 (%ld)", q->state.count, 42, tag);
+					diff_eq_int("L1 output: raw producer cursor (%ld)", q->cursor, (step - 1121) * 4, tag);
+					diff_eq_int("L1 output: read trajectory (%ld)", q->rd_before, (saved_index[side] - 12 + (step - 1123) * 4 + V34_TXQ_RING) % V34_TXQ_RING, tag);
+					if (q->rd_before == saved_index[side]) {
+						e->pop_step = e->float_step = e->fifo_step = step;
+						e->pop_rd_before = q->rd_before; e->pop_rd_after = q->rd;
+						memcpy(e->popped, q->popped, sizeof e->popped);
+						diff_eq_obj("L1 output saved producer block is actually dequeued", unsigned[4], q->head, saved[side], tag);
+						diff_eq_obj("L1 output original signed saved block dequeued", short[4], q->popped, first_block, tag);
+					}
+					for (i = 0; i < 4; i++) returned_saved &= out[side][ep][i] == first_block[i];
+					if (returned_saved && e->return_step < 0) {
+						e->return_step = step; e->return_rd_before = q->rd_before; e->return_rd_after = q->rd;
+						e->fifo_count = q->fifo_before; e->fifo_delay = step - e->pop_step;
+						e->return_tx_sample = q->tx_sample;
+						memcpy(e->returned, q->returned, sizeof e->returned);
+						diff_eq_obj("L1 output actual returned original-probe signed block", short[4], out[side][ep], first_block, tag);
+						diff_eq_obj("L1 output copied returned signed known answer", short[4], q->returned, first_block, tag);
+						diff_eq_int("L1 output: return belongs to prior queue-pop frame (%ld)", step - e->pop_step, 1, tag);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("L1 output selected pointer-free projection", struct output_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("L1 output actual four-sample return", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (event[0].return_step >= 0 || event[1].return_step >= 0 ||
+		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step; wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct output_events *e = &event[side];
+		diff_eq_int("L1 output: first saved dequeue step (%ld)", e->pop_step, 1126, side);
+		diff_eq_int("L1 output: float staging step (%ld)", e->float_step, 1126, side);
+		diff_eq_int("L1 output: saved block at FIFO head after (%ld)", e->fifo_step, 1126, side);
+		diff_eq_int("L1 output: first complete returned block (%ld)", e->return_step, 1127, side);
+		diff_eq_int("L1 output: queue-pop read origin (%ld)", e->pop_rd_before, 66, side);
+		diff_eq_int("L1 output: queue-pop read result (%ld)", e->pop_rd_after, 70, side);
+		diff_eq_int("L1 output: return-frame read origin (%ld)", e->return_rd_before, 70, side);
+		diff_eq_int("L1 output: return-frame read result (%ld)", e->return_rd_after, 74, side);
+		diff_eq_int("L1 output: observed FIFO delay (%ld)", e->fifo_delay, 1, side);
+		diff_eq_int("L1 output: observed retained FIFO samples (%ld)", e->fifo_count, 4, side);
+		printf("L1 output side=%s produced=%d ring=%d pop=%d float=%d fifo_head_after=%d "
+		       "returned=%d pop_rd=%d->%d return_rd=%d->%d fifo=%d delay=%d "
+		       "samples=%d,%d,%d,%d return_frame_tx_sample=%d\n", side ? "blob" : "ours",
+		       e->producer_step, e->saved_index, e->pop_step, e->float_step, e->fifo_step,
+		       e->return_step, e->pop_rd_before, e->pop_rd_after, e->return_rd_before,
+		       e->return_rd_after, e->fifo_count, e->fifo_delay,
+		       e->returned[0], e->returned[1], e->returned[2], e->returned[3], e->return_tx_sample);
+	}
+	diff_eq_obj("L1 output producer pop FIFO and returned epochs", struct output_events, &event[0], &event[1], 0);
+	diff_eq_int("L1 output: process-call denominator", calls, 20, 0);
+	printf("L1 output denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; first saved block returned only, no peer-arrival claim\n",
+	       calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].return_step == 1127 && event[1].return_step == 1127)
+		calls += info0_l1_arrival(ops, root, o, prev, wire, wp, out);
+	return calls;
+}
+
+static int
+info0_l1_producer(struct dp_operations **ops, struct dp *root[2][2],
+		  struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		  short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4],
+		  short sent[2][INFO0_DELAY / 4][4], int origin[INFO0_DELAY / 4])
+{
+	/* Native65c56 selects setup at count42;6b5e7 is_short==0 selects TX51,
+	 * RX53 and c1200_ detectorinit. Post-microstate TX51 dispatch exits at
+	 * 644c9: setup is not production. Initial TX51 dispatch62c69/65290
+	 * doubles signed probe samples, scales/SAR14, then txwritequeue stores
+	 * four low halfwords with zero upper halves. Original ELF known answers
+	 * below are probe[0..3], c1200_, and the resulting words at scale5793.
+	 * Bound42 setup calls plus4 refill calls; stop at the first raw producer.
+	 */
+	static const short probe_prefix[4] = { 13027, 13097, 7026, -8421 };
+	static const short coeff[8] = { 0, 0, 0, 0, -22892, 15993, -22892, 15993 };
+	/* Detector halfwords after its pointer: polarity,armed,count,limit,state,
+	 * hi,lo,level,x[4],y[4]. The pointer is excluded from the projection. */
+	static const short detector_init[16] = { 0, 0, -50, 100, 1, 0, 2048, 0,
+		0, 0, 0, 0, 0, 0, 0, 0 };
+	static const unsigned raw_words[4] = { 9212, 9261, 4968, 59581 };
+	struct producer_projection {
+		struct info0_projection state;
+		int point, polarity, cursor, cursor_before, scale, target, queue_before, queue_after;
+		int rd_before, wr_before, rd, wr, is_short, gain, rxflags, coeff_present, input_origin;
+		short detector[16], coeff[8], input[4];
+		unsigned produced[4];
+	} p[2][2];
+	struct producer_events {
+		int setup_step, setup_count, setup_tx, setup_rx, setup_cursor;
+		int producer_step, producers, cursor, wr_advance, rd_advance, old_ahead;
+		int queue_before, queue_after, detector_limit, detector_lo, setup_diagnostic;
+		unsigned produced[4];
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, slot = wp / 4, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].setup_step = event[side].producer_step = -1;
+		diff_eq_int("L1 producer: initial peer micro51 (%ld)", prev[side][1].micro, 51, side);
+		diff_eq_int("L1 producer: initial peer count0 (%ld)", prev[side][1].count, 0, side);
+		memcpy(sent[side][slot], last_out[side][0], sizeof sent[side][slot]);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	origin[slot] = 1077; wp = (wp + 4) % INFO0_DELAY;
+	dsplib_debug_capture_on = 1; set_level(2);
+	for (step = 1078; step <= 1123; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct producer_projection *q = &p[side][ep];
+				struct producer_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				struct v34_detector *d = &o[side][ep]->detector;
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+				int rc;
+
+				memset(q, 0, sizeof *q);
+				q->cursor_before = o[side][ep]->vect_idx;
+				q->queue_before = o[side][ep]->tx.txq.count;
+				q->rd_before = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->wr_before = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.wr);
+				q->input_origin = origin[slot];
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (ep == 1) {
+					diff_eq_int("L1 producer: actual source frame index (%ld)", q->input_origin, step - 72, tag);
+					diff_eq_obj("L1 producer actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->point = o[side][ep]->tx.txpoint.word;
+				q->polarity = o[side][ep]->short_358c;
+				q->cursor = o[side][ep]->vect_idx;
+				q->scale = o[side][ep]->tx.tx_scale;
+				q->target = o[side][ep]->tx_fill_target;
+				q->queue_after = o[side][ep]->tx.txq.count;
+				q->rd = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.rd);
+				q->wr = info0_tx_ring_index(o[side][ep], o[side][ep]->tx.txq.wr);
+				q->is_short = o[side][ep]->is_short;
+				q->gain = o[side][ep]->receiver.agc_gain;
+				q->rxflags = (unsigned short)o[side][ep]->receiver.flags;
+				q->coeff_present = d->coeff != 0;
+				if (d->coeff) memcpy(q->coeff, d->coeff, sizeof q->coeff);
+				memcpy(q->detector, &d->polarity, sizeof q->detector);
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("L1 producer: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("L1 producer: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("L1 producer: live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("L1 producer: progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("L1 producer: queue pointers belong to owner (%ld)",
+					    q->rd_before >= 0 && q->wr_before >= 0 && q->rd >= 0 && q->wr >= 0, 1, tag);
+				diff_eq_int("L1 producer: four actual queue samples consumed (%ld)",
+					    (q->rd - q->rd_before + V34_TXQ_RING) % V34_TXQ_RING, 4, tag);
+				if (ep == 0) {
+					diff_eq_int("L1 producer: caller stays micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("L1 producer: caller stays TX silence (%ld)", q->state.tx, 5, tag);
+					diff_eq_int("L1 producer: caller counter (%ld)", q->state.count, step - 961, tag);
+				} else {
+					diff_eq_int("L1 producer: peer stays micro51 (%ld)", q->state.micro, 51, tag);
+					diff_eq_int("L1 producer: full-session native branch (%ld)", q->is_short, 0, tag);
+					diff_eq_int("L1 producer: setup timing TX (%ld)", q->state.tx, step < 1119 ? 60 : 51, tag);
+					diff_eq_int("L1 producer: setup timing RX (%ld)", q->state.rx, step < 1119 ? 43 : 53, tag);
+					diff_eq_int("L1 producer: native counter then RX53 bypass (%ld)", q->state.count, step < 1119 ? step - 1077 : 42, tag);
+					diff_eq_int("L1 producer: cursor only advances at producer (%ld)", q->cursor, step < 1122 ? 0 : 4, tag);
+					diff_eq_int("L1 producer: original recipe scale (%ld)", q->scale, 5793, tag);
+					diff_eq_int("L1 producer: native queue refill target (%ld)", q->target, 16, tag);
+					diff_eq_int("L1 producer: old complex point is still TONE_AB (%ld)", q->point, 300093923, tag);
+					diff_eq_int("L1 producer: native live polarity retained (%ld)", q->polarity, 0, tag);
+					if (step >= 1119) {
+						diff_eq_int("L1 producer: detector coefficient pointer present (%ld)", q->coeff_present, 1, tag);
+						diff_eq_obj("L1 producer original c1200 coefficients", short[8], q->coeff, coeff, tag);
+						diff_eq_obj("L1 producer native detector setup", short[16], q->detector, detector_init, tag);
+						diff_eq_int("L1 producer: DET_PENDING flag set (%ld)", (q->rxflags & 0x200) != 0, 1, tag);
+						diff_eq_int("L1 producer: native low-gain arm retains gain (%ld)", q->gain, 1079, tag);
+					}
+					if (before->tx == 60 && q->state.tx == 51) {
+						e->setup_step = step; e->setup_count = q->state.count;
+						e->setup_tx = q->state.tx; e->setup_rx = q->state.rx; e->setup_cursor = q->cursor;
+						e->detector_limit = q->detector[3]; e->detector_lo = q->detector[6];
+						e->setup_diagnostic = strstr(text, "TONE_AB=>TX_L1") != 0 &&
+							strstr(text, "RX_DPSK=>DET_AB") != 0 && strstr(text, "starting DET_AB") != 0;
+						diff_eq_int("L1 producer: setup selected at increment42 (%ld)", before->count + 1, 42, tag);
+					}
+					if (q->state.tx == 51 && q->cursor != q->cursor_before) {
+						unsigned expected[4];
+						int ahead = (q->wr_before - q->rd + V34_TXQ_RING) % V34_TXQ_RING;
+						if (q->wr_before >= 0)
+						for (i = 0; i < 4; i++)
+							memcpy(&q->produced[i], (const unsigned char *)o[side][ep] + 0x2228 +
+							       ((q->wr_before + i) % V34_TXQ_RING) * 4, 4);
+						for (i = 0; i < 4; i++)
+							expected[i] = (unsigned short)(((short)(2 * probe_prefix[i]) * q->scale) >> 14);
+						diff_eq_obj("L1 producer independent formula known answer", unsigned[4], expected, raw_words, tag);
+						diff_eq_obj("L1 producer original probe scaled queue words", unsigned[4], q->produced, expected, tag);
+						diff_eq_int("L1 producer: cursor before first raw block (%ld)", q->cursor_before, 0, tag);
+						diff_eq_int("L1 producer: four raw samples generated (%ld)", q->cursor - q->cursor_before, 4, tag);
+						diff_eq_int("L1 producer: write pointer advances four entries (%ld)",
+							    (q->wr - q->wr_before + V34_TXQ_RING) % V34_TXQ_RING, 4, tag);
+						diff_eq_int("L1 producer: older queue samples still ahead (%ld)", ahead, 12, tag);
+						diff_eq_int("L1 producer: all new samples remain queued (%ld)", q->queue_after, ahead + 4, tag);
+						e->producer_step = step; e->producers++; e->cursor = q->cursor;
+						e->wr_advance = (q->wr - q->wr_before + V34_TXQ_RING) % V34_TXQ_RING;
+						e->rd_advance = (q->rd - q->rd_before + V34_TXQ_RING) % V34_TXQ_RING;
+						e->old_ahead = ahead; e->queue_before = q->queue_before; e->queue_after = q->queue_after;
+						memcpy(e->produced, q->produced, sizeof e->produced);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("L1 producer selected pointer-free projection", struct producer_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("L1 producer actual four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (event[0].producer_step >= 0 || event[1].producer_step >= 0 ||
+		    p[0][1].state.micro != 51 || p[1][1].state.micro != 51 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step; wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct producer_events *e = &event[side];
+		diff_eq_int("L1 producer: native setup step (%ld)", e->setup_step, 1119, side);
+		diff_eq_int("L1 producer: native setup count (%ld)", e->setup_count, 42, side);
+		diff_eq_int("L1 producer: native setup TX (%ld)", e->setup_tx, 51, side);
+		diff_eq_int("L1 producer: native setup RX (%ld)", e->setup_rx, 53, side);
+		diff_eq_int("L1 producer: native setup cursor (%ld)", e->setup_cursor, 0, side);
+		diff_eq_int("L1 producer: detector limit (%ld)", e->detector_limit, 100, side);
+		diff_eq_int("L1 producer: detector lower threshold (%ld)", e->detector_lo, 2048, side);
+		diff_eq_int("L1 producer: native setup diagnostics (%ld)", e->setup_diagnostic, 1, side);
+		diff_eq_int("L1 producer: first actual raw producer step (%ld)", e->producer_step, 1122, side);
+		diff_eq_int("L1 producer: actual raw producer blocks (%ld)", e->producers, 1, side);
+		diff_eq_int("L1 producer: first block cursor (%ld)", e->cursor, 4, side);
+		diff_eq_int("L1 producer: producer/output separation (%ld)", e->old_ahead, 12, side);
+		printf("L1 producer side=%s setup=%d count=%d TX/RX=%d/%d cursor=%d detector=%d/%d "
+		       "producer=%d blocks=%d new_cursor=%d wr/rd_advance=%d/%d old_ahead=%d "
+		       "queue=%d->%d words=%u,%u,%u,%u\n", side ? "blob" : "ours", e->setup_step,
+		       e->setup_count, e->setup_tx, e->setup_rx, e->setup_cursor, e->detector_limit,
+		       e->detector_lo, e->producer_step, e->producers, e->cursor, e->wr_advance,
+		       e->rd_advance, e->old_ahead, e->queue_before, e->queue_after,
+		       e->produced[0], e->produced[1], e->produced[2], e->produced[3]);
+	}
+	diff_eq_obj("L1 producer setup and raw-production events", struct producer_events, &event[0], &event[1], 0);
+	diff_eq_int("L1 producer: process-call denominator", calls, 180, 0);
+	printf("L1 producer denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; first raw L1 queue block only, external L1 not claimed\n",
+	       calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].producer_step == 1122 && event[1].producer_step == 1122) {
+		int index[2], produced_step[2];
+		unsigned saved[2][4];
+		for (side = 0; side < 2; side++) {
+			index[side] = p[side][1].wr_before;
+			produced_step[side] = event[side].producer_step;
+			memcpy(saved[side], event[side].produced, sizeof saved[side]);
+		}
+		calls += info0_l1_output(ops, root, o, prev, wire, wp, out, sent, origin, index, saved, produced_step);
+	}
+	return calls;
+}
+
+static int
+info0_peer_l1_entry(struct dp_operations **ops, struct dp *root[2][2],
+		    struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		    short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4],
+		    short sent[2][INFO0_DELAY / 4][4], int origin[INFO0_DELAY / 4])
+{
+	/* Native peer47: (sr&15)==15 at66845, then flags==0 at6cc1b, gates
+	 * recovery before increment. Otherwise6685d tests incremented count>95;
+	 * 66870 clears it,6687c toggles polarity,668ad selects micro51. TX remains
+	 * 60, whose post-microstate dispatch644c9 does not generate another point.
+	 * Bound seven calls from the naturally reloaded89; do not process micro51.
+	 */
+	static const int phase_after[7] = { 0, 3, 6, 9, 12, 15, 18 };
+	static const int next_after[7] = { 6, 6, 6, 18, 18, 18, 18 };
+	struct l1_projection {
+		struct info0_projection state;
+		int polarity, producer_polarity, point, reset_flags, substate, rtd, is_short;
+		int phase, next, sign, bit_len, bit_lo, bit_hi, txq, input_origin;
+		short input[4];
+	} p[2][2];
+	struct l1_events {
+		int resync_step, bit_step, bit_updates, bit_phase, bit_next, bit_sign;
+		int edge_step, edge_increment, edge_counter, edge_polarity, producer_polarity;
+		int point, edge_sr, edge_bits, diagnostic;
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, slot = wp / 4, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].resync_step = event[side].bit_step = event[side].edge_step = -1;
+		diff_eq_int("peer L1 entry: initial native microstate (%ld)", prev[side][1].micro, 47, side);
+		diff_eq_int("peer L1 entry: initial reloaded counter (%ld)", prev[side][1].count, 89, side);
+		diff_eq_int("peer L1 entry: initial complete register (%ld)", prev[side][1].sr, 1, side);
+		diff_eq_int("peer L1 entry: initial received count (%ld)", prev[side][1].pending, 156, side);
+		/* Publish the previous terminal frame1070, preserving actual lineage. */
+		memcpy(sent[side][slot], last_out[side][0], sizeof sent[side][slot]);
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	}
+	origin[slot] = 1070;
+	wp = (wp + 4) % INFO0_DELAY;
+	dsplib_debug_capture_on = 1; set_level(2);
+	for (step = 1071; step <= 1077; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct l1_projection *q = &p[side][ep];
+				struct l1_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				int phase = o[side][ep]->fsk.phase, next = o[side][ep]->fsk.next;
+				int sign = o[side][ep]->fsk.prev, rc;
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+
+				memset(q, 0, sizeof *q);
+				q->producer_polarity = o[side][ep]->short_358c;
+				q->input_origin = origin[slot];
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				if (ep == 1) {
+					diff_eq_int("peer L1 entry: actual source frame index (%ld)", q->input_origin, step - 72, tag);
+					diff_eq_obj("peer L1 entry actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->polarity = o[side][ep]->short_358c; /* read-only live-polarity epoch observer */
+				q->point = o[side][ep]->tx.txpoint.word;
+				q->reset_flags = o[side][ep]->short_3588;
+				q->substate = o[side][ep]->short_358a;
+				q->rtd = o[side][ep]->rtd;
+				q->is_short = o[side][ep]->is_short;
+				q->phase = o[side][ep]->fsk.phase;
+				q->next = o[side][ep]->fsk.next;
+				q->sign = o[side][ep]->fsk.prev;
+				q->bit_len = o[side][ep]->fsk.bit_len;
+				q->bit_lo = o[side][ep]->fsk.bit_lo;
+				q->bit_hi = o[side][ep]->fsk.bit_hi;
+				q->txq = o[side][ep]->tx.txq.count;
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("peer L1 entry: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("peer L1 entry: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("peer L1 entry: live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("peer L1 entry: engine progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("peer L1 entry: native RX stays DPSK (%ld)", q->state.rx, 43, tag);
+				diff_eq_int("peer L1 entry: reset flags stay clear (%ld)", q->reset_flags, 0, tag);
+				diff_eq_int("peer L1 entry: substate stays two (%ld)", q->substate, 2, tag);
+				diff_eq_int("peer L1 entry: entry-polarity producer epoch (%ld)", q->producer_polarity, 1, tag);
+				diff_eq_int("peer L1 entry: last native point remains vect4[2] (%ld)", q->point, -300028387, tag);
+				if (ep == 0) {
+					diff_eq_int("peer L1 entry: caller remains micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("peer L1 entry: caller counter (%ld)", q->state.count, step - 961, tag);
+					diff_eq_int("peer L1 entry: caller remains TX silence (%ld)", q->state.tx, 5, tag);
+				} else {
+					int n = before->count + 1;
+					diff_eq_int("peer L1 entry: entered from micro47 (%ld)", before->micro, 47, tag);
+					diff_eq_int("peer L1 entry: repeated INFO0 conjunction false (%ld)", (q->state.sr & 15) == 15 && q->reset_flags == 0, 0, tag);
+					diff_eq_int("peer L1 entry: native register known answer (%ld)", q->state.sr, step < 1074 ? 1 : 2, tag);
+					diff_eq_int("peer L1 entry: native bit count (%ld)", q->state.pending, step < 1074 ? 156 : 157, tag);
+					diff_eq_int("peer L1 entry: discriminator samples per bit (%ld)", q->bit_len, 12, tag);
+					diff_eq_int("peer L1 entry: phase after native resync (%ld)", q->phase, phase_after[step - 1071], tag);
+					diff_eq_int("peer L1 entry: next native sampling instant (%ld)", q->next, next_after[step - 1071], tag);
+					diff_eq_int("peer L1 entry: bulk delay retained (%ld)", q->rtd, 148, tag);
+					diff_eq_int("peer L1 entry: TX remains TONE_AB, not L1 (%ld)", q->state.tx, 60, tag);
+					if (phase > q->phase) {
+						e->resync_step = step;
+						diff_eq_int("peer L1 entry: actual sign crossing resynchronises (%ld)", sign < 0 && q->sign > 0, 1, tag);
+					}
+					if (q->state.pending != before->pending) {
+						e->bit_step = step; e->bit_updates++;
+						e->bit_phase = phase; e->bit_next = next; e->bit_sign = sign;
+						diff_eq_int("peer L1 entry: native sample is eligible (%ld)", phase >= next, 1, tag);
+						diff_eq_int("peer L1 entry: actual sampled sign is positive (%ld)", sign > 0, 1, tag);
+						diff_eq_int("peer L1 entry: positive discriminator maps zero (%ld)", q->bit_hi, 0, tag);
+						diff_eq_int("peer L1 entry: actual zero-bit register shift (%ld)", q->state.sr, (before->sr * 2 + q->bit_hi) & 0xffff, tag);
+					}
+					if (q->state.micro == 47) {
+						diff_eq_int("peer L1 entry: native low counter arm (%ld)", q->state.count, n, tag);
+						diff_eq_int("peer L1 entry: producer/live epoch before edge (%ld)", q->polarity, q->producer_polarity, tag);
+					} else {
+						e->edge_step = step; e->edge_increment = n; e->edge_counter = q->state.count;
+						e->edge_polarity = q->polarity; e->producer_polarity = q->producer_polarity;
+						e->point = q->point; e->edge_sr = q->state.sr; e->edge_bits = q->state.pending;
+						e->diagnostic = strstr(text, "TX_PHASE2_ANS=>TX_L1") != 0;
+						diff_eq_int("peer L1 entry: incremented counter exceeds95 (%ld)", n > 95, 1, tag);
+						diff_eq_int("peer L1 entry: native microstate becomes51 (%ld)", q->state.micro, 51, tag);
+						diff_eq_int("peer L1 entry: native counter resets (%ld)", q->state.count, 0, tag);
+						diff_eq_int("peer L1 entry: live epoch toggles after producer (%ld)", q->polarity, q->producer_polarity ^ 1, tag);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("peer L1 entry selected pointer-free projection", struct l1_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("peer L1 entry four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][1].state.micro != 47 || p[1][1].state.micro != 47 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step; wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct l1_events *e = &event[side];
+		diff_eq_int("peer L1 entry: native sign resync step (%ld)", e->resync_step, 1071, side);
+		diff_eq_int("peer L1 entry: native new-bit step (%ld)", e->bit_step, 1074, side);
+		diff_eq_int("peer L1 entry: native new-bit updates (%ld)", e->bit_updates, 1, side);
+		diff_eq_int("peer L1 entry: actual sampling phase (%ld)", e->bit_phase, 6, side);
+		diff_eq_int("peer L1 entry: actual sampling instant (%ld)", e->bit_next, 6, side);
+		diff_eq_int("peer L1 entry: actual sampled prior discriminator (%ld)", e->bit_sign, 3005, side);
+		diff_eq_int("peer L1 entry: first peer47 departure (%ld)", e->edge_step, 1077, side);
+		diff_eq_int("peer L1 entry: threshold known answer (%ld)", e->edge_increment, 96, side);
+		diff_eq_int("peer L1 entry: reset known answer (%ld)", e->edge_counter, 0, side);
+		diff_eq_int("peer L1 entry: live polarity after toggle (%ld)", e->edge_polarity, 0, side);
+		diff_eq_int("peer L1 entry: last producer used entry polarity (%ld)", e->producer_polarity, 1, side);
+		diff_eq_int("peer L1 entry: last point is still TONE_AB (%ld)", e->point, -300028387, side);
+		diff_eq_int("peer L1 entry: full terminal register (%ld)", e->edge_sr, 2, side);
+		diff_eq_int("peer L1 entry: terminal recovered count (%ld)", e->edge_bits, 157, side);
+		diff_eq_int("peer L1 entry: native departure diagnostic (%ld)", e->diagnostic, 1, side);
+		printf("peer L1 entry side=%s resync=%d bit_step=%d bit_updates=%d sample=%d/%d sign=%d "
+		       "edge=%d increment=%d count=%d live_polarity=%d producer_polarity=%d "
+		       "point=%d sr=%04x bits=%d\n", side ? "blob" : "ours", e->resync_step, e->bit_step,
+		       e->bit_updates, e->bit_phase, e->bit_next, e->bit_sign, e->edge_step, e->edge_increment,
+		       e->edge_counter, e->edge_polarity, e->producer_polarity, e->point, e->edge_sr, e->edge_bits);
+	}
+	diff_eq_obj("peer L1 entry native events and producer/live epochs", struct l1_events, &event[0], &event[1], 0);
+	diff_eq_int("peer L1 entry: process-call denominator", calls, 28, 0);
+	printf("peer L1 entry denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; micro51 entry only, no generated L1 claim\n", calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].edge_step == 1077 && event[1].edge_step == 1077)
+		calls += info0_l1_producer(ops, root, o, prev, wire, wp, out, sent, origin);
+	return calls;
+}
+
+static int
+info0_wire_receipt(struct dp_operations **ops, struct dp *root[2][2],
+		   struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		   short wire[2][2][INFO0_DELAY], int wp, short last_out[2][2][4])
+{
+	/* Native TX60 selects vect4[2] at62d48 and txmit appends modulated samples
+	 * at5d810..5d853. Point generation, external samples and demodulation are
+	 * separate clocks. Preserve the four measured pre-reversal sample phases.
+	 * The fixed channel adds288 samples=72 calls; shadow copies retain actual
+	 * emitted frames and their origins, never writing into a live DSP owner.
+	 * Native peer49 needs count>filtdelay+80 and sr&1 (66a6c/66a8c), then
+	 * derives bulk delay=(count-filtdelay)*4-396 and reloads filtdelay (66b13).
+	 * Bound172 calls: peer guard opening54 + native caller tone dwell42 +
+	 * channel72 + one FSK bit4. Stop at the first peer departure, not the bound.
+	 */
+	static const short steady[4][4] = {
+		{ 0, 2987, 4224, 2987 }, { 0, -2988, -4226, -2989 },
+		{ 0, 2988, 4227, 2989 }, { 0, -2989, -4227, -2988 }
+	};
+	struct wire_projection {
+		struct info0_projection state;
+		int point, polarity, txq, filtdelay, rtd, is_short, reset_flags;
+		int bit_lo, bit_hi, phase, next, sign, input_origin;
+		short input[4];
+	} p[2][2];
+	struct wire_events {
+		int point_step, changed_output, antiphase_output, changed_input, antiphase_input;
+		int eligible_step, waiting, edge_step, edge_increment, edge_sr, edge_bits;
+		int edge_bulk, edge_reload, edge_phase, edge_next, edge_sign, diagnostic;
+	} event[2];
+	short in[2][2][4], out[2][2][4], sent[2][INFO0_DELAY / 4][4];
+	int origin[INFO0_DELAY / 4], step, side, ep, i, j, slot, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].point_step = event[side].changed_output = event[side].antiphase_output = -1;
+		event[side].changed_input = event[side].antiphase_input = -1;
+		event[side].eligible_step = event[side].edge_step = -1;
+		for (j = 0; j < 4; j++) {
+			short frame[4];
+			for (i = 0; i < 4; i++)
+				frame[i] = j == 3 ? last_out[side][0][i] :
+					wire[side][1][(wp + INFO0_DELAY - 12 + j * 4 + i) % INFO0_DELAY];
+			diff_eq_obj("wire receipt pre-reversal sample phase", short[4], frame, steady[(958 + j) % 4], side * 4 + j);
+		}
+	}
+	/* The preceding loop stopped before publishing frame961. */
+	for (side = 0; side < 2; side++)
+	for (ep = 0; ep < 2; ep++)
+	for (i = 0; i < 4; i++)
+		wire[side][ep][(wp + i) % INFO0_DELAY] = last_out[side][1 - ep][i];
+	wp = (wp + 4) % INFO0_DELAY;
+	for (j = 0; j < INFO0_DELAY / 4; j++) {
+		slot = (wp / 4 + j) % (INFO0_DELAY / 4);
+		origin[slot] = 962 - INFO0_DELAY / 4 + j;
+		for (side = 0; side < 2; side++)
+		for (i = 0; i < 4; i++)
+			sent[side][slot][i] = wire[side][1][slot * 4 + i];
+	}
+	dsplib_debug_capture_on = 1;
+	set_level(2);
+	for (step = 962; step <= 1133; step++) {
+		slot = wp / 4;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct wire_projection *q = &p[side][ep];
+				struct wire_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				int phase = o[side][ep]->fsk.phase, next = o[side][ep]->fsk.next;
+				int sign = o[side][ep]->fsk.prev, rc, changed = 0, antiphase = 1;
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+
+				memset(q, 0, sizeof *q);
+				memcpy(q->input, in[side][ep], sizeof q->input);
+				q->input_origin = origin[slot];
+				if (ep == 1) {
+					diff_eq_int("wire receipt: exact source frame index (%ld)", origin[slot], step - 72, tag);
+					diff_eq_obj("wire receipt actual emitted caller frame", short[4], q->input, sent[side][slot], tag);
+					for (i = 0; i < 4; i++) {
+						changed |= q->input[i] != steady[(step - 72) % 4][i];
+						antiphase &= q->input[i] == -steady[(step - 72) % 4][i];
+					}
+					if (changed && e->changed_input < 0)
+						e->changed_input = step; /* read-only delayed-sample timing observer */
+					if (antiphase && e->antiphase_input < 0)
+						e->antiphase_input = step;
+				}
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				info0_project(&q->state, o[side][ep], rc);
+				q->point = o[side][ep]->tx.txpoint.word;
+				q->polarity = o[side][ep]->short_358c;
+				q->txq = o[side][ep]->tx.txq.count;
+				q->filtdelay = o[side][ep]->filtdelay;
+				q->rtd = o[side][ep]->rtd;
+				q->is_short = o[side][ep]->is_short;
+				q->reset_flags = o[side][ep]->short_3588;
+				q->bit_lo = o[side][ep]->fsk.bit_lo;
+				q->bit_hi = o[side][ep]->fsk.bit_hi;
+				q->phase = o[side][ep]->fsk.phase;
+				q->next = o[side][ep]->fsk.next;
+				q->sign = o[side][ep]->fsk.prev;
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("wire receipt: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("wire receipt: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("wire receipt: live status zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("wire receipt: progress zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("wire receipt: filter delay unchanged (%ld)", q->filtdelay, 89, tag);
+				diff_eq_int("wire receipt: polarity retained (%ld)", q->polarity, 1, tag);
+				if (ep == 0) {
+					changed = 0; antiphase = 1;
+					for (i = 0; i < 4; i++) {
+						changed |= out[side][ep][i] != steady[step % 4][i];
+						antiphase &= out[side][ep][i] == -steady[step % 4][i];
+					}
+					if (changed && e->changed_output < 0) e->changed_output = step;
+					if (antiphase && e->antiphase_output < 0) e->antiphase_output = step;
+					if (q->point == -300028387 && e->point_step < 0) e->point_step = step;
+					diff_eq_int("wire receipt: reversed original vect4 point (%ld)", q->point, -300028387, tag);
+					diff_eq_int("wire receipt: caller remains micro59 (%ld)", q->state.micro, 59, tag);
+					diff_eq_int("wire receipt: caller native counter (%ld)", q->state.count, step - 961, tag);
+					diff_eq_int("wire receipt: caller tone then native silence (%ld)", q->state.tx, step < 1003 ? 60 : 5, tag);
+					diff_eq_int("wire receipt: caller repeated-INFO0 guard false (%ld)", (q->state.sr & 7) == 7, 0, tag);
+				} else {
+					int n = before->count + 1;
+					diff_eq_int("wire receipt: peer starts in micro49 (%ld)", before->micro, 49, tag);
+					diff_eq_int("wire receipt: peer bit mapping low (%ld)", q->bit_lo, 1, tag);
+					diff_eq_int("wire receipt: peer bit mapping high (%ld)", q->bit_hi, 0, tag);
+					diff_eq_int("wire receipt: peer repeated INFO0 pattern absent (%ld)", (q->state.sr & 0x3ff) == 0x372, 0, tag);
+					if (n > q->filtdelay + 80 && e->eligible_step < 0) e->eligible_step = step;
+					if (q->state.micro == 49) {
+						diff_eq_int("wire receipt: peer counter increment (%ld)", q->state.count, n, tag);
+						diff_eq_int("wire receipt: peer full register still zero (%ld)", q->state.sr, 0, tag);
+						if (n > q->filtdelay + 80) e->waiting++;
+					} else {
+						int bulk = (n - q->filtdelay) * 4 - 396;
+						e->edge_step = step; e->edge_increment = n;
+						e->edge_sr = q->state.sr; e->edge_bits = q->state.pending;
+						e->edge_bulk = q->rtd; e->edge_reload = q->state.count;
+						e->edge_phase = phase; e->edge_next = next; e->edge_sign = sign;
+						e->diagnostic = strstr(text, "RX_PHASE1_ANS=>TX_PHASE2_ANS") != 0 &&
+							strstr(text, "bulkDelay=148, filtDelay=89") != 0;
+						diff_eq_int("wire receipt: peer counter guard opens (%ld)", n > q->filtdelay + 80, 1, tag);
+						diff_eq_int("wire receipt: native low-bit predicate (%ld)", q->state.sr & 1, 1, tag);
+						diff_eq_int("wire receipt: native first-phase sample eligible (%ld)", phase >= next, 1, tag);
+						diff_eq_int("wire receipt: native sampled prior sign (%ld)", sign <= 0, 1, tag);
+						diff_eq_int("wire receipt: actual register shift at edge (%ld)", q->state.sr, before->sr * 2 + q->bit_lo, tag);
+						diff_eq_int("wire receipt: actual recovered bit count (%ld)", q->state.pending, before->pending + 1, tag);
+						diff_eq_int("wire receipt: native peer transition (%ld)", q->state.micro, 47, tag);
+						diff_eq_int("wire receipt: full-session delay arm (%ld)", q->is_short, 0, tag);
+						diff_eq_int("wire receipt: native bulk formula (%ld)", q->rtd, bulk > 0 ? bulk : 1, tag);
+						diff_eq_int("wire receipt: native counter reload (%ld)", q->state.count, q->filtdelay, tag);
+					}
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("wire receipt selected pointer-free projection", struct wire_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("wire receipt four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][1].state.micro != 49 || p[1][1].state.micro != 49 ||
+		    p[0][0].state.micro != 59 || p[1][0].state.micro != 59) break;
+		for (side = 0; side < 2; side++) {
+			memcpy(sent[side][slot], out[side][0], sizeof sent[side][slot]);
+			for (ep = 0; ep < 2; ep++)
+			for (i = 0; i < 4; i++)
+				wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		}
+		origin[slot] = step;
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0); dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct wire_events *e = &event[side];
+		diff_eq_int("wire receipt: first generated reversed point (%ld)", e->point_step, 962, side);
+		diff_eq_int("wire receipt: first changed output frame (%ld)", e->changed_output, 968, side);
+		diff_eq_int("wire receipt: first exact antiphase output (%ld)", e->antiphase_output, 997, side);
+		diff_eq_int("wire receipt: first changed peer input (%ld)", e->changed_input, 1040, side);
+		diff_eq_int("wire receipt: changed-frame transport latency (%ld)", e->changed_input - e->changed_output, 72, side);
+		diff_eq_int("wire receipt: first exact antiphase peer input (%ld)", e->antiphase_input, 1069, side);
+		diff_eq_int("wire receipt: antiphase-frame transport latency (%ld)", e->antiphase_input - e->antiphase_output, 72, side);
+		diff_eq_int("wire receipt: native peer eligibility step (%ld)", e->eligible_step, 1015, side);
+		diff_eq_int("wire receipt: eligible waiting calls (%ld)", e->waiting, 55, side);
+		diff_eq_int("wire receipt: first peer departure (%ld)", e->edge_step, 1070, side);
+		diff_eq_int("wire receipt: pre-reload native count (%ld)", e->edge_increment, 225, side);
+		diff_eq_int("wire receipt: complete received register (%ld)", e->edge_sr, 1, side);
+		diff_eq_int("wire receipt: recovered bit count (%ld)", e->edge_bits, 156, side);
+		diff_eq_int("wire receipt: bulk delay known answer (%ld)", e->edge_bulk, 148, side);
+		diff_eq_int("wire receipt: reloaded counter (%ld)", e->edge_reload, 89, side);
+		diff_eq_int("wire receipt: observed sampling phase (%ld)", e->edge_phase, 6, side);
+		diff_eq_int("wire receipt: observed sampling instant (%ld)", e->edge_next, 6, side);
+		diff_eq_int("wire receipt: observed prior discriminator (%ld)", e->edge_sign, -2094, side);
+		diff_eq_int("wire receipt: native transition and delay diagnostic (%ld)", e->diagnostic, 1, side);
+		printf("wire receipt side=%s point=%d changed_out=%d antiphase_out=%d changed_in=%d "
+		       "antiphase_in=%d eligible=%d waiting=%d edge=%d count=%d sr=%04x bits=%d "
+		       "bulk=%d reload=%d phase/next=%d/%d prior_sign=%d\n", side ? "blob" : "ours",
+		       e->point_step, e->changed_output, e->antiphase_output, e->changed_input,
+		       e->antiphase_input, e->eligible_step, e->waiting, e->edge_step, e->edge_increment,
+		       e->edge_sr, e->edge_bits, e->edge_bulk, e->edge_reload, e->edge_phase, e->edge_next, e->edge_sign);
+	}
+	diff_eq_obj("wire receipt generation/transport/native events", struct wire_events, &event[0], &event[1], 0);
+	diff_eq_int("wire receipt: process-call denominator", calls, 436, 0);
+	printf("wire receipt denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; first peer49 departure only\n", calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].edge_step == 1070 && event[1].edge_step == 1070)
+		calls += info0_peer_l1_entry(ops, root, o, prev, wire, wp, out, sent, origin);
+	return calls;
+}
+
+static int
+info0_tone_reversal(struct dp_operations **ops, struct dp *root[2][2],
+		    struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		    short wire[2][2][INFO0_DELAY], int wp)
+{
+	/* Native caller55 increments O+aa78 and tests signed >95 at65ba4.
+	 * Starting at89, seven further calls reach96:65bbe clears the counter,
+	 * 65bcc toggles O+358c,65bf3 selects59. Stop on that first departure.
+	 * Native TX60 loads vect4[2*(polarity&1)] at62d48..62d62; original
+	 * .rodata+5370/+5378 give the two signed word known answers below.
+	 * TX generation precedes receive/microstate processing (62933..62a0c).
+	 * The post-microstate TX60 dispatch goes to644c9, not the point producer,
+	 * so the last generated point still uses the ENTRY polarity at this edge.
+	 * Peer49 needs count>filtdelay+80 at66a6c, impossible within this bound
+	 * from109 with filtdelay89. No later receive edge is claimed.
+	 */
+	struct tone_projection {
+		struct info0_projection state;
+		int polarity, reset_flags, substate, filtdelay, point, producer_polarity;
+	} p[2][2];
+	struct tone_events {
+		int bit_step, bit_updates, edge_step, edge_increment, edge_counter;
+		int edge_sr, edge_bits, edge_polarity, edge_point, diagnostic, peer_counter;
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, calls = 0;
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].bit_step = event[side].edge_step = -1;
+		diff_eq_int("tone edge: initial caller microstate (%ld)", prev[side][0].micro, 55, side);
+		diff_eq_int("tone edge: initial caller counter (%ld)", prev[side][0].count, 89, side);
+		diff_eq_int("tone edge: initial peer counter (%ld)", prev[side][1].count, 109, side);
+	}
+	dsplib_debug_capture_on = 1;
+	set_level(2);
+	for (step = 955; step <= 961; step++) {
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct tone_projection *q = &p[side][ep];
+				struct tone_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+				int rc, new_bit, producer_polarity = o[side][ep]->short_358c;
+
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				memset(q, 0, sizeof *q);
+				info0_project(&q->state, o[side][ep], rc);
+				q->polarity = o[side][ep]->short_358c;
+				q->reset_flags = o[side][ep]->short_3588;
+				q->substate = o[side][ep]->short_358a;
+				q->filtdelay = o[side][ep]->filtdelay;
+				q->producer_polarity = producer_polarity;
+				q->point = o[side][ep]->tx.txpoint.word; /* read-only native tone producer */
+				text = dsplib_debug_capture_text(side);
+				new_bit = q->state.pending != before->pending;
+				diff_eq_int("tone edge: capture complete (%ld)", dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("tone edge: process return OK (%ld)", rc, DPSTAT_OK, tag);
+				diff_eq_int("tone edge: live status stays zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("tone edge: engine progress stays zero (%ld)", q->state.progress, 0, tag);
+				diff_eq_int("tone edge: TX remains TONE_AB (%ld)", q->state.tx, 60, tag);
+				diff_eq_int("tone edge: RX remains RX_DPSK (%ld)", q->state.rx, 43, tag);
+				diff_eq_int("tone edge: reset flags stay clear (%ld)", q->reset_flags, 0, tag);
+				diff_eq_int("tone edge: substate remains two (%ld)", q->substate, 2, tag);
+				diff_eq_int("tone edge: native filter delay (%ld)", q->filtdelay, 89, tag);
+				diff_eq_int("tone edge: native vect4 producer known answer (%ld)", q->point,
+					    q->producer_polarity ? -300028387 : 300093923, tag);
+				diff_eq_int("tone edge: received bit count (%ld)", q->state.pending, step < 958 ? 127 : 128, tag);
+				diff_eq_int("tone edge: complete received register (%ld)", q->state.sr, ep ? 0 : (step < 958 ? 1 : 2), tag);
+				if (new_bit) {
+					diff_eq_int("tone edge: one native received bit (%ld)", q->state.pending, before->pending + 1, tag);
+					diff_eq_int("tone edge: native received zero shifts register (%ld)", q->state.sr, (before->sr * 2) & 0xffff, tag);
+				}
+				if (ep == 0) {
+					diff_eq_int("tone edge: repeated INFO0 guard remains false (%ld)", new_bit && (q->state.sr & 7) == 7, 0, tag);
+					diff_eq_int("tone edge: packed late-reset guard remains false (%ld)",
+						    q->reset_flags == 2 && q->substate == 2 && (q->state.sr & 0x3ff) == 0x372, 0, tag);
+					diff_eq_int("tone edge: caller counter before reset (%ld)", before->count, step - 866, tag);
+					diff_eq_int("tone edge: caller bounded microstate (%ld)", q->state.micro, step == 961 ? 59 : 55, tag);
+					diff_eq_int("tone edge: caller counter/reset (%ld)", q->state.count, step == 961 ? 0 : before->count + 1, tag);
+					diff_eq_int("tone edge: caller polarity (%ld)", q->polarity, step == 961, tag);
+					if (new_bit) {
+						e->bit_step = step;
+						e->bit_updates++;
+					}
+					if (q->state.micro != 55) {
+						e->edge_step = step;
+						e->edge_increment = before->count + 1;
+						e->edge_counter = q->state.count;
+						e->edge_sr = q->state.sr;
+						e->edge_bits = q->state.pending;
+						e->edge_polarity = q->polarity;
+						e->edge_point = q->point;
+						e->diagnostic = strstr(text, "TX_PHASE1_CALL=>RX_PHASE2_CALL") != 0;
+					}
+				} else {
+					diff_eq_int("tone edge: peer repeated INFO0 pattern absent (%ld)", q->state.sr & 0x3ff, 0, tag);
+					diff_eq_int("tone edge: peer receive counter guard blocked (%ld)", q->state.count > q->filtdelay + 80, 0, tag);
+					diff_eq_int("tone edge: peer remains RX_PHASE1_ANS (%ld)", q->state.micro, 49, tag);
+					diff_eq_int("tone edge: peer counter increment (%ld)", q->state.count, before->count + 1, tag);
+					diff_eq_int("tone edge: peer polarity retained (%ld)", q->polarity, 1, tag);
+					e->peer_counter = q->state.count;
+				}
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("tone edge pointer-free projection", struct tone_projection, &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("tone edge four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][0].state.micro != 55 || p[1][0].state.micro != 55 ||
+		    p[0][1].state.micro != 49 || p[1][1].state.micro != 49)
+			break;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0);
+	dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct tone_events *e = &event[side];
+
+		diff_eq_int("tone edge: native receive-bit step (%ld)", e->bit_step, 958, side);
+		diff_eq_int("tone edge: native receive-bit updates (%ld)", e->bit_updates, 1, side);
+		diff_eq_int("tone edge: first caller departure (%ld)", e->edge_step, 961, side);
+		diff_eq_int("tone edge: incremented native threshold (%ld)", e->edge_increment, 96, side);
+		diff_eq_int("tone edge: native counter reset (%ld)", e->edge_counter, 0, side);
+		diff_eq_int("tone edge: native departure diagnostic (%ld)", e->diagnostic, 1, side);
+		diff_eq_int("tone edge: native polarity reversal (%ld)", e->edge_polarity, 1, side);
+		diff_eq_int("tone edge: peer terminal counter (%ld)", e->peer_counter, 116, side);
+		printf("tone edge side=%s bit_step=%d bit_updates=%d edge=%d increment=%d "
+		       "counter=%d sr=%04x bits=%d polarity=%d point=%d peer_counter=%d\n",
+		       side ? "blob" : "ours", e->bit_step, e->bit_updates, e->edge_step,
+		       e->edge_increment, e->edge_counter, e->edge_sr, e->edge_bits,
+		       e->edge_polarity, e->edge_point, e->peer_counter);
+	}
+	diff_eq_obj("tone edge native event transcript", struct tone_events, &event[0], &event[1], 0);
+	diff_eq_int("tone edge: process-call denominator", calls, 28, 0);
+	printf("tone edge denominator: 1 unchanged peer recipe x 2 implementations x 2 endpoints; "
+	       "%d further four-sample steps, %d process calls, %d paired projections and "
+	       "%d paired output buffers; caller55->59 only, peer49 receive guard blocked\n",
+	       calls / 4, calls, calls / 2, calls / 2);
+	if (event[0].edge_step == 961 && event[1].edge_step == 961)
+		calls += info0_wire_receipt(ops, root, o, prev, wire, wp, out);
+	return calls;
+}
+
+static int
+info0_phase1_history(struct dp_operations **ops, struct dp *root[2][2],
+		     struct v34_object *o[2][2], struct info0_projection prev[2][2],
+		     short wire[2][2][INFO0_DELAY], int wp)
+{
+	/* Native 0x66027 gates on incremented signed counter >95; 0x6604c
+	 * requires the COMPLETE received register ==1, not a masked suffix.
+	 * Bound at 1201 further calls (native >1200 timeout, 0x6608b), stopping
+	 * at the first caller departure. The fixed peer recipe witnesses step954.
+	 * Native peer 0x6b4c9/0x6b515 toggles O+358c after counter399; TX60
+	 * uses its low bit to select vect4 at 0x62d48..0x62d62.
+	 */
+	struct phase1_projection {
+		struct info0_projection state;
+		int polarity, substate, filtdelay;
+	} p[2][2];
+	struct phase1_events {
+		int threshold_step, waiting, edge_step, edge_count, edge_sr;
+		int edge_diagnostic, reload, substate, peer_step, peer_polarity;
+	} event[2];
+	short in[2][2][4], out[2][2][4];
+	int step, side, ep, i, calls = 0;
+	int previous_polarity[2] = { 0, 0 };
+
+	memset(event, 0, sizeof event);
+	for (side = 0; side < 2; side++) {
+		event[side].threshold_step = event[side].edge_step = -1;
+		event[side].peer_step = -1;
+		diff_eq_int("phase1: initial peer tone polarity (%ld)",
+			    o[side][1]->short_358c, 0, side);
+	}
+	dsplib_debug_capture_on = 1;
+	set_level(2);
+	for (step = INFO0_STEPS; step < INFO0_STEPS + 1201; step++) {
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+		for (ep = 0; ep < 2; ep++) {
+			for (side = 0; side < 2; side++) {
+				struct phase1_projection *q = &p[side][ep];
+				struct phase1_events *e = &event[side];
+				const struct info0_projection *before = &prev[side][ep];
+				const char *text;
+				long tag = step * 4 + ep * 2 + side;
+				int rc;
+
+				dsplib_debug_capture_reset();
+				rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+				calls++;
+				memset(q, 0, sizeof *q);
+				info0_project(&q->state, o[side][ep], rc);
+				q->polarity = o[side][ep]->short_358c;
+				q->substate = o[side][ep]->short_358a;
+				q->filtdelay = o[side][ep]->filtdelay;
+				text = dsplib_debug_capture_text(side);
+				diff_eq_int("phase1: debug capture complete (%ld)",
+					    dsplib_debug_capture_complete(side), 1, tag);
+				diff_eq_int("phase1: process return OK (%ld)", q->state.rc, DPSTAT_OK, tag);
+				diff_eq_int("phase1: live status stays zero (%ld)", q->state.status, 0, tag);
+				diff_eq_int("phase1: engine progress stays zero (%ld)", q->state.progress, 0, tag);
+				if (ep == 0) {
+					int n = before->count + 1;
+
+					diff_eq_int("phase1: caller entered from RX_PHASE1_CALL (%ld)", before->micro, 58, tag);
+					if (q->state.micro == 58) {
+						diff_eq_int("phase1: native counter increment (%ld)", q->state.count, n, tag);
+						if (n > 95) {
+							if (e->threshold_step < 0)
+								e->threshold_step = step;
+							e->waiting++;
+							diff_eq_int("phase1: complete register blocks eligible caller (%ld)", q->state.sr != 1, 1, tag);
+						}
+					} else {
+						e->edge_step = step;
+						e->edge_count = n;
+						e->edge_sr = q->state.sr; /* read-only complete-register observer */
+						e->reload = q->state.count;
+						e->substate = q->substate;
+						e->edge_diagnostic = strstr(text,
+							"RX_PHASE1_CALL received, count2=509,") != 0;
+						diff_eq_int("phase1: first departure selects TX_PHASE1_CALL (%ld)", q->state.micro, 55, tag);
+						diff_eq_int("phase1: native edge counter predicate (%ld)", n > 95, 1, tag);
+						diff_eq_int("phase1: counter reload is native filtdelay (%ld)", q->state.count, q->filtdelay, tag);
+					}
+				} else {
+					if (before->micro == 46 && q->state.micro == 49) {
+						e->peer_step = step;
+						e->peer_polarity = q->polarity;
+						diff_eq_int("phase1: peer tone count before reversal (%ld)", before->count, 399, tag);
+						diff_eq_int("phase1: peer complete received register zero (%ld)", q->state.sr, 0, tag);
+						diff_eq_int("phase1: peer tone counter resets (%ld)", q->state.count, 0, tag);
+						diff_eq_int("phase1: peer tone polarity toggles (%ld)", q->polarity, previous_polarity[side] ^ 1, tag);
+						diff_eq_int("phase1: peer reversal diagnostic (%ld)", strstr(text,
+							"TX_PHASE1_ANS=>RX_PHASE1_ANS") != 0, 1, tag);
+					}
+					previous_polarity[side] = q->polarity;
+				}
+				diff_eq_int("phase1: native transmitter remains TONE_AB (%ld)", q->state.tx, 60, tag);
+				diff_eq_int("phase1: native receiver remains RX_DPSK (%ld)", q->state.rx, 43, tag);
+				prev[side][ep] = q->state;
+			}
+			diff_eq_obj("phase1 selected pointer-free projection", struct phase1_projection,
+				    &p[0][ep], &p[1][ep], step * 2 + ep);
+			diff_eq_obj("phase1 four-sample output", short[4], out[0][ep], out[1][ep], step * 2 + ep);
+		}
+		if (p[0][0].state.micro != 58 || p[1][0].state.micro != 58)
+			break;
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+	}
+	set_level(0);
+	dsplib_debug_capture_on = 0;
+	for (side = 0; side < 2; side++) {
+		const struct phase1_events *e = &event[side];
+
+		diff_eq_int("phase1: first counter eligibility step (%ld)", e->threshold_step, 541, side);
+		diff_eq_int("phase1: eligible calls blocked by register (%ld)", e->waiting, 413, side);
+		diff_eq_int("phase1: first caller edge step (%ld)", e->edge_step, 954, side);
+		diff_eq_int("phase1: observed pre-reload counter (%ld)", e->edge_count, 509, side);
+		diff_eq_int("phase1: COMPLETE edge register equals one (%ld)", e->edge_sr, 1, side);
+		diff_eq_int("phase1: witnessed native edge diagnostic (%ld)", e->edge_diagnostic, 1, side);
+		diff_eq_int("phase1: witnessed counter reload (%ld)", e->reload, 89, side);
+		diff_eq_int("phase1: witnessed edge substate (%ld)", e->substate, 2, side);
+		diff_eq_int("phase1: peer tone reversal step (%ld)", e->peer_step, 845, side);
+		diff_eq_int("phase1: peer tone reversal polarity (%ld)", e->peer_polarity, 1, side);
+		printf("phase1 side=%s threshold=%d blocked=%d peer_reversal=%d polarity=%d "
+		       "edge=%d counter=%d complete_sr=%04x reload=%d substate=%d\n",
+		       side ? "blob" : "ours", e->threshold_step, e->waiting, e->peer_step,
+		       e->peer_polarity, e->edge_step, e->edge_count, e->edge_sr, e->reload, e->substate);
+	}
+	diff_eq_obj("phase1 caller/peer event transcript", struct phase1_events, &event[0], &event[1], 0);
+	diff_eq_int("phase1: continuation process-call denominator", calls, 2036, 0);
+	printf("phase1 continuation denominator: 1 unchanged peer recipe x 2 implementations x "
+	       "2 endpoints; 509 four-sample steps after INFO0, %d process calls, "
+	       "1018 paired projections and 1018 paired output buffers; first caller edge only\n", calls);
+	if (event[0].edge_step == 954 && event[1].edge_step == 954) {
+		/* Publish the last frame before continuing the SAME channel history.
+		 * The phase1 loop stops before its ordinary channel-buffer update.
+		 */
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++)
+		for (i = 0; i < 4; i++)
+			wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+		wp = (wp + 4) % INFO0_DELAY;
+		calls += info0_tone_reversal(ops, root, o, prev, wire, wp);
+	}
+	return calls;
+}
+
+static int
+run_info0_history(void)
+{
+	struct dp_operations *ops[2] = { 0, 0 };
+	int erased_case, side, ep, i, step;
+	int calls = 0, graphs = 0, runtimes = 0, destroys = 0, deletes = 0;
+
+	diff_begin("INFO0 lifecycle: generated frame / external CRC-window erasure");
+	set_level(0);
+	harness_reg_reset();
+	dp_vpcm_init();
+	ref_dp_vpcm_init();
+	for (i = 0; i < harness_reg_ours.count; i++)
+		if (harness_reg_ours.id[i] == 34)
+			ops[0] = (struct dp_operations *)harness_reg_ours.ops[i];
+	for (i = 0; i < harness_reg_ref.count; i++)
+		if (harness_reg_ref.id[i] == 34)
+			ops[1] = (struct dp_operations *)harness_reg_ref.ops[i];
+	diff_eq_int("INFO0: both registered tables", ops[0] != 0 && ops[1] != 0, 1, 0);
+	if (!ops[0] || !ops[1])
+		return diff_end();
+
+	for (erased_case = 0; erased_case < 2; erased_case++) {
+		struct dsp_info info[2][2];
+		struct dp *root[2][2] = { { 0, 0 }, { 0, 0 } };
+		void *runtime[2][2] = { { 0, 0 }, { 0, 0 } };
+		struct v34_object *o[2][2];
+		struct info0_projection p[2][2], prev[2][2];
+		struct info0_events event[2];
+		short wire[2][2][INFO0_DELAY], in[2][2][4], out[2][2][4];
+		int built = 0, wp = 0, erased = 0;
+		int steps = erased_case ? 443 : INFO0_STEPS;
+
+		memset(info, 0, sizeof info);
+		memset(wire, 0, sizeof wire);
+		memset(event, 0, sizeof event);
+		for (side = 0; side < 2; side++) {
+			event[side].sync_step = event[side].terminal_step = -1;
+			event[side].computed_crc = 0xffff;
+			for (i = 0; i < INFO0_BITS; i++)
+				event[side].bit[i] = event[side].bit_step[i] = -1;
+			for (ep = 0; ep < 2; ep++) {
+				event[side].tx_start_step[ep] = event[side].tx_done_step[ep] = -1;
+				harness_param_reset();
+				harness_param_set(MDMPRM_DSPINFO, (long)(size_t)&info[side][ep]);
+				harness_param_set(MDMPRM_CODECTYPE, 4);
+				runtime[side][ep] = side ? ref_dp_runtime_create(&info[side][ep]) :
+							 dp_runtime_create(&info[side][ep]);
+				diff_eq_int("INFO0: real runtime (%ld)", runtime[side][ep] != 0,
+					    1, side * 2 + ep);
+				if (!runtime[side][ep])
+					continue;
+				runtimes++;
+				harness_param_set(MDMPRM_DPRUNTIME, (long)(size_t)runtime[side][ep]);
+				harness_param_set(MDMPRM_MIN_RATE, 2400);
+				harness_param_set(MDMPRM_MAX_RATE, 33600);
+				harness_param_set(MDMPRM_IODELAY, 216);
+				root[side][ep] = ops[side]->create(&info[side][ep], 34, ep == 0,
+								9600, 48, ops[side]);
+				diff_eq_int("INFO0: real graph (%ld)", root[side][ep] != 0,
+					    1, side * 2 + ep);
+				if (!root[side][ep])
+					continue;
+				graphs++;
+				built++;
+				o[side][ep] = (struct v34_object *)((unsigned char *)root[side][ep] + 0x2c);
+				diff_eq_int("INFO0: root extent (%ld)", harness_alloc_reqsize(root[side][ep]),
+					    0xd258, side * 2 + ep);
+				diff_eq_int("INFO0: constructed role (%ld)", o[side][ep]->role,
+					    ep ? 0x66 : 0x65, side * 2 + ep);
+				info0_project(&prev[side][ep], o[side][ep], 0);
+				diff_eq_int("INFO0: constructed microstate (%ld)", prev[side][ep].micro, 41, ep);
+				diff_eq_int("INFO0: constructed RX (%ld)", prev[side][ep].rx, 43, ep);
+				diff_eq_int("INFO0: constructed TX (%ld)", prev[side][ep].tx, 54, ep);
+			}
+		}
+		if (built == 4) {
+			dsplib_debug_capture_on = 1;
+			set_level(2);
+			for (step = 0; step < steps; step++) {
+				for (side = 0; side < 2; side++)
+				for (ep = 0; ep < 2; ep++)
+				for (i = 0; i < 4; i++)
+					in[side][ep][i] = wire[side][ep][(wp + i) % INFO0_DELAY];
+				if (erased_case && step >= 390 && step <= 410) {
+					for (side = 0; side < 2; side++)
+						memset(in[side][0], 0, sizeof in[side][0]);
+					erased += 4; /* per caller, not summed across implementations */
+				}
+				for (ep = 0; ep < 2; ep++) {
+					for (side = 0; side < 2; side++) {
+						int rc;
+						long tag = erased_case * 10000 + ep * 1000 + step;
+
+						dsplib_debug_capture_reset();
+						rc = ops[side]->process(root[side][ep], in[side][ep], out[side][ep], 4);
+						calls++;
+						info0_project(&p[side][ep], o[side][ep], rc);
+						diff_eq_int("INFO0: debug capture complete (%ld)",
+							    dsplib_debug_capture_complete(side), 1, tag * 2 + side);
+						info0_observe(&event[side], &p[side][ep], &prev[side][ep],
+							      dsplib_debug_capture_text(side), step, ep, side);
+						prev[side][ep] = p[side][ep];
+					}
+					diff_eq_obj("INFO0 process return/state projection", struct info0_projection,
+						    &p[0][ep], &p[1][ep], erased_case * 10000 + ep * 1000 + step);
+					diff_eq_obj("INFO0 process output", short[4], out[0][ep], out[1][ep],
+						    erased_case * 10000 + ep * 1000 + step);
+				}
+				for (side = 0; side < 2; side++)
+				for (ep = 0; ep < 2; ep++)
+				for (i = 0; i < 4; i++)
+					wire[side][ep][(wp + i) % INFO0_DELAY] = out[side][1 - ep][i];
+				wp = (wp + 4) % INFO0_DELAY;
+			}
+			set_level(0);
+			dsplib_debug_capture_on = 0;
+			for (side = 0; side < 2; side++) {
+				const struct info0_events *e = &event[side];
+				const struct info0_projection *last = &p[side][0];
+				long tag = erased_case * 2 + side;
+
+				diff_eq_int("INFO0: sync acquired (%ld)", e->sync_step, 314, tag);
+				for (ep = 0; ep < 2; ep++) {
+					diff_eq_int("INFO0: matched TX record production (%ld)", e->tx_start_step[ep], 145, tag * 2 + ep);
+					diff_eq_int("INFO0: matched TX completion (%ld)", e->tx_done_step[ep], 358, tag * 2 + ep);
+				}
+				diff_eq_int("INFO0: terminal process step (%ld)", e->terminal_step, steps - 1, tag);
+				diff_eq_int("INFO0: all 17+16 bits consumed (%ld)", e->consumed, INFO0_BITS, tag);
+				diff_eq_int("INFO0: observed bit values (%ld)", e->observed, erased_case ? 32 : 33, tag);
+				diff_eq_int("INFO0: generated payload known answer (%ld)", e->payload, 0x1ff08, tag);
+				diff_eq_int("INFO0: independently calculated CRC (%ld)", e->computed_crc, 0x8fd9, tag);
+				diff_eq_int("INFO0: payload completed before erasure (%ld)", e->payload_step, 382, tag);
+				diff_eq_int("INFO0: native payload CRC known answer (%ld)", e->payload_crc, 0x8fd9, tag);
+				diff_eq_int("INFO0: expected acceptance count (%ld)", e->accepts, !erased_case, tag);
+				diff_eq_int("INFO0: expected rejection count (%ld)", e->rejects, erased_case, tag);
+				diff_eq_int("INFO0: final caller microstate (%ld)", last->micro, erased_case ? 41 : 58, tag);
+				diff_eq_int("INFO0: final caller RX (%ld)", last->rx, 43, tag);
+				diff_eq_int("INFO0: final caller TX (%ld)", last->tx, erased_case ? 24 : 60, tag);
+				diff_eq_int("INFO0: final caller counter (%ld)", last->count, erased_case ? 33 : 0, tag);
+				diff_eq_int("INFO0: all process returns OK (%ld)", e->unexpected_returns, 0, tag);
+				diff_eq_int("INFO0: live status and engine progress stay zero (%ld)", e->nonzero_status_progress, 0, tag);
+				if (erased_case) {
+					diff_eq_int("INFO0: invalid last bit remains unknown (%ld)", e->bit[32], -1, tag);
+					diff_eq_int("INFO0: either CRC completion is rejected (%ld)",
+						    e->crc_prefix * 2 != e->computed_crc &&
+						    e->crc_prefix * 2 + 1 != e->computed_crc, 1, tag);
+					diff_eq_int("INFO0: CRC failure reset register (%ld)", last->sr, 0xffff, tag);
+					diff_eq_int("INFO0: CRC failure reset accumulator (%ld)", last->rx_crc, 0xffff, tag);
+				} else {
+					diff_eq_int("INFO0: received CRC matches native known answer (%ld)", e->received_crc, 0x8fd9, tag);
+					diff_eq_int("INFO0: observed CRC equals independent payload CRC (%ld)", e->received_crc, e->computed_crc, tag);
+					diff_eq_int("INFO0: all sixteen CRC bits match received register (%ld)",
+						    e->crc_prefix * 2 + (unsigned)e->bit[32], e->received_crc, tag);
+					diff_eq_int("INFO0: native accepted CRC is retained (%ld)", last->rx_crc, 0x8fd9, tag);
+					diff_eq_int("INFO0: matching peer microstate (%ld)", p[side][1].micro, 46, tag);
+				}
+				printf("INFO0 case=%s side=%s calls=%d payload_bits=%d CRC=%04x "
+				       "observed_bits=%d terminal=%d accepts=%d rejects=%d erased=%d\n",
+				       erased_case ? "CRC-window erasure" : "generated",
+				       side ? "blob" : "ours", steps * 2, INFO0_PAYLOAD,
+				       e->computed_crc, e->observed, e->terminal_step,
+				       e->accepts, e->rejects, erased);
+			}
+			diff_eq_obj("INFO0 caller event transcript", struct info0_events,
+				    &event[0], &event[1], erased_case);
+			diff_eq_int("INFO0: external erased sample count", erased, erased_case ? 84 : 0, erased_case);
+			if (!erased_case)
+				calls += info0_phase1_history(ops, root, o, prev, wire, wp);
+		}
+		for (side = 0; side < 2; side++)
+		for (ep = 0; ep < 2; ep++) {
+			if (root[side][ep]) {
+				ops[side]->destroy(root[side][ep]);
+				destroys++;
+			}
+			if (runtime[side][ep]) {
+				if (side)
+					ref_dp_runtime_delete(runtime[side][ep]);
+				else
+					dp_runtime_delete(runtime[side][ep]);
+				deletes++;
+			}
+		}
+	}
+	harness_param_reset();
+	diff_eq_int("INFO0: process-call denominator", calls, 14302, 0);
+	diff_eq_int("INFO0: constructed graph denominator", graphs, 8, 0);
+	diff_eq_int("INFO0: constructed runtime denominator", runtimes, 8, 0);
+	diff_eq_int("INFO0: graph destruction denominator", destroys, 8, 0);
+	diff_eq_int("INFO0: runtime deletion denominator", deletes, 8, 0);
+	printf("INFO0 lifecycle denominator: 1 id34 configuration/channel recipe, "
+	       "2 external input cases x 2 implementations x 2 endpoints; "
+	       "%d process calls, %d real graphs, %d real runtimes; "
+	       "generated path through native real-history wrapper deadline, CRC rejection prefix; "
+	       "no INFO1/progress1/2/status2/3 claim\n",
+	       calls, graphs, runtimes);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1450,6 +4307,8 @@ main(void)
 	bad |= run_visual();
 	bad |= run_visual_separation();
 	bad |= run_members();
+	bad |= run_visual_history();
+	bad |= run_info0_history();
 
 	return bad;
 }

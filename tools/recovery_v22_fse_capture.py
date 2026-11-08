@@ -2,7 +2,8 @@
 """Validate prior F11741 whole-config capture, without reopening its palette.
 
 Default compiles pinned baseline/copy using immutable Gentoo baseline inputs.
-Then --audit, --period, or --mutant. No production source is generated implicitly.
+Then --audit or --period. Mutation validation from the original study is
+archived; no production source is generated implicitly.
 """
 import argparse,json,sys,subprocess,shutil,hashlib,os,re
 from pathlib import Path
@@ -32,19 +33,13 @@ def gate(labels):
         for p in list(stable.glob('src_*.o'))+list(stable.glob('test_harness_*.o'))+[stable/'test_unit_t_v22_fse.o',stable/'test_unit_t_v22rate.o']:shutil.copy2(p,folder/p.name)
         obj=folder/'src_pump_v22_v22_fse.o';shutil.copy2(OUT/'v22_fse'/label/'candidate.o',obj);digest=sha(obj);cmd=['make','period','T=t_v22_fse t_v22rate','J=4']
         with (folder/'gate.log').open('w') as log:status=subprocess.run(cmd,cwd=ROOT,env=dict(os.environ,PERIOD_OUT=str(folder.relative_to(ROOT))),stdout=log,stderr=subprocess.STDOUT).returncode
-        assert sha(obj)==digest,'candidate overwritten';logs={n:(folder/(n+'.run.log')).read_text() for n in ('t_v22_fse','t_v22rate')};assert (status==0)==(label!='mutant'),(label,status)
+        assert sha(obj)==digest,'candidate overwritten';logs={n:(folder/(n+'.run.log')).read_text() for n in ('t_v22_fse','t_v22rate')};assert status==0,(label,status)
         report[label]={'command':cmd,'exit':status,'object_sha256':digest,'logs':logs,'checks':{n:sum(map(int,re.findall(r'(\d+) checks',t))) for n,t in logs.items()}};print(label,status,report[label]['checks'],flush=True)
     (OUT/('mutant-period.json' if 'mutant' in labels else 'period.json')).write_text(json.dumps(report,indent=2)+'\n')
-def mutant():
-    source=variants(SOURCE,subprocess.check_output(['git','show',REV+':'+SOURCE],cwd=ROOT,text=True))['copy'];old=json.loads(subprocess.check_output(['git','show',REV+':test/mutations/v22fse.json'],cwd=ROOT,text=True));row=next(r for r in old if isinstance(r,dict) and r.get('label')=='I and Q are swapped');row={k:v.replace('cfg->','copied.') if k in ('find','replace') else v for k,v in row.items()};assert source.count(row['find'])==1
-    folder=OUT/'v22_fse/mutant';folder.mkdir(exist_ok=True);(folder/'v22_fse.c').write_text(source.replace(row['find'],row['replace']));ledger=json.loads((OUT/'results.json').read_text());cmd=[x.replace('/copy/','/mutant/') for x in ledger['families']['v22_fse']['cells']['copy']['command']]
-    with (folder/'compile.log').open('w') as log:subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True)
-    (OUT/'mutant-row.json').write_text(json.dumps(row,indent=2)+'\n');gate(('mutant',))
 if __name__=='__main__':
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--audit',action='store_true');ap.add_argument('--period',action='store_true');ap.add_argument('--mutant',action='store_true');args=ap.parse_args()
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--audit',action='store_true');ap.add_argument('--period',action='store_true');args=ap.parse_args()
     if args.audit:audit()
     elif args.period:gate(('baseline','copy'))
-    elif args.mutant:mutant()
     else:
         manifest={'revision':REV,'source_sha256':hashlib.sha256(subprocess.check_output(['git','show',REV+':'+SOURCE],cwd=ROOT)).hexdigest(),'frozen':{name:sha(OUT/'frozen'/name) for name in ('.build-config','src_pump_v22_v22_fse.c.o')}}
         if (OUT/'validation-pin.json').exists():assert json.loads((OUT/'validation-pin.json').read_text())==manifest,'frozen input drift'

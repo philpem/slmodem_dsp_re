@@ -13,11 +13,9 @@ Three checks already look at the call sites, and none of them answers this.
                              and .data.  Says the STRING is the original's.  A
                              correct string at a site no test reaches passes
                              this without a murmur.
-  mutate.py                  breaks a site and checks something goes red.  The
-                             strongest of the three, but a mutation caught by
-                             the string sweep rather than by a differential
-                             test is telling you the literal exists, which is
-                             the first check again.
+Neither source-site counting nor string comparison establishes that a test
+executes a diagnostic site.
+
 
 `gcov` answers the remaining question directly: after the whole suite has run,
 which `dsplibs_debug_printf` lines have a hit count of zero?
@@ -67,8 +65,7 @@ It lives in this file rather than in a new tool for two reasons.  The
 instrumented build is the expensive part and it is already here, so the marginal
 cost is a second `gcov` over the ~20 files a deviation names.  And `make phase`
 already runs this script, so wiring the number into the gate needs no Makefile
-edit -- and the Makefile is inside `tools/mutsnap.py`'s closure, where an edit
-restales all 66 mutation suites for a report that changes no behaviour.
+edit -- and keeping this as a local report avoids an unnecessary Makefile change.
 
 HOW A SITE IS IDENTIFIED, and why the obvious regex is wrong
 

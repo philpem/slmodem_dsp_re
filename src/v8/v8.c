@@ -25,6 +25,15 @@ extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 
 
+/* Keep the mask operation byte-sized before promoting its result.  The
+ * period compiler inlines this contract to immediate byte TESTs for all
+ * three modulation bits, including bit 7. */
+static int
+v8_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 static struct dp *
 v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	  struct dp_operations *op)
@@ -119,15 +128,28 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	struct v8_dp *st = ((struct v8_dp *)dp)->self;
 	int rc = V8Process(st->v8, in, out, count);
 	int ret = 0;
-	/* Assigned by the arm that requests the datapump change. */
+	/*
+	 * The datapump to switch to, from the arm that decided it to the
+	 * `modem_set_param` in that same arm.  There is no sentinel: the
+	 * object has no initial store and no `arg >= 0` test anywhere, and
+	 * every read below is preceded by a write.  Finding F12053.
+	 */
 	int arg;
 
 	switch (rc) {
+	/*
+	 * These three are arms even though they do nothing.  The object's
+	 * table sends 2, 7 and 9 to the switch's break label (0x37c2),
+	 * while the values with no label at all -- 1, 3, 6, 8, 10, 14 and
+	 * 15 -- go to the default arm two bytes earlier (0x37c0).  The
+	 * entries therefore prove a label at each of 2, 7 and 9; a single
+	 * arm carrying all three is the minimal spelling, since the RTL
+	 * merges them anyway.
+	 */
 	case V8_ANS_CM_DETECTED:
 	case V8_ORG_ANSAM_DETECTED_WAITING_TE:
 	case V8_ORG_JM_DETECTED:
 		break;
-
 
 	/* Every status whose name ends TIME_OUT_WAITING_FOR_something. */
 	case V8_ANS_TIME_OUT_WAITING_FOR_CM:
@@ -165,11 +187,11 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("v8: process: QC.\n");
 			arg = st->want;
-		} else if (st->cm->b0 & 0x08) {
+		} else if (v8_flag_test(st->cm->b0, 0x08)) {
 			arg = DP_V90;
-		} else if (st->cm->b0 & 0x20) {
+		} else if (v8_flag_test(st->cm->b0, 0x20)) {
 			arg = DP_V34;
-		} else if (st->cm->b0 & 0x80) {
+		} else if (v8_flag_test(st->cm->b0, 0x80)) {
 			arg = DP_V32;
 		} else {
 			ret = DPSTAT_ERROR;
@@ -180,8 +202,24 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		st->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;
 		st->dspinfo->qc_index = st->cm->menu;
 
-		/* Each eligible arm supplies its own outgoing argument store.
-		 * GCC shares the identical call tail after those stores. */
+		/*
+		 * THE CHANGE IS ASKED FOR IN THIS ARM, not once after the
+		 * switch behind a test on `arg`.  The object files the third
+		 * argument of `modem_set_param` from BOTH arms -- 0x388f
+		 * here, after the two `qc_` stores, and 0x38c2 in the QCA1d
+		 * arm -- and only then enters one shared body at 0x38c6,
+		 * which it reaches by a jump from here and by fallthrough
+		 * from there.  Identical statements in each arm are what
+		 * produces that: GCC cross-jumps the shared `mov $0x9`/
+		 * `dp->modem`/call/`modem_get_param`/print tail and leaves
+		 * each arm's own argument store in place (the same lever as
+		 * `_delete_data_rx_modem`, finding F12048).  It also removes
+		 * the residual `arg >= 0`: neither join tests the value it
+		 * is about to pass -- the QCA1d arm writes 0x38c2 and falls
+		 * into 0x38c6, and this arm writes 0x388f and jumps there --
+		 * and the `st->cm` stack home that test forced is gone with
+		 * it.  Finding F12053.
+		 */
 		modem_set_param(dp->modem, 9, arg);
 		ret = DPSTAT_CHANGEDP;
 		st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
@@ -206,7 +244,13 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 			arg = 92;
 			st->dspinfo->qc_lapm &= 1;
 
-			/* The second arm-owned request, with no sentinel test. */
+			/*
+			 * The same change as the V8_OK arm's, written in this
+			 * arm for the same reason: this is the second of the
+			 * object's two argument stores (0x38c2), and the body
+			 * it falls into at 0x38c6 is the one the OK arm jumps
+			 * to.  Finding F12053.
+			 */
 			modem_set_param(dp->modem, 9, arg);
 			ret = DPSTAT_CHANGEDP;
 			st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
@@ -217,6 +261,26 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		}
 		break;
 
+	/*
+	 * V8_INIT needs a label of its own even though its body is the
+	 * default's.  GCC drops a case that shares the default label from
+	 * the jump-table range, so `case V8_INIT:` immediately above
+	 * `default:` leaves the table starting at 4; giving it its own
+	 * `ret = 0` keeps the range 0..17, and cross-jumping then folds
+	 * the two identical arms onto one target -- which is what the
+	 * object shows, its entry 0 and its out-of-range branch both
+	 * reaching 0x37c0.  The pre-merge label multiplicity is finding
+	 * F12044's lever.
+	 */
+	case V8_INIT:
+		ret = 0;
+		break;
+
+	/*
+	 * The default arm zeroes `ret` explicitly: it carries a
+	 * `xor %edi,%edi` that the break label above does not, and the
+	 * out-of-range guard `ja` lands here too.
+	 */
 	default:
 		ret = 0;
 		break;
@@ -224,8 +288,10 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 
 	/*
 	 * The same change detector as V8Process's, one layer up: keep the
-	 * previous status in `last_status` and report only when it changes.
-	 * The unchanged-status branch lands on the store, so it is unconditional.
+	 * previous status in `last_status` and REPORT it only when it
+	 * changes.  The store is not under that test: the object's `je` at
+	 * 0x37c5 lands ON the store at 0x37d0 rather than past it, so an
+	 * unchanged status is written back too.  Finding F12053.
 	 */
 	if (st->last_status != rc) {
 		if (DSPLIB_DEBUG_ON())

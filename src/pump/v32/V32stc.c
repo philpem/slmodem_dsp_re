@@ -45,9 +45,9 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 	fp->int_1c = ctl->ctl0 & 1;
 	fp->int_20 = (ctl->ctl0 >> 1) & 1;
 	fp->int_24 = (ctl->ctl0 >> 2) & 1;
-	fp->int_00 = ((ctl->ctl0 & 0x08) == 0);
-	fp->int_0c = ((ctl->ctl0 & 0x10) == 0);
-	fp->eq_adapt = ((ctl->ctl0 & 0x20) == 0);
+	fp->int_00 = (ctl->ctl0 & 0x08) ? 0 : 1;
+	fp->int_0c = (ctl->ctl0 & 0x10) ? 0 : 1;
+	fp->eq_adapt = (ctl->ctl0 & 0x20) ? 0 : 1;
 	fp->int_14 = ctl->r18;
 	fp->int_18 = ctl->r1c;
 	((unsigned char *)&modem->params.options)[1] =
@@ -75,7 +75,7 @@ V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 		hdx = HDX(modem);
 		hdx->short_9c =
 			(unsigned short)(ratio
-					 * hdx->short_9c);
+					 * (unsigned short)hdx->short_9c);
 		hdx->block_charge =
 			(unsigned short)V32_SYMBOL_LEN[PARAMS(modem)->symlen_sel];
 		hdx->symbol_len =
@@ -251,9 +251,8 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	fp->decision_error = (short)err;
 
 	if ((short)err != 0) {
-		k = (short)((((unsigned short)
-			      (fp->short_2e - 4) < 2)
-			     ? 0x4000 : 0) + 0x1400 - err);
+		k = ((unsigned short)(fp->short_2e - 4) < 2) ? 0x4000 : 0;
+		k = (short)(k + 0x1400 - err);
 		FPM_div(fp->decision_error, &recip, &shift);
 		m = (k * (int)recip) >> 16;
 		snr = V32_SNR_FLOOR;
@@ -300,32 +299,24 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	 * INVERTED, which is exactly the set `V32FP_control` writes from
 	 * `struct v32fp_ctl::ctl0`.
 	 */
-	st->flags = (unsigned char)((st->flags & 0xfe)
-				    | (((unsigned char *)&fp->int_1c)[0] & 1));
+	st->flag_bits.scrambler = ((unsigned char *)&fp->int_1c)[0] & 1;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xfd)
-				    | ((((unsigned char *)&fp->int_20)[0] & 1) << 1));
+	st->flag_bits.descrambler = ((unsigned char *)&fp->int_20)[0] & 1;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xfb)
-				    | ((((unsigned char *)&fp->int_24)[0] & 1) << 2));
+	st->flag_bits.bit2 = ((unsigned char *)&fp->int_24)[0] & 1;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xf7)
-				    | ((fp->int_00 == 0) << 3));
+	st->flag_bits.bit3 = fp->int_00 == 0;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xef)
-				    | ((fp->int_0c == 0) << 4));
+	st->flag_bits.bit4 = fp->int_0c == 0;
 	fp = FP(modem);
-	st->flags = (unsigned char)((st->flags & 0xdf)
-				    | ((fp->eq_adapt == 0) << 5));
-	st->flags = (unsigned char)(st->flags & 0xbf);
-	st->flags = (unsigned char)((st->flags & 0x7f)
-				    | (((((unsigned char *)&modem->params.options)[1]
-					 >> 1) & 1) << 7));
-	st->r20 = 0;
-	st->r24 = 0;
+	st->flag_bits.eq_frozen = fp->eq_adapt == 0;
+	st->flag_bits.bit6 = 0;
+	st->flag_bits.bit7 = (((unsigned char *)&modem->params.options)[1] >> 1) & 1;
 	st->flags1 = (unsigned char)((st->flags1 & 0xfe)
 				     | ((((unsigned char *)&modem->params.options)[1]
 					 >> 2) & 1));
+	st->r20 = 0;
+	st->r24 = 0;
 
 	fp = FP(modem);
 	st->r18 = fp->sre.active;

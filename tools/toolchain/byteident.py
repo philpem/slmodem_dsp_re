@@ -17,8 +17,20 @@ all (finding F616).  It is a rough gauge of completion and nothing else, and it
 has already misled once: the MP CRC work found a source form whose BYTE COUNT
 was closer while its instruction sequence was further away.
 
-So this tool reports one number per function and one count over the tree:
-**exact, or not.**
+The headline reports EXACT, REGALLOC and NONMATCH, with unresolved or missing
+evidence separate. NONMATCH combines mismatching bytes, extents and relocation
+targets: equal size is not fidelity. Low-level verdicts and legacy JSON counters
+remain diagnostic/compatibility records, not independent fidelity grades.
+
+Per-function longest contiguous instruction runs are diagnostic: see fidelity.py
+for normalization. They preserve widths, condition mnemonics, constants, memory
+operands and canonical targets, but do not prove register relationships or branch
+destinations. A 100% reference run can still have extra candidate instructions.
+
+The legacy grade01 ratchet membership includes UNRESOLVED and remains unchanged.
+The headline matched count is EXACT + REGALLOC and excludes UNRESOLVED.
+New floors also bank matched_symbols: each named function must retain an EXACT
+or REGALLOC proof, independently of any reviewed EXACT displacement.
 
 RELOCATED FIELDS ARE COMPARED BY TARGET, NOT BY VALUE, and that is not a
 loosening -- it is the only correct comparison.  A four-byte field under an
@@ -36,20 +48,68 @@ destination does not prove the same symbol interposition or export behavior.
 
     tools/toolchain/byteident.py                  counts, then the misses
     tools/toolchain/byteident.py --list-exact     the exact set, for a diff
+    tools/toolchain/byteident.py --link-selected  the body the recovered-order
+                                                  partial link keeps, beside the
+                                                  worst-copy verdict
     BLOB=/abs/path/to/dsplibs.o TC_OUT=build/tc_out tools/toolchain/byteident.py
 
 Denominator: the symbols the blob and `TC_OUT` both define, which is
 `compare.py`'s denominator exactly, so the two numbers are comparable.
+
+`--link-selected` is a DIAGNOSTIC and changes nothing above it.  It reads the
+artifacts `make partial-link` already writes (`build/tc_repro/tc_link_manifest.txt`
+from `recoverorder.py`, and `build/partial/dsplibs.o` from `partiallink.sh`) and
+reports the selected body with `linkedcopies.py`.  It refuses rather than
+reporting a clean zero when those inputs are absent.  The report is written to
+stderr so the default census on stdout is byte-identical with and without it.
+
+THE THREE PHASES (the owner-approved metric, and what the ratchet enforces)
+
+  1. FUNCTIONS RIGHT -- per-TU grade 0 OR grade 1 (EXACT / UNRESOLVED /
+     REGALLOC).  This is the HARD FLOOR: it must never fall, because a fall
+     means the function itself got worse.  No review ledger can excuse it.
+  2. RIGHT FILE / RIGHT PLACE -- TU attribution, emission order, symbol
+     binding, and the body the recovered-order link keeps.  The metric is
+     link-selected EXACT: the per-TU EXACT set, corrected by the body the
+     partial link actually selects for every multiply-defined name.
+  3. REPRODUCE THE BLOB -- positional byte identity of the LINKED object.
+     The end target is `make partial-compare-exact`
+     (`partialcmp --require-exact --require-raw-exact`).  The per-TU census
+     below is progress toward it, not the goal itself.
+
+`--summary` prints one line per phase to stdout.  It is opt-in and
+diagnostic; if the partial-link artifacts are absent it reports the
+link-selected metric as unavailable rather than failing.
+
+THE DISPLACEMENT LEDGER (`tools/ci/displaced.json`) is the only way an EXACT
+or link-selected-EXACT loss can pass the ratchet.  Each reviewed entry pins
+the body of the CURRENT head that the loss is about (raw bytes plus canonical
+relocation identity, the same SHA-256 `tools/ci/period_metrics.py` uses), the
+phase that caused it, where the evidence is, and how re-measurement should
+recover it.  The two identities are separate because they are different
+bodies: `body_sha256` pins the WORST per-TU copy the census scored, while
+`selected_body_sha256` pins the body the recovered-order link selects.
+`metric=exact` requires the former, `metric=selected` the latter, and
+`metric=both` both.  A selected-body pin is read from the input copy that
+`linkedcopies` proves matches the linked body, so unrelated size changes do
+not move it.  A name the link defines only ONCE has no independent phase-2
+identity -- the linked body is its only body -- so its selected loss is the
+same event as its per-TU EXACT loss and is covered by the `exact` entry; the
+selected check applies to multiply-defined names.  A loss moves metric only when an entry matches the loss, the
+evidence path exists, and the relevant hash still describes the current body.
+Stale entries fail: an unreviewed drift must not be inherited as permission.
 """
 
 import argparse
 import functools
 import glob
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -65,20 +125,239 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 # while `make period` stays green throughout, because a differential test
 # proves behavioural equivalence, not code-generation equivalence, and this
 # tree's own history (findings F2155, F612, F616, 7796, 7800, 7770) is a
-# record of exactly that gap.  Only EXACT ratchets, for the reason
-# `compare.py`'s own comment gives for its `identical`: REGALLOC (grade 1)
-# falls when a function GRADUATES to EXACT, so gating on it fails on
-# progress.  REGALLOC is reported with its direction and is informational.
+# record of exactly that gap.
 #
-# The floor is the exact SYMBOL SET, not only its cardinality.  An aggregate
-# count lets one function quietly fall out of EXACT while another enters it:
-# the headline remains unchanged and the regression is certified.  That is
-# precisely backwards for a ratchet -- every symbol it has banked must remain
-# banked.  Keep the counts as redundant, human-readable integrity checks and
-# for the existing REGALLOC note, but decide grade 0 from membership.
+# The floor is a SYMBOL SET, not a cardinality, and there are three of them:
+#
+#   grade01_symbols          HARD floor.  EXACT ∪ UNRESOLVED ∪ REGALLOC.  A
+#                            fall means the function itself got worse, and no
+#                            displacement review can excuse it.
+#   exact_symbols            phase 0's set.  A loss may be displaced only while
+#                            the symbol is still grade 1 (REGALLOC) and a
+#                            reviewed ledger entry pins the current body hash.
+#   selected_exact_symbols   phase 2's set: per-TU EXACT corrected by the body
+#                            the recovered-order link selects.  A loss may be
+#                            displaced by an entry without the grade-1 rule,
+#                            because the worst per-TU copy can legitimately be
+#                            BYTES while the selected body was EXACT.
+#
+# An aggregate count lets one function quietly fall out of a bucket while
+# another enters it: the headline remains unchanged and the regression is
+# certified.  That is precisely backwards for a ratchet -- every symbol it has
+# banked must remain banked.  Keep the counts as redundant, human-readable
+# integrity checks, but decide every phase from membership.
 #
 RATCHET = os.path.join(HERE, "byteident_ratchet.json")
 RATCHET_EXACT_SYMBOLS = "exact_symbols"
+#
+# THE THREE-PHASE FLOOR.  `grade01_symbols` is the hard one: a symbol that
+# falls out of EXACT ∪ UNRESOLVED ∪ REGALLOC has lost the function itself, and
+# unlike an EXACT loss there is no legitimate "the code is still equivalent"
+# displacement for it.  `selected_exact_symbols` is phase 2's set: the per-TU
+# EXACT set corrected by the body the recovered-order link keeps.
+#
+RATCHET_GRADE01_SYMBOLS = "grade01_symbols"
+RATCHET_SELECTED_EXACT_SYMBOLS = "selected_exact_symbols"
+# Optional in historical floors; unlike grade01, this excludes UNRESOLVED.
+RATCHET_MATCHED_SYMBOLS = "matched_symbols"
+
+DISPLACED = os.path.join(ROOT, "tools", "ci", "displaced.json")
+DISPLACED_METRICS = ("exact", "selected", "both")
+DISPLACED_PHASES = ("order", "tu-split", "neighbour-codegen")
+DISPLACED_TARGETS = ("REGALLOC", "BYTES", "RELOC", "UNRESOLVED")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
+def _evidence_path(evidence, root=ROOT):
+    """Resolve a ledger evidence path, refusing anything outside the repo."""
+    if not isinstance(evidence, str) or not evidence.strip():
+        return None
+    path = Path(evidence.split("#", 1)[0])
+    if not path.is_absolute():
+        path = Path(root) / path
+    try:
+        path = path.resolve()
+        path.relative_to(Path(root).resolve())
+    except (OSError, ValueError):
+        return None
+    return path if path.is_file() else None
+
+
+def ledger_entry_problem(entry, root=ROOT):
+    """Structural and evidence checks shared by the loader and the ratchet.
+
+    Kept here rather than in the loader because the ratchet decision must
+    still reject a hand-built or stale entry when the tests call it without a
+    file.  Returns a reason string, or None when the entry is well formed.
+    """
+    if not isinstance(entry, dict):
+        return "entry is not an object"
+    symbol = entry.get("symbol")
+    if not isinstance(symbol, str) or not symbol.strip():
+        return "missing symbol"
+    if entry.get("metric") not in DISPLACED_METRICS:
+        return "%s: metric must be one of %s" % (
+            symbol, "/".join(DISPLACED_METRICS))
+    if entry.get("from") != "EXACT":
+        return "%s: from must be EXACT" % symbol
+    if entry.get("to") not in DISPLACED_TARGETS:
+        return "%s: to must be one of %s" % (
+            symbol, "/".join(DISPLACED_TARGETS))
+    metric = entry.get("metric")
+    if metric in ("exact", "both"):
+        if not isinstance(entry.get("body_sha256"), str) or not \
+                SHA256.fullmatch(entry.get("body_sha256", "")):
+            return ("%s: body_sha256 must be a full 64-hex SHA-256 for "
+                    "metric=%s" % (symbol, metric))
+    if metric in ("selected", "both"):
+        if not isinstance(entry.get("selected_body_sha256"), str) or not \
+                SHA256.fullmatch(entry.get("selected_body_sha256", "")):
+            return ("%s: selected_body_sha256 must be a full 64-hex SHA-256 "
+                    "for metric=%s" % (symbol, metric))
+    if entry.get("phase") not in DISPLACED_PHASES:
+        return "%s: phase must be one of %s" % (
+            symbol, "/".join(DISPLACED_PHASES))
+    for field in ("cause", "recovery", "evidence"):
+        value = entry.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return "%s: missing %s" % (symbol, field)
+    if _evidence_path(entry["evidence"], root) is None:
+        return "%s: evidence path does not exist inside the repository: %s" % (
+            symbol, entry["evidence"])
+    return None
+
+
+def validate_displaced(data, root=ROOT):
+    """Validate the displacement ledger strictly; return its entries."""
+    if not isinstance(data, dict) or data.get("version") != 1 or \
+            not isinstance(data.get("displaced"), list):
+        raise ValueError(
+            "%s requires version 1 and a displaced list" % DISPLACED)
+    seen = set()
+    for entry in data["displaced"]:
+        problem = ledger_entry_problem(entry, root)
+        if problem is not None:
+            raise ValueError("%s: %s" % (DISPLACED, problem))
+        key = (entry["symbol"], entry["metric"])
+        if key in seen:
+            raise ValueError("%s: duplicate entry for %s (%s)"
+                             % (DISPLACED, key[0], key[1]))
+        seen.add(key)
+    return data["displaced"]
+
+
+def load_displaced(path=DISPLACED, root=ROOT):
+    try:
+        with open(path) as stream:
+            data = json.load(stream)
+    except OSError as error:
+        raise ValueError("cannot read %s: %s" % (path, error))
+    except ValueError as error:
+        raise ValueError("cannot read %s: %s" % (path, error))
+    return validate_displaced(data, root)
+
+
+def selected_exact_set(exact_symbols, report):
+    """Phase 2's symbol set from the link-selected audit.
+
+    Start from the per-TU EXACT set, then let the body the recovered-order
+    link actually keeps decide every multiply-defined name: add it when that
+    body is EXACT, remove it when it is not.  Names the audit could not
+    compare have no `linked` verdict and are left as the census graded them.
+    """
+    selected = set(exact_symbols)
+    for row in report.get("duplicates", []):
+        linked = row.get("linked")
+        if not isinstance(linked, dict) or "grade" not in linked:
+            continue
+        if linked["grade"] == "EXACT":
+            selected.add(row["symbol"])
+        else:
+            selected.discard(row["symbol"])
+    return selected
+
+
+def body_digest(raw, relocs):
+    """Current head body identity, reusing period_metrics' exact payload.
+
+    Imported lazily: `period_metrics` imports this module inside its own
+    helper, so a top-level import here is a cycle.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "tools", "ci"))
+    import period_metrics
+    return period_metrics.body_digest(raw, relocs)
+
+
+def _current_body_digest(object_for_symbol, symbol):
+    """Hash the body the census scored for `symbol`: the HEAD's own body.
+
+    The worst copy is the one the metric degraded from, so it -- not a lucky
+    COMDAT twin -- is the body a displacement entry must pin.
+    """
+    path = object_for_symbol.get(symbol)
+    if path is None:
+        raise ValueError("%s has no measured head object" % symbol)
+    raw, relocs = body(path, symbol)
+    if raw is None or relocs is None:
+        raise ValueError("%s has no measurable head body" % symbol)
+    return body_digest(raw, relocs)
+
+
+def _selected_body_digest(report, directory):
+    """Hash the body the recovered-order link SELECTS, not the worst twin.
+
+    `linkedcopies` records, per duplicate name, the input object copies whose
+    bodies are byte-identical to the linked body
+    (`linked_body_matching_inputs`).  Hashing one of those input copies pins
+    the selected identity without the linked ELF's layout: an unrelated
+    function changing size moves the linked body's address, not the input
+    object's bytes.  The selected body is refused when it matches no input
+    copy, or when the matching copies do not agree on one identity -- falling
+    back to the worst per-TU body would pin the wrong body and re-open the
+    hole this function exists to close.
+    """
+    rows = {row.get("symbol"): row for row in report.get("duplicates", [])
+            if isinstance(row, dict)}
+    def digest(symbol):
+        row = rows.get(symbol)
+        if row is None:
+            raise ValueError(
+                "%s is not a multiply-defined name in the link-selected audit"
+                % symbol)
+        matches = row.get("linked_body_matching_inputs") or []
+        if not matches:
+            raise ValueError(
+                "the recovered-order link selects no input copy for %s"
+                % symbol)
+        hashes = set()
+        for name in matches:
+            path = os.path.join(directory, name)
+            raw, relocs = body(path, symbol)
+            if raw is None or relocs is None:
+                raise ValueError(
+                    "%s has no measurable selected input body" % symbol)
+            hashes.add(body_digest(raw, relocs))
+        if len(hashes) != 1:
+            raise ValueError(
+                "%s's selected body matches %d input copies with different "
+                "identities" % (symbol, len(hashes)))
+        return hashes.pop()
+    return digest
+
+
+# The recovered-order partial link used to resolve an UNDEFINED private-frame
+# callee. Explicit --linked/--link-manifest paths also apply without the
+# diagnostic --link-selected report; otherwise use the `make partial-link`
+# artifact beside the census object tree. A body defined in
+# the supplied ELF is never looked up here.
+LINK_RESOLUTION = None
+
+
+def _link_resolution_paths():
+    if LINK_RESOLUTION is not None:
+        return LINK_RESOLUTION
+    manifest, linked = _link_selected_paths(None, None)
+    return linked, manifest
 
 
 def _default_blob():
@@ -336,8 +615,12 @@ def body(path, sym):
     if b"\xff\x24" in raw and any(kind == "R_386_32" and target[0] == "section"
                                   for kind, target in relocs.values()):
         import jumptable
+        linked, manifest = _link_resolution_paths()
+        if os.path.realpath(str(path)) == os.path.realpath(str(linked)):
+            # A body in the link itself has already been resolved by the link.
+            linked = manifest = None
         try:
-            proof = jumptable.prove(path, sym)
+            proof = jumptable.prove(path, sym, link=linked, manifest=manifest)
         except jumptable.Refused:
             import induction_jumptable
             try:
@@ -362,6 +645,22 @@ def body(path, sym):
             expected = ("R_386_32", ("section", proof['table_section'], proof['table_offset']))
             if relocs.get(off) == expected:
                 relocs[off] = ("R_386_32", proof['identity'])
+    # Exact-only destination identity. Unlike the ABI-aware proofs above,
+    # this does not establish a register-renaming domain. Keep its descriptor
+    # visible to every body consumer, but explicitly prohibit grade 1 below.
+    unresolved = [(off, kind, target) for off, (kind, target) in relocs.items()
+                  if target[0] == 'section']
+    if len(unresolved) == 1 and b'\xff\x24\x85' in raw:
+        import guarded_switch
+        try:
+            proof = guarded_switch.prove(path, sym)
+        except guarded_switch.Refused:
+            proof = None
+        if proof is not None:
+            off = proof['relocation_offset']
+            expected = ('R_386_32', ('section', proof['table_section'], proof['table_offset']))
+            if relocs.get(off) == expected:
+                relocs[off] = ('R_386_32', proof['identity'])
     return raw, relocs
 
 
@@ -371,13 +670,6 @@ REG32 = {"al": "eax", "ah": "eax", "ax": "eax", "eax": "eax",
          "dl": "edx", "dh": "edx", "dx": "edx", "edx": "edx",
          "si": "esi", "esi": "esi", "di": "edi", "edi": "edi",
          "bp": "ebp", "ebp": "ebp", "sp": "esp", "esp": "esp"}
-# Explicit (bit width, least significant bit) within the 32-bit family.
-# Spelling length cannot distinguish ax/al or al/ah.  Preserve the lane as
-# well as the width: renaming eax to edx maps al to dl and ah to dh.
-REG_SHAPE = {reg: ((32, 0) if reg == family else
-                   (8, 8) if reg in ("ah", "bh", "ch", "dh") else
-                   (8, 0) if reg in ("al", "bl", "cl", "dl") else (16, 0))
-             for reg, family in REG32.items()}
 REGTOK = re.compile(r"%(\w+)")
 BARE_REG = re.compile(r"%\w+")
 #
@@ -390,6 +682,19 @@ BARE_REG = re.compile(r"%\w+")
 # the direction a loosening tool must never fail in.
 #
 WIDE_REG = frozenset(("eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp"))
+# A token's family does not specify the accessed bits. In particular AL, AH
+# and AX all have two-character names but read different parts of EAX. Keep
+# the shape used by both use and definition checks in one explicit table.
+GP_REGISTER_SHAPE = {name: (32, 0) for name in WIDE_REG}
+GP_REGISTER_SHAPE.update({name: (16, 0) for name in
+                          ("ax", "bx", "cx", "dx", "si", "di", "bp", "sp")})
+GP_REGISTER_SHAPE.update({name: (8, 0) for name in ("al", "bl", "cl", "dl")})
+GP_REGISTER_SHAPE.update({name: (8, 8) for name in ("ah", "bh", "ch", "dh")})
+
+
+def gp_register_shape(name):
+    """Return (access width, family bit offset), or None for non-GP tokens."""
+    return GP_REGISTER_SHAPE.get(name)
 
 
 def _full_write(tok):
@@ -451,13 +756,21 @@ def _fields(ops):
     return out
 
 
+class InstructionSequence(list):
+    """Decoded rows with function-relative instruction boundary metadata."""
+
+    def __init__(self, rows, offsets):
+        super().__init__(rows)
+        self.offsets = tuple(offsets)
+
+
 def insns(path, sym):
     """[(mnemonic, operand text)] with addresses and symbol comments dropped."""
     _, relocs = body(path, sym)
     out = subprocess.run(
         ["objdump", "-dr", "--disassemble=" + sym, "--no-show-raw-insn", path],
         capture_output=True, text=True).stdout
-    rows, base = [], None
+    rows, offsets, base = [], [], None
     for line in out.splitlines():
         m = re.match(r"^\s*([0-9a-f]+):\t", line)
         if not m:
@@ -514,6 +827,7 @@ def insns(path, sym):
         if re.fullmatch(r"[0-9a-f]+", ops):
             ops = ".%+d" % (int(ops, 16) - base)
         rows.append([parts[0], ops])
+        offsets.append(at - base)
         continue
     #
     # A RELOCATED OPERAND'S PRINTED NUMBER IS A PLACEHOLDER, and the two
@@ -527,18 +841,17 @@ def insns(path, sym):
     # the target: choosing one without decoding its byte field could erase a
     # different immediate.  Zero literals also requires appending the target.
     #
-    return [tuple(r) for r in rows]
+    return InstructionSequence([tuple(r) for r in rows], offsets)
 
 
-def alpha_why(x, y):
+def _alpha_live_why(x, y):
     """Same instructions and operands up to a register renaming, PER LIVE RANGE.
 
     This is grade 1 and it is STRICTER than `compare.py`, which drops operands
     altogether -- there, `mov $1,%eax` and `mov $2,%ebx` both read as `mov`.
     Here every immediate and displacement must match exactly and only the
     register NAMES may differ (%eax<->%edx implies %al<->%dl, so tokens are
-    folded to their 32-bit family and the bit width and low/high lane must
-    still agree).  `%esp` and
+    folded to their 32-bit family; access width AND byte lane must agree). `%esp` and
     `%ebp` are pinned to themselves: the frame is not a free choice.
 
     THE RENAMING IS PER LIVE RANGE, NOT PER FUNCTION, because that is what a
@@ -575,6 +888,8 @@ def alpha_why(x, y):
     # alignment filler does not were rejected on length, which is a difference
     # in nothing.
     #
+    if any("@R_386_32:('exact-switch-v1'," in operands for _, operands in x + y):
+        return 'anonymous switch destination proved for exact bytes only'
     x = [r for r in x if not _padding(*r)]
     y = [r for r in y if not _padding(*r)]
 
@@ -665,9 +980,9 @@ def alpha_why(x, y):
                     return ("row %d NON-REGISTER  %s vs %s  | %s | %s"
                             % (i, u, v, ox, oy))
                 continue
-            if REG_SHAPE[u] != REG_SHAPE[v]:
-                return ("row %d WIDTH/LANE  %s vs %s  | %s | %s"
-                        % (i, u, v, ox, oy))
+            if gp_register_shape(u) is None or gp_register_shape(u) != gp_register_shape(v):
+                return ("row %d REGISTER SHAPE (width, bit offset)  %s=%s vs %s=%s  | %s | %s"
+                        % (i, u, gp_register_shape(u), v, gp_register_shape(v), ox, oy))
             if not bind(fu, fv):
                 return ("row %d USE CONFLICT  %s wants %s, already bound to %s\n"
                         "        blob %s\n        ours %s"
@@ -678,11 +993,25 @@ def alpha_why(x, y):
             if fu is None or fv is None:
                 if u != v:
                     return ("row %d DEST NON-REGISTER  %s vs %s" % (i, u, v))
-            elif REG_SHAPE[u] != REG_SHAPE[v] or not rebind(fu, fv):
-                return ("row %d DEST WIDTH  %s vs %s" % (i, u, v))
+            elif gp_register_shape(u) is None or gp_register_shape(u) != gp_register_shape(v) or not rebind(fu, fv):
+                return ("row %d DEST SHAPE/BINDING  %s=%s vs %s=%s"
+                        % (i, u, gp_register_shape(u), v, gp_register_shape(v)))
         if REGTOK.sub("%r", ox) != REGTOK.sub("%r", oy):
             return ("row %d NON-REGISTER OPERAND  %s | %s" % (i, ox, oy))
     return None
+
+
+def framefree_certificate(x, y):
+    from framefree import certificate
+    return certificate(x, y, fields=_fields, regtok=REGTOK, reg32=REG32,
+                       padding=_padding)
+
+
+def alpha_why(x, y):
+    reason = _alpha_live_why(x, y)
+    if reason is not None and framefree_certificate(x, y) is not None:
+        return None
+    return reason
 
 
 def alpha_equal(x, y):
@@ -1169,9 +1498,10 @@ def _ratchet_membership(was, now):
 
     Older ratchets stored only an aggregate `exact` count.  They cannot tell
     whether a replacement symbol concealed a regression, so accepting one
-    would weaken this check exactly where it is meant to be strict.  Refuse
-    it with a re-blessing instruction rather than silently retaining the old
-    count-only behaviour.
+    would weaken this check exactly where it is meant to be strict.  The
+    three-phase baseline adds two more symbol sets, and a baseline without
+    them is exactly the same hazard one phase further on: refuse it with a
+    re-blessing instruction rather than silently measuring only phase 0.
     """
     if not isinstance(was, dict):
         raise ValueError("baseline is not a JSON object")
@@ -1179,60 +1509,722 @@ def _ratchet_membership(was, now):
         raise ValueError(
             "baseline is legacy aggregate-only data (no %r); run --update "
             "to record the current exact-symbol set" % RATCHET_EXACT_SYMBOLS)
+    missing = [key for key in (RATCHET_GRADE01_SYMBOLS,
+                               RATCHET_SELECTED_EXACT_SYMBOLS)
+               if key not in was]
+    if missing:
+        raise ValueError(
+            "baseline is legacy data without %s; re-bless with --update to "
+            "record the grade-0/1 and link-selected symbol sets"
+            % ", ".join(repr(key) for key in missing))
+    sets = (RATCHET_EXACT_SYMBOLS, RATCHET_GRADE01_SYMBOLS,
+            RATCHET_SELECTED_EXACT_SYMBOLS)
     for label, row in (("baseline", was), ("current result", now)):
-        symbols = row.get(RATCHET_EXACT_SYMBOLS)
-        if (not isinstance(symbols, list) or
-                any(not isinstance(k, str) for k in symbols)):
-            raise ValueError("%s %r must be a list of symbol names"
-                             % (label, RATCHET_EXACT_SYMBOLS))
-        if len(set(symbols)) != len(symbols):
-            raise ValueError("%s %r contains duplicate symbol names"
-                             % (label, RATCHET_EXACT_SYMBOLS))
-        for field in ("exact", "regalloc", "compared"):
+        for key in sets:
+            symbols = row.get(key)
+            if (not isinstance(symbols, list) or
+                    any(not isinstance(k, str) for k in symbols)):
+                raise ValueError("%s %r must be a list of symbol names"
+                                 % (label, key))
+            if len(set(symbols)) != len(symbols):
+                raise ValueError("%s %r contains duplicate symbol names"
+                                 % (label, key))
+        for field in ("exact", "grade01", "selected_exact", "regalloc",
+                      "compared"):
             value = row.get(field)
             if type(value) is not int or value < 0:
                 raise ValueError("%s %r must be a non-negative integer"
                                  % (label, field))
-        if row["exact"] != len(symbols):
-            raise ValueError("%s exact count (%d) disagrees with its %r (%d)"
-                             % (label, row["exact"], RATCHET_EXACT_SYMBOLS,
-                                len(symbols)))
+        for count, key in (("exact", RATCHET_EXACT_SYMBOLS),
+                           ("grade01", RATCHET_GRADE01_SYMBOLS),
+                           ("selected_exact",
+                            RATCHET_SELECTED_EXACT_SYMBOLS)):
+            if row[count] != len(row[key]):
+                raise ValueError("%s %s count (%d) disagrees with its %r (%d)"
+                                 % (label, count, row[count], key,
+                                    len(row[key])))
+        if not set(row[RATCHET_EXACT_SYMBOLS]) <= set(
+                row[RATCHET_GRADE01_SYMBOLS]):
+            raise ValueError("%s grade-0/1 set does not contain its EXACT set"
+                             % label)
+        if "matched" in row or RATCHET_MATCHED_SYMBOLS in row:
+            symbols = row.get(RATCHET_MATCHED_SYMBOLS)
+            if (not isinstance(symbols, list) or
+                    any(not isinstance(k, str) or not k.strip()
+                        for k in symbols)):
+                raise ValueError("%s %r must be a list of nonempty symbol names"
+                                 % (label, RATCHET_MATCHED_SYMBOLS))
+            if len(set(symbols)) != len(symbols):
+                raise ValueError("%s %r contains duplicate symbol names"
+                                 % (label, RATCHET_MATCHED_SYMBOLS))
+            count = row.get("matched")
+            if type(count) is not int or count < 0:
+                raise ValueError("%s 'matched' must be a non-negative integer"
+                                 % label)
+            if count != len(symbols):
+                raise ValueError("%s matched count disagrees with its %r"
+                                 % (label, RATCHET_MATCHED_SYMBOLS))
+            if not set(row[RATCHET_EXACT_SYMBOLS]) <= set(symbols):
+                raise ValueError("%s matched set does not contain its EXACT set"
+                                 % label)
+            if not set(symbols) <= set(row[RATCHET_GRADE01_SYMBOLS]):
+                raise ValueError("%s grade-0/1 set does not contain its matched set"
+                                 % label)
     return (sorted(set(was[RATCHET_EXACT_SYMBOLS]) -
                    set(now[RATCHET_EXACT_SYMBOLS])),
             sorted(set(now[RATCHET_EXACT_SYMBOLS]) -
                    set(was[RATCHET_EXACT_SYMBOLS])))
 
 
-def ratchet_self_test():
-    """Exercise the strict direction: equal counts must not hide a loss."""
-    def row(symbols):
-        return {"exact": len(symbols), "regalloc": 53, "compared": 1852,
-                RATCHET_EXACT_SYMBOLS: symbols}
+def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
+                         root=ROOT, selected_digest=None,
+                         multiply_defined=None):
+    """The three-phase ratchet decision, as a pure function.
 
-    cases = [
-        ("a replacement cannot conceal an exact-symbol loss", row(["a", "b"]),
-         row(["b", "c"]), (["a"], ["c"])),
+    Returns `(failures, allowed)`.  `failures` is a list of human-readable
+    reasons the ratchet must fail; `allowed` is a list of
+    `(metric, symbol)` pairs a reviewed, hash-pinned ledger entry displaced.
+
+      * A grade-0/1 loss ALWAYS fails.  It means the function itself got
+        worse, and no ledger entry can make a different function acceptable.
+      * A named matched-floor loss ALWAYS fails against actual EXACT and
+        REGALLOC membership, even if UNRESOLVED keeps it in grade 0/1.
+        Floors predating matched_symbols retain their legacy protection.
+      * A conservative EXACT loss may be displaced only while the function is
+        still grade 1 (REGALLOC) and the entry's `body_sha256` still describes
+        the WORST per-TU head body the census scored.
+      * A link-selected EXACT loss may be displaced by an entry without the
+        grade-1 requirement, because the worst per-TU copy can legitimately be
+        BYTES while the selected body was EXACT.  It is checked against
+        `selected_body_sha256`, the body the recovered-order link SELECTS, so
+        a changed selected body cannot hide behind an unchanged worst twin.
+      * When `multiply_defined` is supplied, a name absent from it has one
+        definition, so its selected set membership IS its per-TU membership;
+        the selected loop skips it and the exact check above carries the
+        evidence.  Without the parameter every name is checked independently
+        (the pure-function default, used by the self-test).
+      * `metric=both` entries carry both pins and each phase checks its own.
+      * An entry that matches no current loss is stale and fails.
+    """
+    failures, allowed = [], []
+    exact_now = set(now.get(RATCHET_EXACT_SYMBOLS, []))
+    grade01_now = set(now.get(RATCHET_GRADE01_SYMBOLS, []))
+    selected_now = now.get(RATCHET_SELECTED_EXACT_SYMBOLS)
+    selected_now = set(selected_now) if isinstance(selected_now, list) else None
+
+    for symbol in sorted(set(was.get(RATCHET_GRADE01_SYMBOLS, [])) -
+                         grade01_now):
+        failures.append(
+            "grade 0/1 lost: %s -- the function itself got worse; no ledger "
+            "entry can excuse this" % symbol)
+
+    # Use the actual scored REGALLOC names, not the legacy grade01 set or
+    # a claimed current matched list: UNRESOLVED is not a matching proof.
+    for symbol in sorted(set(was.get(RATCHET_MATCHED_SYMBOLS, [])) -
+                         (exact_now | set(grade1_symbols))):
+        failures.append(
+            "matched lost: %s -- no EXACT or REGALLOC proof remains; no "
+            "ledger entry can excuse this" % symbol)
+
+    by_symbol = {}
+    for entry in displaced:
+        if isinstance(entry, dict):
+            by_symbol.setdefault(entry.get("symbol"), []).append(entry)
+    used = set()
+
+    def candidates(symbol, metric):
+        return [entry for entry in by_symbol.get(symbol, [])
+                if entry.get("metric") in (metric, "both")]
+
+    def mark_used(symbol, metric):
+        for entry in candidates(symbol, metric):
+            used.add(id(entry))
+
+    def consume(symbol, metric, require_regalloc):
+        matches = candidates(symbol, metric)
+        if not matches:
+            return ("no reviewed displacement entry (%s); this loss is "
+                    "unexplained" % metric)
+        if len(matches) > 1:
+            return ("%d ledger entries match (%s), so the review is "
+                    "ambiguous" % (len(matches), metric))
+        entry = matches[0]
+        problem = ledger_entry_problem(entry, root)
+        if problem is not None:
+            return problem
+        if require_regalloc:
+            if entry.get("to") != "REGALLOC":
+                return ("entry says to=%s, but an EXACT loss is only "
+                        "displaceable while the function is grade 1 "
+                        "(REGALLOC)" % entry.get("to"))
+            if symbol not in set(grade1_symbols):
+                return ("the symbol is not grade 1 (REGALLOC) in the current "
+                        "census, so this EXACT loss cannot be displaced")
+        if metric == "selected":
+            if selected_digest is None:
+                return ("the selected-body identity is unavailable, so this "
+                        "loss cannot be pinned")
+            hasher, field, label = selected_digest, "selected_body_sha256", \
+                "selected"
+        else:
+            hasher, field, label = digest, "body_sha256", "worst per-TU"
+        try:
+            actual = hasher(symbol)
+        except ValueError as error:
+            return "cannot measure the current %s body: %s" % (label, error)
+        if actual != entry.get(field):
+            prefix = ("selected body hash mismatch" if metric == "selected"
+                      else "body hash mismatch")
+            return ("%s: entry pins %s, the current %s body is %s"
+                    % (prefix, entry.get(field), label, actual))
+        used.add(id(entry))
+        return None
+
+    for symbol in sorted(set(was.get(RATCHET_EXACT_SYMBOLS, [])) - exact_now):
+        if symbol not in grade01_now:
+            # Already a hard grade-0/1 failure.  The entry still describes a
+            # real loss, so do not also call it stale.
+            mark_used(symbol, "exact")
+            continue
+        problem = consume(symbol, "exact", True)
+        if problem is None:
+            allowed.append(("exact", symbol))
+        else:
+            failures.append("EXACT loss %s: %s" % (symbol, problem))
+
+    if selected_now is not None:
+        for symbol in sorted(
+                set(was.get(RATCHET_SELECTED_EXACT_SYMBOLS, [])) -
+                selected_now):
+            if multiply_defined is not None and symbol not in multiply_defined:
+                # One definition: phase 2 is phase 0.  The exact check owns
+                # this loss; requiring a second selected pin would demand
+                # evidence about a body that does not exist separately.
+                continue
+            problem = consume(symbol, "selected", False)
+            if problem is None:
+                allowed.append(("selected", symbol))
+            else:
+                failures.append("link-selected EXACT loss %s: %s"
+                                % (symbol, problem))
+
+    for entry in displaced:
+        if isinstance(entry, dict) and id(entry) not in used:
+            failures.append(
+                "stale ledger entry: %s (%s) matches no current loss; "
+                "remove it" % (entry.get("symbol"), entry.get("metric")))
+    return failures, allowed
+
+
+def ratchet_self_test():
+    """Exercise every direction: each rule must accept AND reject.
+
+    Pure functions only: no objects, no partial link, no ledger file.  A
+    detector that cannot fail is the dead-detector defect, so each new rule
+    below carries a mutation that it must catch.
+    """
+    def digest(symbol):
+        return hashlib.sha256(("body:" + symbol).encode()).hexdigest()
+
+    def selected_digest(symbol):
+        return hashlib.sha256(("selected:" + symbol).encode()).hexdigest()
+
+    def row(exact, grade01=None, selected=None, regalloc=None):
+        exact = list(exact)
+        grade01 = list(exact if grade01 is None else grade01)
+        selected = list(exact if selected is None else selected)
+        regalloc = list(regalloc or [])
+        return {"exact": len(exact), "regalloc": len(regalloc),
+                "unresolved": 0, "compared": 1852,
+                "grade01": len(grade01), RATCHET_GRADE01_SYMBOLS: grade01,
+                "selected_exact": len(selected),
+                RATCHET_SELECTED_EXACT_SYMBOLS: selected,
+                RATCHET_EXACT_SYMBOLS: exact}
+
+    def entry(symbol, metric="exact", to="REGALLOC", body=None, selected=None,
+              evidence="tools/ci/displaced.json", phase="order",
+              cause="reviewed", recovery="re-measure after the cause settles"):
+        item = {"symbol": symbol, "metric": metric, "from": "EXACT", "to": to,
+                "phase": phase, "cause": cause, "evidence": evidence,
+                "recovery": recovery}
+        if metric in ("exact", "both"):
+            item["body_sha256"] = (body if body is not None
+                                   else digest(symbol))
+        if metric in ("selected", "both"):
+            item["selected_body_sha256"] = (selected if selected is not None
+                                            else selected_digest(symbol))
+        return item
+
+    checks = []
+
+    def check(label, condition):
+        checks.append((label, bool(condition)))
+
+    # --- symbol-set membership (phase 0, the original check) ---------------
+    membership = [
+        ("a replacement cannot conceal an exact-symbol loss",
+         row(["a", "b"]), row(["b", "c"]), (["a"], ["c"])),
         ("an exact-set gain loses nothing", row(["a", "b"]),
          row(["a", "b", "c"]), ([], ["c"])),
     ]
-    bad = 0
-    for name, was, now, want in cases:
-        got = _ratchet_membership(was, now)
-        ok = got == want
-        bad += not ok
-        print("  %s  %-56s want=%s got=%s"
-              % ("ok  " if ok else "FAIL", name, want, got))
+    for label, was, now, want in membership:
+        check(label, _ratchet_membership(was, now) == want)
+
     try:
         _ratchet_membership({"exact": 2, "regalloc": 53, "compared": 1852},
                             row(["a", "b"]))
-        ok = False
-    except ValueError as e:
-        ok = "legacy aggregate-only" in str(e)
-    bad += not ok
-    print("  %s  %-56s legacy count-only baseline is rejected"
-          % ("ok  " if ok else "FAIL", ""))
-    print("\n  %d case(s), %d failure(s)" % (len(cases) + 1, bad))
+    except ValueError as error:
+        check("legacy count-only baseline is rejected",
+              "legacy aggregate-only" in str(error))
+    else:
+        check("legacy count-only baseline is rejected", False)
+
+    try:
+        _ratchet_membership({"exact": 1, "regalloc": 0, "compared": 1,
+                             "exact_symbols": ["a"]}, row(["a"]))
+    except ValueError as error:
+        check("baseline without the three-phase keys is rejected",
+              "re-bless with --update" in str(error))
+    else:
+        check("baseline without the three-phase keys is rejected", False)
+
+    # --- optional EXACT/REGALLOC floor, excluding unresolved evidence -----
+    def matched(row_, names):
+        return dict(row_, matched=len(names), matched_symbols=list(names))
+
+    matched_was = matched(row(["a"], ["a", "r"], ["a"], ["r"]),
+                          ["a", "r"])
+    for label, current in (
+            ("UNRESOLVED", row(["a"], ["a", "r"], ["a"])),
+            ("NONMATCH", row(["a"], ["a"], ["a"])),
+            ("missing", row(["a"], ["a"], ["a"]))):
+        failures, _ = ratchet_displacement(
+            matched_was, current, [], digest, set())
+        check("matched REGALLOC to %s fails" % label,
+              any("matched lost: r" in f for f in failures))
+    failures, _ = ratchet_displacement(
+        matched_was, matched(row(["a", "r"]), ["a", "r"]),
+        [], digest, set())
+    check("matched REGALLOC to EXACT passes", not failures)
+    failures, _ = ratchet_displacement(
+        matched_was, matched_was, [], digest, {"r"})
+    check("unchanged matched floor passes", not failures)
+    legacy = row(["a"], ["a", "r"], ["a"], ["r"])
+    unresolved = row(["a"], ["a", "r"], ["a"])
+    failures, _ = ratchet_displacement(legacy, unresolved, [], digest, set())
+    check("old floor retains legacy unresolved compatibility", not failures)
+    failures, _ = ratchet_displacement(
+        matched_was, matched(unresolved, ["a", "r"]),
+        [entry("r")], digest, set())
+    check("claimed matched list and ledger cannot excuse actual matched loss",
+          any("matched lost: r" in f for f in failures))
+
+    # A valid reviewed dp-style EXACT displacement stays inside matched.
+    failures, allowed = ratchet_displacement(
+        matched(row(["dp"]), ["dp"]),
+        matched(row([], ["dp"], [], ["dp"]), ["dp"]),
+        [entry("dp")], digest, {"dp"}, multiply_defined=set())
+    check("matched floor preserves pinned single-definition displacement",
+          not failures and allowed == [("exact", "dp")])
+
+    invalid_matched = [
+        ("missing names", {"matched": 2}),
+        ("missing count", {"matched_symbols": ["a", "r"]}),
+        ("wrong count", {"matched": 3, "matched_symbols": ["a", "r"]}),
+        ("negative count", {"matched": -1, "matched_symbols": []}),
+        ("boolean count", {"matched": True, "matched_symbols": ["a"]}),
+        ("non-list names", {"matched": 1, "matched_symbols": "a"}),
+        ("non-string name", {"matched": 2, "matched_symbols": ["a", 1]}),
+        ("empty name", {"matched": 2, "matched_symbols": ["a", ""]}),
+        ("blank name", {"matched": 2, "matched_symbols": ["a", " "]}),
+        ("duplicate name", {"matched": 2, "matched_symbols": ["a", "a"]}),
+        ("EXACT outside matched", {"matched": 1, "matched_symbols": ["r"]}),
+        ("matched outside legacy set", {"matched": 2,
+                                         "matched_symbols": ["a", "z"]}),
+    ]
+    for label, fields in invalid_matched:
+        malformed = dict(legacy, **fields)
+        for position in ("baseline", "current"):
+            try:
+                _ratchet_membership(
+                    malformed if position == "baseline" else matched_was,
+                    malformed if position == "current" else matched_was)
+            except ValueError:
+                rejected = True
+            else:
+                rejected = False
+            check("%s rejects matched %s" % (position, label), rejected)
+    check("legacy baseline accepts new current matched fields",
+          _ratchet_membership(legacy, matched_was) == ([], []))
+
+    # --- displacement decisions ------------------------------------------
+    was = row(["a", "b"], ["a", "b"], ["a", "b"], [])
+    regressed = row(["b"], ["a", "b"], ["a", "b"], ["a"])
+
+    failures, allowed = ratchet_displacement(
+        was, regressed, [], digest, {"a"})
+    check("unexplained EXACT loss fails",
+          any("EXACT loss a" in f for f in failures) and not allowed)
+
+    failures, allowed = ratchet_displacement(
+        was, regressed, [entry("a")], digest, {"a"})
+    check("EXACT to REGALLOC with a matching entry passes",
+          not failures and allowed == [("exact", "a")])
+
+    bytewise = row(["b"], ["b"], ["b"], [])
+    failures, _ = ratchet_displacement(
+        was, bytewise, [entry("a", metric="both")], digest, set())
+    check("EXACT to BYTES fails even with an entry",
+          any("grade 0/1 lost: a" in f for f in failures))
+
+    grade_lost = row(["a", "b"], ["a", "b"], ["a", "b"], [])
+    was_c = row(["a", "b"], ["a", "b", "c"], ["a", "b"], [])
+    failures, _ = ratchet_displacement(
+        was_c, grade_lost, [entry("c")], digest, set())
+    check("grade 0/1 loss fails even with an entry",
+          any("grade 0/1 lost: c" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed,
+        [entry("a", evidence="tools/ci/does-not-exist.json")], digest, {"a"})
+    check("missing evidence fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", phase="")], digest, {"a"})
+    check("missing phase fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", recovery="")], digest, {"a"})
+    check("missing recovery fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", body="0" * 64)], digest, {"a"})
+    check("body hash mismatch fails",
+          any("body hash mismatch" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        row(["a"], ["a"], ["a"], []), row(["a"], ["a"], ["a"], []),
+        [entry("z")], digest, set())
+    check("stale ledger entry fails",
+          any("stale ledger entry" in f for f in failures))
+
+    selected_was = row(["a", "b"], ["a", "b"], ["a", "b"], [])
+    selected_lost = row(["a", "b"], ["a", "b"], ["b"], [])
+    failures, allowed = ratchet_displacement(
+        selected_was, selected_lost,
+        [entry("a", metric="selected", to="BYTES")], digest, set(),
+        selected_digest=selected_digest)
+    check("selected loss with an entry passes without the grade-1 rule",
+          not failures and allowed == [("selected", "a")])
+
+    failures, _ = ratchet_displacement(
+        selected_was, selected_lost, [], digest, set(),
+        selected_digest=selected_digest)
+    check("selected loss without an entry fails",
+          any("link-selected EXACT loss a" in f for f in failures))
+
+    # A name with ONE definition has no independent phase-2 identity.
+    single_was = row(["a"], ["a"], ["a"], [])
+    single_lost = row([], ["a"], [], ["a"])
+    failures, allowed = ratchet_displacement(
+        single_was, single_lost, [entry("a", metric="exact")], digest, {"a"},
+        selected_digest=selected_digest, multiply_defined=set())
+    check("single-definition exact+selected loss displaced by one exact entry",
+          not failures and ("exact", "a") in allowed)
+    failures, _ = ratchet_displacement(
+        single_was, single_lost, [], digest, {"a"},
+        selected_digest=selected_digest, multiply_defined=set())
+    check("single-definition exact loss still needs its entry",
+          any("EXACT loss a" in f for f in failures)
+          and not any("link-selected" in f for f in failures))
+    failures, _ = ratchet_displacement(
+        row(["a"], ["a"], ["a"], []), row(["a"], ["a"], [], ["a"]),
+        [], digest, set(), selected_digest=selected_digest,
+        multiply_defined={"a"})
+    check("multiply-defined selected loss still needs its entry",
+          any("link-selected EXACT loss a" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a", to="BYTES")], digest, {"a"})
+    check("EXACT displacement must target REGALLOC", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        was, regressed, [entry("a"), entry("a", metric="both")], digest,
+        {"a"})
+    check("ambiguous duplicate ledger entries fail", bool(failures))
+
+    # --- the selected pin must be the SELECTED body -----------------------
+    # Worst body unchanged (digest), selected body changed (selected_digest
+    # differs from the entry) MUST fail.  The old single-callback design
+    # accepted this because it only ever hashed the worst twin.
+    failures, allowed = ratchet_displacement(
+        selected_was, selected_lost,
+        [entry("a", metric="selected", to="BYTES",
+               selected="0" * 64)], digest, set(),
+        selected_digest=selected_digest)
+    check("changed selected body with unchanged worst fails for selected",
+          any("selected body hash mismatch" in f for f in failures)
+          and not allowed)
+
+    changed_selected = row(["a", "b"], ["a", "b"], ["b"], [])
+    failures, allowed = ratchet_displacement(
+        selected_was, changed_selected,
+        [entry("a", metric="selected", to="BYTES")], digest, set(),
+        selected_digest=lambda symbol: "0" * 64)
+    check("unchanged worst cannot excuse a changed selected body",
+          any("selected body hash mismatch" in f for f in failures)
+          and not allowed)
+
+    failures, allowed = ratchet_displacement(
+        was, regressed,
+        [entry("a", metric="both", body="0" * 64,
+               selected=selected_digest("a"))], digest,
+        {"a"}, selected_digest=selected_digest)
+    check("changed worst body with unchanged selected fails for exact",
+          any("body hash mismatch" in f for f in failures) and not allowed)
+
+    failures, allowed = ratchet_displacement(
+        was, regressed, [entry("a")], digest, {"a"},
+        selected_digest=selected_digest)
+    check("recomputed worst body still passes exact", not failures
+          and allowed == [("exact", "a")])
+
+    failures, allowed = ratchet_displacement(
+        selected_was, selected_lost,
+        [entry("a", metric="selected", to="BYTES")], digest, set(),
+        selected_digest=selected_digest)
+    check("recomputed selected body still passes selected", not failures
+          and allowed == [("selected", "a")])
+
+    failures, allowed = ratchet_displacement(
+        was, regressed,
+        [entry("a", metric="selected", to="BYTES")], digest, {"a"},
+        selected_digest=selected_digest)
+    check("selected-only entry never excuses an EXACT loss",
+          any("no reviewed displacement entry (exact)" in f
+              for f in failures) and not allowed)
+
+    # `both` must carry both pins.  The structural validator is the authority
+    # here; the decision calls it for every entry it actually uses.
+    both = entry("a", metric="both")
+    both["selected_body_sha256"] = selected_digest("a")
+    check("both with both pins is structurally valid",
+          ledger_entry_problem(both) is None)
+    missing = entry("a", metric="both")
+    del missing["body_sha256"]
+    check("both without body_sha256 is rejected",
+          "body_sha256" in (ledger_entry_problem(missing) or ""))
+    missing = entry("a", metric="both")
+    del missing["selected_body_sha256"]
+    check("both without selected_body_sha256 is rejected",
+          "selected_body_sha256" in (ledger_entry_problem(missing) or ""))
+    check("selected-only entry does not need body_sha256",
+          ledger_entry_problem(entry("a", metric="selected")) is None)
+
+    # --- phase-2 set construction ----------------------------------------
+    report = {"duplicates": [
+        {"symbol": "b", "linked": {"grade": "EXACT"}},
+        {"symbol": "a", "linked": {"grade": "REGALLOC"}},
+        {"symbol": "c"},
+    ]}
+    check("selected set adds a linked-EXACT name and removes a non-EXACT one",
+          selected_exact_set(["a", "c"], report) == {"b", "c"})
+
+    bad = sum(not ok for _, ok in checks)
+    for label, ok in checks:
+        print("  %s  %s" % ("ok  " if ok else "FAIL", label))
+    print("\n  %d case(s), %d failure(s)" % (len(checks), bad))
     return 1 if bad else 0
+
+
+LINK_SELECTED_SCRIPTS = ("recoverorder.py", "partiallink.sh",
+                         "partialcmp.py", "linkedcopies.py")
+
+
+def _link_selected_paths(manifest, linked):
+    """Default to the artifacts `make partial-link` writes beside TC_OUT."""
+    build = os.path.dirname(os.path.abspath(OURS))
+    return (manifest or os.path.join(build, "tc_repro", "tc_link_manifest.txt"),
+            linked or os.path.join(build, "partial", "dsplibs.o"))
+
+
+def _link_selected_present(manifest, linked):
+    """Are the recovered-order artifacts usable?  No message, no exit."""
+    manifest, linked = _link_selected_paths(manifest, linked)
+    if any(not os.path.isfile(os.path.join(HERE, name))
+           for name in LINK_SELECTED_SCRIPTS):
+        return False
+    return all(os.path.isfile(path) and os.path.getsize(path) > 0
+               for path in (manifest, linked))
+
+
+def _link_selected_audit(manifest, linked):
+    """Audit the supplied link once; the caller decides whether to print it."""
+    manifest, linked = _link_selected_inputs(manifest, linked)
+    #
+    # Reuse linkedcopies.audit: it is the established reader of the supplied
+    # link, the ordered manifest and the conservative policy.  Imported late
+    # because linkedcopies imports this module.
+    #
+    import linkedcopies
+    try:
+        return linkedcopies.audit(BLOB, manifest, linked)
+    except (OSError, ValueError) as error:
+        sys.exit("byteident.py --link-selected: cannot read the recovered-order\n"
+                 "  inputs: %s\n"
+                 "  Run `make partial-link`.  Refusing to report a clean zero."
+                 % error)
+
+
+def _link_selected_inputs(manifest, linked):
+    """Refuse early when the recovered-order machinery is not there."""
+    manifest, linked = _link_selected_paths(manifest, linked)
+    missing = [name for name in LINK_SELECTED_SCRIPTS
+               if not os.path.isfile(os.path.join(HERE, name))]
+    if missing:
+        sys.exit(
+            "byteident.py --link-selected: recovered-order machinery is NOT\n"
+            "  available: missing tools/toolchain/%s.\n"
+            "  Refusing to report a link-selected view rather than a clean\n"
+            "  zero." % ", ".join(missing))
+    for path, what in ((manifest, "recovered-order manifest"),
+                       (linked, "partial-link artifact")):
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            sys.exit(
+                "byteident.py --link-selected: %s is missing or empty:\n"
+                "    %s\n"
+                "  Run `make partial-link` (needs tc-repro, attribution and\n"
+                "  the binutils 2.15 image), or pass --link-manifest/--linked.\n"
+                "  Refusing to report a link-selected view rather than a clean\n"
+                "  zero." % (what, path))
+    return manifest, linked
+
+
+def link_selected_report(manifest, linked, out=None, report=None):
+    """Print the body the recovered-order partial link keeps, beside the worst.
+
+    DIAGNOSTIC ONLY.  This consumes the artifacts the existing
+    `recoverorder.py` + `partiallink.sh` path writes; it does not derive a
+    second link order, and it never touches the census, buckets, ratchet or
+    exit status.  The report goes to stderr so the default census on stdout is
+    byte-for-byte unchanged whether or not the flag is present.
+
+    `report` is the audit when the caller already made it (`--summary`,
+    `--ratchet` and `--link-selected` share one): the same run must never
+    audit twice.
+    """
+    out = out or sys.stderr
+    manifest, linked = _link_selected_inputs(manifest, linked)
+    if report is None:
+        report = _link_selected_audit(manifest, linked)
+    import linkedcopies
+    rows = report["duplicates"]
+    examined = len(rows)
+    records = sum(len(row["copies"]) for row in rows)
+    resolved = [row for row in rows
+                if "linked" in row and
+                len(row["linked_definition_records"]) == 1 and
+                row["linked"]["raw"] != "NODATA"]
+    if examined and not resolved:
+        sys.exit("byteident.py --link-selected: the supplied link resolves NONE\n"
+                 "  of the %d multiply-defined name(s).  That is not a clean\n"
+                 "  result; the artifact and manifest do not agree."
+                 % examined)
+    disagree = [row for row in rows
+                if len({copy["raw"] for copy in row["copies"]}) > 1]
+    order = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(manifest))), "partial", "link-order.json")
+    provenance = ""
+    if os.path.isfile(order):
+        try:
+            meta = json.load(open(order))
+            provenance = ("; %d ordering candidate(s), %d retained by source "
+                          "order" % (meta["anchored"], meta["unanchored"]))
+        except (OSError, ValueError, KeyError):
+            provenance = "; order report unreadable"
+    print("\n  link-selected view -- recovered-order partial link (diagnostic "
+          "only;", file=out)
+    print("  census, buckets and exit status are unchanged)", file=out)
+    print("    order       : %s (%d input(s)%s)"
+          % (manifest, report["summary"]["input_objects"], provenance), file=out)
+    print("    linked      : %s  sha256 %s"
+          % (linked, linkedcopies.digest(linked)), file=out)
+    print("    denominator : %d multiply-defined name(s), %d definition "
+          "record(s);" % (examined, records), file=out)
+    print("                  %d link-resolved, %d unresolved"
+          % (len(resolved), examined - len(resolved)), file=out)
+    print("    disagreements: %d name(s) whose copies get different verdicts"
+          % len(disagree), file=out)
+    if disagree:
+        print("    %-11s %-11s %s" % ("worst-copy", "selected", "symbol"),
+              file=out)
+        for row in disagree:
+            worst = row.get("conservative_grade", "-")
+            selected = (row["linked"]["grade"] if "linked" in row
+                        else "UNRESOLVED")
+            worst_obj = os.path.basename(row.get("conservative_object", ""))
+            detail = ""
+            for copy in row["copies"]:
+                if copy.get("object") == row.get("conservative_object"):
+                    detail = "raw %s, %d byte(s)" % (copy["raw"],
+                                                     copy["delta"])
+            if worst_obj:
+                detail = "%s; %s" % (worst_obj, detail) if detail else worst_obj
+            print("    %-11s %-11s %s%s"
+                  % (worst, selected, row["symbol"],
+                     "  [worst: %s]" % detail if detail else ""),
+                  file=out)
+    matched = sum(bool(row["linked_body_matching_inputs"]) for row in resolved)
+    print("    selected linked bodies matching an input copy: %d/%d"
+          % (matched, len(resolved)), file=out)
+    return report
+
+
+def byte_extent(raw, declared):
+    """A refused body still has a declared symbol extent, not measured bytes."""
+    return declared if raw is None else len(raw)
+
+
+def function_fidelity(symbol, scored, candidate_sizes, read_insns, verdict_label):
+    """Diagnostic run over every defining copy; grading is unchanged."""
+    import fidelity
+    records = []
+    for (diagnostic, _), obj in scored:
+        row = {"fidelity": fidelity.category(verdict_label),
+               "diagnostic": diagnostic, "object": os.path.basename(obj),
+               "defining_copies": len(scored),
+               "reference_bytes": candidate_sizes[None],
+               "candidate_bytes": candidate_sizes[obj],
+               "byte_delta": candidate_sizes[obj] - candidate_sizes[None]}
+        try:
+            if diagnostic == "NODATA":
+                raise ValueError("missing or rejected function body; byte diagnostics use declared extent")
+            reference = read_insns(BLOB, symbol)
+            candidate = reference if diagnostic == "EXACT" else read_insns(obj, symbol)
+            row["instructions"] = fidelity.measure(reference, candidate, _padding)
+        except ValueError as error:
+            row.update(instructions=None, run_unavailable=str(error))
+        records.append(row)
+    return fidelity.conservative(records)
+
+
+def print_summary(now, link_available, displaced):
+    """One diagnostic line per owner-approved phase.  Opt-in, stdout."""
+    print("\nphase summary (diagnostic)")
+    print("  functions right   : EXACT + REGALLOC   %d / %d"
+          % (now["exact"] + now["regalloc"], now["compared"]))
+    print("  legacy protected  : per-TU grade 0 or 1   %d / %d"
+          % (now["grade01"], now["compared"]))
+    if link_available:
+        print("  right place       : link-selected EXACT   %d"
+              % now["selected_exact"])
+    else:
+        print("  right place       : link-selected EXACT : unavailable "
+              "(run make partial-link)")
+    print("  per-TU bytes      : EXACT                 %d" % now["exact"])
+    print("  displaced         : %d reviewed in tools/ci/displaced.json"
+          % len(displaced))
+    print("  end target        : make partial-compare-exact (not yet reached)")
 
 
 def main():
@@ -1241,22 +2233,36 @@ def main():
     ap.add_argument("--list-exact", action="store_true")
     ap.add_argument("--comdat", action="store_true",
                     help="list symbols whose defining objects disagree")
+    ap.add_argument("--link-selected", action="store_true",
+                    help="report the body the recovered-order partial link keeps, "
+                         "beside the worst-copy verdict (diagnostic only; report "
+                         "on stderr, census unchanged)")
+    ap.add_argument("--summary", action="store_true",
+                    help="print one diagnostic line per phase (functions right, "
+                         "right place, end target) on stdout")
+    ap.add_argument("--link-manifest", metavar="PATH",
+                    help="ordered manifest from recoverorder.py (default: "
+                         "<build>/tc_repro/tc_link_manifest.txt)")
+    ap.add_argument("--linked", metavar="PATH",
+                    help="partial-link artifact (default: <build>/partial/dsplibs.o)")
     ap.add_argument("--near", type=int, metavar="N", default=0,
-                    help="list the N symbols closest to closing, by |instruction "
-                         "delta| with alignment padding stripped")
+                    help="list N NONMATCH functions by longest contiguous "
+                         "instruction run / reference, padding stripped")
     ap.add_argument("--why", metavar="SYMBOL",
                     help="print the row alpha_equal rejects SYMBOL on")
     ap.add_argument("--self-test", action="store_true",
                     help="prove alpha_equal and relocation resolution accept and REJECT")
     ap.add_argument("--ratchet-self-test", action="store_true",
-                    help="prove the exact-symbol ratchet rejects a masked loss")
+                    help="prove the three-phase ratchet accepts and REJECTS "
+                         "every rule, purely")
     ap.add_argument("--limit", type=int, default=25)
     ap.add_argument("--ratchet", action="store_true",
                     help="fail if any previously grade-0 EXACT symbol regresses")
     ap.add_argument("--update", action="store_true",
                     help="record the current exact-symbol set as the new floor")
     ap.add_argument("--json-out", metavar="PATH",
-                    help="write the final exact/regalloc counts as JSON")
+                    help="write counts, per-function fidelity, instruction runs "
+                         "and byte diagnostics as JSON (legacy keys retained)")
     a = ap.parse_args()
 
     if a.self_test:
@@ -1264,60 +2270,60 @@ def main():
     if a.ratchet_self_test:
         return ratchet_self_test()
 
-    if a.near:
-        #
-        # SORT BY DELTA, NOT BY SIZE.  A brief that picked targets by BLOB SIZE
-        # sent an agent at symbols whose deltas were -99, +16, -40, +20 and -32
-        # while calling them "the closest to reach"; the real near misses were
-        # plus or minus one to three and none of them was on the list (7865).
-        # Size is how big the function is.  Delta is how far away we are.
-        #
-        blob = sizes(BLOB)
-        ours = {}
-        for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
-            for s in sizes(o):
-                ours.setdefault(s, o)
-        rows = []
-        for k in sorted(x for x in ours if x in blob):
-            ab, ar = body(BLOB, k)
-            bb, br = body(ours[k], k)
-            v, nd = verdict(ab, ar, bb, br)
-            if v in ("EXACT", "UNRESOLVED", "NODATA"):
-                continue
-            try:
-                ia = [r for r in insns(BLOB, k) if not _padding(*r)]
-                ib = [r for r in insns(ours[k], k) if not _padding(*r)]
-            except Exception:
-                continue
-            rows.append((abs(len(ia) - len(ib)), len(ib) - len(ia), v, blob[k], k))
-        rows.sort(key=lambda r: (r[0], -r[3]))
-        print("  %d symbol(s) not yet exact, nearest first by |instruction delta|"
-              "\n  (delta is OURS minus BLOB, padding stripped)\n" % len(rows))
-        print("  %-6s %-9s %8s   %s" % ("delta", "grade", "blob B", "symbol"))
-        for _, d, v, sz, k in rows[:a.near]:
-            print("  %+6d %-9s %8d   %s" % (d, v, sz, k[:70]))
-        return 0
+    # Proof inputs are independent of the optional selected-body report.
+    # Bind before --why too: it calls body() and needs the same callee context
+    # as the census. Explicit missing inputs must not fall back silently.
+    global LINK_RESOLUTION
+    LINK_RESOLUTION = None
+    if a.link_manifest == "" or a.linked == "":
+        ap.error("--link-manifest and --linked require non-empty paths")
+    if a.link_selected or a.link_manifest is not None or a.linked is not None:
+        manifest, linked = _link_selected_inputs(a.link_manifest, a.linked)
+        LINK_RESOLUTION = (linked, manifest)
 
     if a.why:
+        import fidelity
         k = a.why
-        ours = {}
-        for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
-            for s in sizes(o):
-                ours.setdefault(s, o)
-        if k not in ours:
-            sys.exit("byteident.py: %s is not defined by any object in %s"
-                     % (k, OURS))
-        if k not in sizes(BLOB):
+        definitions = [(obj, sizes(obj)) for obj in sorted(glob.glob(os.path.join(OURS, "*.o")))]
+        definitions = [(obj, declared[k]) for obj, declared in definitions if k in declared]
+        blob = sizes(BLOB)
+        if not definitions:
+            sys.exit("byteident.py: %s is not defined by any object in %s" % (k, OURS))
+        if k not in blob:
             sys.exit("byteident.py: the blob does not define %s" % k)
-        ab, ar = body(BLOB, k)
-        bb, br = body(ours[k], k)
-        v, nd = verdict(ab, ar, bb, br)
-        print("  %s\n  grade 0 verdict: %s%s"
-              % (k, v, "" if not nd else "  (%d byte(s) differ)" % nd))
-        why = alpha_why(insns(BLOB, k), insns(ours[k], k))
-        print("  grade 1 verdict: %s" % ("ACCEPT" if why is None else "REJECT"))
-        if why is not None:
-            print("    %s" % why)
+        reference_body, reference_relocs = body(BLOB, k)
+        print("  %s: %d defining copies; every copy shown" % (k, len(definitions)))
+        records = []
+        for obj, declared in definitions:
+            own, own_relocs = body(obj, k)
+            verdict_label, differences = verdict(reference_body, reference_relocs, own, own_relocs)
+            why = None
+            if verdict_label not in ("EXACT", "UNRESOLVED", "NODATA", "RELOC"):
+                why = alpha_why(insns(BLOB, k), insns(obj, k))
+                if why is None:
+                    verdict_label = "REGALLOC"
+            scored = [((verdict_label, differences), obj)]
+            row = function_fidelity(k, scored,
+                    {None: byte_extent(reference_body, blob[k]), obj: byte_extent(own, declared)},
+                    insns, verdict_label)
+            records.append(row)
+            print("  %s: fidelity %s" % (obj, row["fidelity"]))
+            print("    byte diagnostic: reference %d, candidate %d, delta %+d" %
+                  (row["reference_bytes"], row["candidate_bytes"], row["byte_delta"]))
+            if row["instructions"] is None:
+                print("    instruction run unavailable: %s" % row["run_unavailable"])
+            else:
+                run = row["instructions"]
+                print("    longest contiguous instruction run: %d / %d (%.1f%% of reference); candidate %d instructions" %
+                      (run["longest_run"], run["reference_instructions"], run["reference_percent"],
+                       run["candidate_instructions"]))
+            if why is not None:
+                print("    register-renaming rejection: %s" % why)
+        worst = fidelity.conservative(records)
+        run = worst["instructions"]
+        print("  Conservative run across %d copies: %s" %
+              (len(records), "unavailable" if run is None else "%d / %d (%.1f%%)" %
+               (run["longest_run"], run["reference_instructions"], run["reference_percent"])))
         return 0
 
     blob = sizes(BLOB)
@@ -1373,13 +2379,25 @@ def main():
     #
     RANK = {"EXACT": 0, "UNRESOLVED": 1, "REGALLOC": 2, "RELOC": 3,
             "BYTES": 4, "SIZE": 5, "NODATA": 6}
+    import fidelity
+    instruction_cache = {}
+
+    def read_insns(path, symbol):
+        key = (path, symbol)
+        if key not in instruction_cache:
+            instruction_cache[key] = insns(path, symbol)
+        return instruction_cache[key]
+
+    functions = {}
     comdat_split = []
     for k in common:
         ab, ar = body(BLOB, k)
         objs = allobjs.get(k, [ours[k]])
         scored = []
+        candidate_sizes = {None: byte_extent(ab, blob[k])}
         for o in objs:
             bb2, br2 = body(o, k)
+            candidate_sizes[o] = byte_extent(bb2, sizes(o).get(k, 0)) if bb2 is None else len(bb2)
             scored.append((verdict(ab, ar, bb2, br2), o))
         if len({s[0][0] for s in scored}) > 1:
             comdat_split.append((k, sorted({s[0][0] for s in scored})))
@@ -1397,9 +2415,10 @@ def main():
         # promoted two destructors that call a different symbol.
         #
         if v not in ("EXACT", "UNRESOLVED", "NODATA", "RELOC"):
-            if alpha_equal(insns(BLOB, k), insns(ours[k], k)):
+            if alpha_equal(read_insns(BLOB, k), read_insns(ours[k], k)):
                 v, n = "REGALLOC", 0
         buckets[v].append((n, blob[k], k))
+        functions[k] = function_fidelity(k, scored, candidate_sizes, read_insns, v)
 
     n = len(common)
     print("  blob    : %s" % BLOB)
@@ -1424,27 +2443,49 @@ def main():
         print("\n  The blob has ONE copy because the linker picked one, and we\n"
               "  cannot know which.  Scoring the best would be scoring the\n"
               "  luckiest, so the worst is scored (F8146).")
-    print("  grade 0  EXACT      same bytes, same places  : %4d  (%.1f%%)"
-          % (ex, 100.0 * ex / n))
-    print("           UNRESOLVED as EXACT, but a section  : %4d" % un)
-    print("                      relocation cannot be")
-    print("                      compared by name (604)")
-    print("  grade 1  REGALLOC   same instructions and    : %4d" % ra)
-    print("                      operands, renamed per")
-    print("                      live range")
-    print("           ------------------------------------------")
-    print("           grade 0 or 1                        : %4d  (%.1f%%)"
-          % (ex + un + ra, 100.0 * (ex + un + ra) / n))
-    print("  RELOC   -- bytes agree, a target differs : %4d" % len(buckets["RELOC"]))
-    print("  BYTES   -- same size, bytes differ       : %4d" % len(buckets["BYTES"]))
-    print("  SIZE    -- different size                : %4d" % len(buckets["SIZE"]))
-    if buckets["NODATA"]:
-        print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
+    link_report = None
+    if a.link_selected:
+        # ONE AUDIT PER RUN: `--link-selected`, `--summary` and `--ratchet`
+        # all read the same report, so the partial link is never audited twice.
+        link_report = _link_selected_audit(a.link_manifest, a.linked)
+        link_selected_report(a.link_manifest, a.linked, report=link_report)
+    elif (a.summary or a.ratchet or a.update) and _link_selected_present(
+            a.link_manifest, a.linked):
+        link_report = _link_selected_audit(a.link_manifest, a.linked)
+    if (a.update or a.ratchet) and link_report is None:
+        sys.exit(
+            "byteident.py: --update/--ratchet need the link-selected metric "
+            "so the\n  three-phase floor is complete, and the partial-link "
+            "artifacts are absent.\n  Run `make partial-link` (needs tc-repro, "
+            "attribution and the binutils\n  2.15 image), or pass "
+            "--link-manifest/--linked.\n  Refusing to ratchet a metric that "
+            "cannot report its phase-2 denominator.")
+    nonmatch = sum(len(buckets[name]) for name in ("BYTES", "SIZE", "RELOC"))
+    print("  EXACT      same bytes and relocation targets : %4d  (%.1f%%)" % (ex, 100.0 * ex / n))
+    print("  REGALLOC   instruction/operand renaming proof: %4d  (%.1f%%)" % (ra, 100.0 * ra / n))
+    print("  Matched    EXACT + REGALLOC                  : %4d / %d (%.1f%%)" %
+          (ex + ra, n, 100.0 * (ex + ra) / n))
+    print("  NONMATCH   function does not match           : %4d" % nonmatch)
+    print("  UNRESOLVED relocation evidence incomplete    : %4d" % un)
+    print("  NODATA     could not be disassembled         : %4d" % len(buckets["NODATA"]))
+    runs = fidelity.summary(functions)
+    print("  Instruction runs measured: %d / %d functions; %d unavailable" %
+          (runs["measured_functions"], n, runs["unavailable_functions"]))
+    print("  Runs abstract GP register identities and local layout; widths, conditions,")
+    print("  constants and canonical relocation targets remain. Diagnostic, not a proof.")
 
     exact_bytes = sum(blob[k] for _, _, k in buckets["EXACT"])
     compared_bytes = sum(blob[k] for k in common)
     if exact_bytes > compared_bytes:
         raise AssertionError("exact reference bytes exceed compared reference bytes")
+    exact_symbols = sorted(k for _, _, k in buckets["EXACT"])
+    matched_symbols = sorted(k for bucket in ("EXACT", "REGALLOC")
+                             for _, _, k in buckets[bucket])
+    grade01_symbols = sorted(
+        k for bucket in ("EXACT", "UNRESOLVED", "REGALLOC")
+        for _, _, k in buckets[bucket])
+    selected = (None if link_report is None
+                else selected_exact_set(exact_symbols, link_report))
     now = {"exact": ex, "regalloc": ra, "compared": n,
            "reference_functions": len(blob),
            "exact_bytes": exact_bytes, "compared_bytes": compared_bytes,
@@ -1453,7 +2494,25 @@ def main():
            "bytes": len(buckets["BYTES"]),
            "size": len(buckets["SIZE"]),
            "nodata": len(buckets["NODATA"]),
-           RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
+           "nonmatch": nonmatch,
+           "function_fidelity": functions,
+           "instruction_runs": runs,
+           "grade01": len(grade01_symbols),
+           "matched": len(matched_symbols),
+           "selected_exact": None if selected is None else len(selected),
+           RATCHET_EXACT_SYMBOLS: exact_symbols,
+           RATCHET_MATCHED_SYMBOLS: matched_symbols,
+           RATCHET_GRADE01_SYMBOLS: grade01_symbols,
+           RATCHET_SELECTED_EXACT_SYMBOLS: (None if selected is None
+                                            else sorted(selected))}
+    displaced = None
+    if a.summary or a.ratchet:
+        try:
+            displaced = load_displaced()
+        except ValueError as error:
+            sys.exit("byteident.py: %s" % error)
+    if a.summary:
+        print_summary(now, link_report is not None, displaced)
     if a.json_out:
         with open(a.json_out, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
@@ -1462,8 +2521,10 @@ def main():
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
             f.write("\n")
-        print("\nratchet updated: %d exact symbol(s), %d compared, %d regalloc"
-              % (now["exact"], now["compared"], now["regalloc"]))
+        print("\nratchet updated: %d exact symbol(s), %d matched, %d legacy protected, "
+              "%d link-selected exact; %d compared, %d regalloc"
+              % (now["exact"], now["matched"], now["grade01"], now["selected_exact"],
+                 now["compared"], now["regalloc"]))
         return 0
     if a.ratchet:
         try:
@@ -1475,21 +2536,51 @@ def main():
         except ValueError as e:
             sys.exit("byteident.py: invalid ratchet baseline %s: %s"
                      % (RATCHET, e))
-        if lost:
-            print("\nRATCHET FAILED -- a previously grade-0 EXACT symbol regressed"
-                  "\nwhile another gain could have kept the aggregate count level."
-                  "\n`make period` proves BEHAVIOUR, not CODE GENERATION.")
-            print("    exact  was %d, now %d" % (was["exact"], now["exact"]))
-            print("\n  Lost exact symbol(s):")
-            for k in lost:
-                print("    %s" % k)
-            print("\n  If the change was deliberate (e.g. a genuine behavioural"
-                  "\n  fix that necessarily changes codegen), re-bless with"
-                  "\n  --update and say in the commit message which exact symbols"
-                  "\n  changed and why.  If it was a pure rename or comment change,"
-                  "\n  it should not have moved this set at all -- find out what"
-                  "\n  else changed before re-blessing.")
+        # THE SELECTED PIN COMES FROM THE SAME AUDIT the census used, and is
+        # available only because --ratchet refused above without the link
+        # artifacts.  It hashes the input copy linkedcopies proves matches
+        # the linked body, not the worst per-TU twin.
+        manifest_path, _ = _link_selected_paths(a.link_manifest, a.linked)
+        selected_body = _selected_body_digest(
+            link_report, os.path.dirname(os.path.abspath(manifest_path)))
+        failures, allowed = ratchet_displacement(
+            was, now, displaced,
+            lambda symbol: _current_body_digest(ours, symbol),
+            set(k for _, _, k in buckets["REGALLOC"]),
+            selected_digest=selected_body,
+            multiply_defined={row.get("symbol") for row in
+                              link_report.get("duplicates", [])
+                              if isinstance(row, dict)})
+        if failures:
+            print("\nRATCHET FAILED -- a banked symbol left the three-phase "
+                  "floor and the\nevidence does not justify it.  `make period` "
+                  "proves BEHAVIOUR, not CODE\nGENERATION, so it cannot see this.")
+            print("    exact %d -> %d, legacy protected %d -> %d, "
+                  "link-selected exact %d -> %d"
+                  % (was["exact"], now["exact"], was["grade01"],
+                     now["grade01"], was["selected_exact"],
+                     now["selected_exact"]))
+            print("\n  Failure(s):")
+            for failure in failures:
+                print("    %s" % failure)
+            print("\n  A matched or grade-0/1 loss is ALWAYS a failure: the function "
+                  "itself got worse and\n  no entry can excuse it.  An EXACT or "
+                  "link-selected-EXACT loss may only be\n  displaced by a "
+                  "reviewed entry in tools/ci/displaced.json whose body hash\n"
+                  "  still describes the current head body.  A stale entry "
+                  "must be removed;\n  never re-bless a floor to silence a "
+                  "regression.")
             return 1
+        if allowed:
+            print("\n  reviewed displacement(s) -- these losses are evidence-"
+                  "pinned, not silently\n  re-blessed:")
+            for metric, symbol in allowed:
+                print("    %-9s %s" % (metric, symbol))
+        if lost:
+            print("\n  note: %d per-TU EXACT symbol(s) left the bucket; every "
+                  "one is listed above as\n  a reviewed displacement.  A new "
+                  "EXACT gain still counts as progress."
+                  % len(lost))
         if now["regalloc"] < was["regalloc"]:
             print("\n  note: regalloc %d -> %d.  A FALL IS AMBIGUOUS -- a symbol"
                   "\n  leaves that bucket both by GRADUATING to exact and by"
@@ -1497,10 +2588,15 @@ def main():
                   "\n  same period; a fall in regalloc alongside a rise in exact"
                   "\n  is progress, not regression."
                   % (was["regalloc"], now["regalloc"], was["exact"], now["exact"]))
-        gained = bool(gained_symbols) or now["regalloc"] > was["regalloc"]
+        gained = (bool(gained_symbols) or now["regalloc"] > was["regalloc"] or
+                  now["grade01"] > was["grade01"] or
+                  now["selected_exact"] > was["selected_exact"])
         print("\nratchet OK%s" % ("" if not gained else
-              " (exact %d -> %d, regalloc %d -> %d)"
-              % (was["exact"], now["exact"], was["regalloc"], now["regalloc"])))
+              " (exact %d -> %d, legacy protected %d -> %d, link-selected exact "
+              "%d -> %d, regalloc %d -> %d)"
+              % (was["exact"], now["exact"], was["grade01"], now["grade01"],
+                 was["selected_exact"], now["selected_exact"],
+                 was["regalloc"], now["regalloc"])))
 
     if a.list_exact:
         print("\nEXACT:")
@@ -1508,13 +2604,8 @@ def main():
             print("  %6d  %s" % (sz, k))
         return 0
 
-    for name, label in (("RELOC", "differing relocation target(s)"),
-                        ("BYTES", "differing byte(s)")):
-        rows = sorted(buckets[name], key=lambda r: r[0])[:a.limit]
-        if rows:
-            print("\n%s, closest first -- %s:" % (name, label))
-            for d, sz, k in rows:
-                print("  %5d of %5d  %s" % (d, sz, k))
+    fidelity.print_rows(functions, a.near or a.limit)
+
     return 0
 
 

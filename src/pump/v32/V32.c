@@ -99,12 +99,8 @@
  * fills them; what the value MEANS is still not established and +0x24 keeps
  * its neutral name.  Finding F8651.
  *
- * Two of the six have no member to assign: `fpm_sre_cfg` spells the slot
- * `pad34`/`pad36` and `fpm_tone_cfg` spells it inside `r16[3]`.  Renaming
- * either is a change to a header two other datapumps initialise
- * positionally -- `src/pump/v22/v22rxtab.c` is one, and this pass does not own
- * it -- so those two are written through the slot's address with the object's
- * own single 32-bit store, and the finding records the rename as owed.
+ * fpm_tone_cfg still spells its slot inside r16[3]. Its neutral raw
+ * access remains; fpm_sre_cfg now models its slot as the owner pointer.
  */
 
 #include <string.h>
@@ -336,14 +332,14 @@ void
 VTBv32_init(struct vtb *state, short mode, int alloc)
 {
 	struct vtb_path *paths;
-	int i;
+	short i;
 
 	if (alloc)
 		state->paths = sysdep_malloc(
 			16 * 8 * sizeof(struct vtb_path));
 	paths = state->paths;
 
-	for (i = 0; (short)i <= 0x7f; i++) {
+	for (i = 0; i <= 0x7f; i++) {
 		paths[i].surv = 0;
 		paths[i].sym = 0;
 	}
@@ -352,7 +348,8 @@ VTBv32_init(struct vtb *state, short mode, int alloc)
 	state->prev = 0;
 	state->depth = 0x10;
 
-	if (mode == 3) {
+	switch (mode) {
+	case 3:
 		state->nsub = 1;
 		state->imap = VTBv32_IMAP16T;
 		state->qmap = VTBv32_QMAP16T;
@@ -360,7 +357,8 @@ VTBv32_init(struct vtb *state, short mode, int alloc)
 		state->region = VTB_REGION_7200;
 		state->grid = 2;
 		state->mask = 0x7;
-	} else if (mode == 4) {
+		break;
+	case 4:
 		state->nsub = 3;
 		state->imap = VTBv32_IMAP64;
 		state->qmap = VTBv32_QMAP64;
@@ -368,7 +366,8 @@ VTBv32_init(struct vtb *state, short mode, int alloc)
 		state->region = VTB_REGION_12000;
 		state->grid = 6;
 		state->mask = 0x1f;
-	} else if (mode == 2) {
+		break;
+	case 2:
 		state->nsub = 2;
 		state->imap = VTBv32_IMAP32;
 		state->qmap = VTBv32_QMAP32;
@@ -376,7 +375,8 @@ VTBv32_init(struct vtb *state, short mode, int alloc)
 		state->region = VTB_REGION_9600;
 		state->grid = 4;
 		state->mask = 0xf;
-	} else {
+		break;
+	default:
 		state->nsub = 4;
 		state->imap = VTBv32_IMAP128;
 		state->qmap = VTBv32_QMAP128;
@@ -384,12 +384,13 @@ VTBv32_init(struct vtb *state, short mode, int alloc)
 		state->region = VTB_REGION_14400;
 		state->grid = 8;
 		state->mask = 0x3f;
+		break;
 	}
 
 	state->metric[0] = 0;
 	state->shift = (short)state->nsub;
 
-	for (i = 1; (short)i <= 7; i++)
+	for (i = 1; i <= 7; i++)
 		state->metric[i] = 0;
 }
 
@@ -420,7 +421,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	int delay;
 	int shift;
 	int fresh;
-	int i;
+	short i;
 
 	(void)arg2;
 
@@ -588,11 +589,10 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	/* The timing recovery. */
 	srecfg = SREv32_CFG;
 	/*
-	 * fpm_sre_cfg + 0x34, spelled `pad34`/`pad36`; see the head of file.
-	 * `memcpy` and not a cast so that the one 32-bit store the object makes
-	 * survives without a strict-aliasing pun.
+	 * fpm_sre_cfg.owner at period +0x34.
+	 * The same context value is passed to the other DSP configurations.
 	 */
-	memcpy(&srecfg.pad34, &p->r24, sizeof p->r24);
+	srecfg.owner = (void *)(long)p->r24;
 	FPM_SRE_init(SRE(FP(modem)), &srecfg, fresh);
 
 	/*
@@ -1030,8 +1030,9 @@ V32FP_GetDiagnostics(struct v32_modem *modem, int which, struct fpm_fse_point *o
  * every value that reaches the first branch.
  */
 short *
-V32FP_GetCleanedSamples(struct v32_modem *modem, int *n)
+V32FP_GetCleanedSamples(struct v32_modem *arg, int *n)
 {
+	struct v32_modem *modem = arg;
 	unsigned short have;
 
 	have = FP(modem)->clean_n;

@@ -29,9 +29,8 @@
  *   - v34tx1_silence() covers three states (SILENCE, SILENCEINFO,
  *     SILENCERETRAIN) as one function that re-reads `txstate` itself and
  *     branches, because the object does the same.
- *   - v34tx1_jtxmit() covers two states (JTXMIT, J1TXMIT) as one function
- *     with a shared body and a single internal branch that separates the
- *     two tails.
+ *   - JTXMIT and J1TXMIT share a body in V34hshak.c, with an internal
+ *     branch separating their two tails.
  *   - v34tx1_moh_silence() covers four states (81-84) as one function with
  *     one behaviour.
  *

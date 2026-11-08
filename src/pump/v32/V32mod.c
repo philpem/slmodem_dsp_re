@@ -11,6 +11,15 @@
  * definition here also restores its natural position before the buffers. */
 int Control_Flag = 0;
 
+/* Both operands stay byte-sized through the mask operation.  With the
+ * period compiler, inlining this contract preserves the original immediate
+ * byte TEST even for bit 7; the int result is the promoted masked value. */
+static int
+v32_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 static unsigned short tx_in_internal[V32_BIT_BUFFER];
 static unsigned short rx_out_internal[V32_BIT_BUFFER];
 
@@ -85,11 +94,11 @@ v32_data(struct v32_modem *modem, unsigned short *txdata, short *txout, short *r
 				      (short *)HDX(modem)->buffer,
 				      txout, (unsigned short)*nsamples);
 
-	if ((st.flags & V32_STFLAG_DESCRAMBLE) != 0)
+	if ((v32_flag_test(st.flags, V32_STFLAG_DESCRAMBLE)) != 0)
 		DescrambleDataV32(modem, (short *)rxout, *rxcount);
-	if ((st.flags & V32_STFLAG_TXCLOCK) != 0)
+	if ((v32_flag_test(st.flags, V32_STFLAG_TXCLOCK)) != 0)
 		TxClockSyncV32(modem);
-	if ((st.flags & V32_STFLAG_RETRAIN_DET) != 0
+	if ((v32_flag_test(st.flags, V32_STFLAG_RETRAIN_DET)) != 0
 	    && RetrainDetectV32(modem) != 0) {
 		modem->flags &= (unsigned char)~V32_FLAG_DATA;
 		ctl = V32_CTL;
@@ -181,21 +190,20 @@ v32_handshake(struct v32_modem *modem, unsigned short *txdata, short *txout, sho
 	      unsigned short *rxout, short *nsamples, unsigned short *rxcount)
 {
 	struct v32_hdx *hdx;
-	unsigned char flags;
 	short i;
 
 	hdx = modem->hdx;
 
-	flags = modem->flags;
 	if (hdx->mode == V32_MODE_RING_INIT)
-		flags = (unsigned char)(flags & ~(V32_FLAG_04 | V32_FLAG_08));
-	modem->flags = (unsigned char)(flags & ~V32_FLAG_01);
+		modem->flags = (unsigned char)
+			(modem->flags & ~(V32_FLAG_04 | V32_FLAG_08));
+	modem->flags = (unsigned char)(modem->flags & ~V32_FLAG_01);
 
+	i = 0;
 	if (hdx->symbol_len > 0) {
 		unsigned short *buf;
 
 		buf = (unsigned short *)hdx->buffer;
-		i = 0;
 		do {
 			buf[i] = txdata[i];
 			i = (short)(i + 1);
@@ -208,8 +216,7 @@ v32_handshake(struct v32_modem *modem, unsigned short *txdata, short *txout, sho
 	 * RE-READ, and it matters: the receive state may have replaced the
 	 * whole context, exactly as `V32TxHdxModem`'s own loop allows.
 	 */
-	hdx = modem->hdx;
-	V32TxHdxModem(modem, (short *)hdx->buffer, txout,
+	V32TxHdxModem(modem, (short *)modem->hdx->buffer, txout,
 		      nsamples);
 }
 

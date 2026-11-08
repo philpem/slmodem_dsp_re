@@ -85,10 +85,11 @@ CarrierDetectV21(void *modem)
  * ahead of the first test.  Read through the struct each time they would not
  * be, since the store into `mag` may alias them.
  *
- * The absolute value is written out rather than called: C's `abs()` is
- * undefined at INT_MIN and this one is reached with -32768, which the object
- * turns into -32768 by truncating 32768 back to a short.  That corner is
- * driven by the differential test rather than reasoned about.
+ * The absolute value is `__builtin_abs`: the object's `cltd / xor / sub` at
+ * 0x0a5854 is exactly GCC's i386 expansion of it (`-march=i386` has no
+ * `cmov`), where a written-out `v < 0 ? -v : v` compiles to a branch.  `v` is
+ * a short promoted to int, so no INT_MIN case exists; -32768 becomes 32768 and
+ * is truncated back to -32768 by the `(short)` store, as the object does.
  *
  * THE SECOND LOOP HAS NO BODY IN THE OBJECT, and this is not an omission
  * here.  0x0a5868..0x0a5875 counts from zero to the same bound with nothing
@@ -109,7 +110,7 @@ GetSNRV21(void *modem)
 	for (i = 0; i < n; i++) {
 		int v = trace[i];
 
-		mag[i] = (short)(v < 0 ? -v : v);
+		mag[i] = (short)__builtin_abs(v);
 	}
 
 	for (i = 0; i < n; i++)

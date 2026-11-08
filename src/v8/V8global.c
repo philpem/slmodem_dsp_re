@@ -368,7 +368,7 @@ checkSignalStability(struct v8 *v)
 	struct v8_rx *r = &v->rx;
 	int elapsed = (unsigned short)r->refresh_timer + 4;
 	int settled;
-	int delta;
+	short delta;
 
 	if ((short)elapsed > V8_STABLE_PERIOD) {
 		/*
@@ -388,10 +388,8 @@ checkSignalStability(struct v8 *v)
 	 * in the original; nothing reaches it, because the gain is only ever
 	 * this function's reference after having been non-zero.
 	 */
-	if (r->gain_ref == 0)
-		delta = 0;
-	else
-		delta = (short)((((int)r->gain - r->gain_ref) << 14) / r->gain_ref);
+	/* Both native paths divide unconditionally (0x753ba, 0x7540e). */
+	delta = (short)((((int)r->gain - r->gain_ref) << 14) / r->gain_ref);
 
 	if (delta < 0)
 		delta = -(short)delta;
@@ -540,7 +538,8 @@ v8_copycoeff(short *dst, const short *src, short n)
 int
 v8_txinit(struct v8 *v)
 {
-	int i;
+	short i;
+	short *shape = v->tx_shape;
 
 	v->short_014 = 1;
 	v->short_00c = 0;
@@ -548,7 +547,7 @@ v8_txinit(struct v8 *v)
 	v->int_004 = 0;
 
 	for (i = 0; i < V8_TX_SHAPE; i++)
-		v->tx_shape[i] = 0;
+		*shape++ = 0;
 
 	v->tx_ring_base = v->tx_ring;
 	for (i = 0; i < V8_TX_RING; i++)
@@ -575,39 +574,39 @@ v8_txinit(struct v8 *v)
 int
 v8_rxinit(struct v8 *v)
 {
-	int i;
+	struct v8_rx *rx = &v->rx;
+	short i;
 
 	for (i = 0; i < V8_RX_SCRATCH; i++)
 		v->rx_scratch[i] = 0;
 	v->rx_scratch[V8_RX_SCRATCH_SEED_INDEX] = V8_RX_SCRATCH_SEED;
 
-	v->rx.gain_ref = 0x200;
-	v->rx.hist_idx = 0;
-	v->rx.gain = 0x200;
-	v->rx.adapt_rate = 0x3333;
+	rx->gain_ref = 0x200;
+	rx->hist_idx = 0;
+	rx->gain = 0x200;
+	rx->adapt_rate = 0x3333;
 
 	for (i = 0; i < V8_RX_HIST; i++)
-		v->rx.hist[i] = 0;
+		rx->hist[i] = 0;
 
-	v->rx.accum = 0;
-	v->rx.refresh_timer = 0;
-	v->rx.stable_timer = 0;
-	v->rx.stable = 0;
-	v->rx.fc2 = 0x50;
-	v->rx.fc8 = 0;
-	v->rx.fc6 = 0;
-	v->rx.fda = 0;
-	v->rx.fd8 = 0;
+	rx->accum = 0;
+	rx->refresh_timer = 0;
+	rx->stable_timer = 0;
+	rx->stable = 0;
+	rx->fc2 = 0x50;
+	rx->fc8 = 0;
+	rx->fc6 = 0;
+	rx->fda = 0;
+	rx->fd8 = 0;
 
-	v->rx.buf = v->rx_stage;
-	v->rx.level = 0;
+	rx->buf = v->rx_stage;
+	rx->level = 0;
 	/*
 	 * One 32-bit store in the original, covering both halves.  They are
 	 * two shorts here because v8_agcadapt reads the upper one on its own.
 	 */
-	v->rx.energy_lo = 0;
-	v->rx.energy_hi = 0;
-	v->rx.clip_count = 0;
+	*(int *)&rx->energy_lo = 0;
+	rx->clip_count = 0;
 
 	return 0;
 }

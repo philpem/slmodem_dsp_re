@@ -36,6 +36,33 @@
 struct fax_class1;
 struct rc;
 
+/*
+ * One of the object's two sample rings.  The tail of `struct fax_ctx` is TWO
+ * of these back to back, and their size is forced rather than inferred:
+ * `&ctx->out_ring` is the `lea 0x229c(%edx),%ebp` at 0x1a43 and
+ * `&ctx->in_ring` the `add $0x25ac,%eax` at 0x1a3a, so the out ring's end IS
+ * the in ring's start (+0x25ac), and the in ring's end IS the object's own
+ * `sysdep_malloc` size, 0x28bc (0x25ac + 0x310).  Each ring addresses its
+ * members through that one hoisted base -- 0x1a9c/0x1b31/0x1b38/0x1be7 on the
+ * out side and 0x1ab3/0x1ad9/0x1af8/0x1b16/0x1b2e/0x1bd2 on the in side --
+ * never through `ctx` with a displacement, which is what the members being a
+ * sub-structure means at the instruction level (F12040).
+ *
+ * The layout is the count/wr/rd/blk/data shape `struct vce_ring` (`vce.h`,
+ * 0x310 bytes) has, and FAX_process reaches only some members per side: out
+ * uses count (0x1be7), rd (0x1a9c) and blk (0x1b31); in uses count (0x1af8),
+ * wr (0x1afa) and blk (0x1b2e).  The count/wr/rd/blk members are `int` here
+ * because the fax object's arithmetic is already unsigned through its own
+ * locals (F12012); the field types are not separately witnessed.
+ */
+struct fax_ring {
+	int		count;	/* +0x00 samples held in the ring        */
+	int		wr;	/* +0x04 fill cursor, samples            */
+	int		rd;	/* +0x08 drain cursor, samples           */
+	int		blk;	/* +0x0c 0 or `host_frame_samples` half  */
+	short		data[0x180];	/* +0x10 ring storage            */
+};
+
 struct fax_ctx {
 	void *modem;			/* +0x000 handed to modem_recv_from_tty/
 					 * modem_send_to_tty as their own first
@@ -85,7 +112,7 @@ struct fax_ctx {
 					 * written straight into out_ring),
 					 * then RcFixed_Resample's `in` for
 					 * rc_b (F10106)                       */
-	int host_frame_samples;	/* +0x2298 the sample count FAX_process
+	unsigned int host_frame_samples; /* +0x2298 the sample count FAX_process
 					 * batches per host-rate chunk, and
 					 * RcFixed_Resample's in_count/out_count
 					 * for both calls.  Rank-1 evidence:
@@ -95,64 +122,12 @@ struct fax_ctx {
 					 * with this field and the literal
 					 * 0xa0 (CLASS1_BLOCK_SAMPLES,
 					 * class1.h) (F10106)                  */
-	int out_produced;		/* +0x229c running total incremented by
-					 * host_frame_samples once per flush
-					 * cycle; nothing reads it back (usage
-					 * inference, F10106)                  */
-	unsigned char pad_22a0[4];	/* +0x22a0 unmodelled                 */
-	int out_read_cursor;		/* +0x22a4 extraction cursor into
-					 * out_ring (samples, wraps mod
-					 * 2*host_frame_samples), advanced
-					 * every inner iteration regardless of
-					 * whether it flushed (usage inference,
-					 * F10106)                             */
-	int out_write_half;		/* +0x22a8 a 0/host_frame_samples
-					 * ping-pong selector toggled once per
-					 * flush cycle, picking which half of
-					 * out_ring the next flush's tx-
-					 * direction data lands in (usage
-					 * inference, F10106)                  */
-	short out_ring[2 * 0xa0];	/* +0x22ac the double-buffered ring
-					 * fax_class1_progress (identity path)
-					 * or the rc_b RcFixed_Resample call
-					 * (resampled path) writes host-rate tx
-					 * samples into, and FAX_process's own
-					 * output is drained from.  2 *
-					 * host_frame_samples shorts, matching
-					 * in_ring's size; ends +0x252c, 0x80
-					 * bytes short of in_pending (F10106)  */
-	unsigned char pad_252c[0x25ac - 0x252c]; /* +0x252c unmodelled --
-					 * `in_pending` is pinned to +0x25ac by
-					 * the object's own `add $0x25ac,%eax`,
-					 * leaving this gap unclaimed         */
-	int in_pending;			/* +0x25ac samples buffered in in_ring
-					 * awaiting a flush; incremented per
-					 * inner-loop copy-in, decremented by
-					 * host_frame_samples once per flush
-					 * (usage inference, F10106)           */
-	int in_write_cursor;		/* +0x25b0 fill cursor into in_ring
-					 * (samples, wraps mod
-					 * 2*host_frame_samples) (usage
-					 * inference, F10106)                  */
-	unsigned char pad_25b4[4];	/* +0x25b4 unmodelled                 */
-	int in_read_half;		/* +0x25b8 out_write_half's
-					 * counterpart for the input side: a
-					 * 0/host_frame_samples ping-pong
-					 * toggle picking which half of
-					 * in_ring the next flush reads its
-					 * pump-rate input from (usage
-					 * inference, F10106)                  */
-	short in_ring[2 * 0xa0];	/* +0x25bc the double-buffered ring
-					 * FAX_process's own input is copied
-					 * into, and the rc_a RcFixed_Resample
-					 * call (or the identity path directly)
-					 * reads from.  Sized by the exact
-					 * 0x280 gap to the struct's own
-					 * 0x28bc allocation size, with 0x80
-					 * bytes left over (pad_283c) (F10106) */
-	unsigned char pad_283c[0x28bc - 0x283c]; /* +0x283c to the object's
-					 * own 0x28bc allocation size, unread
-					 * by anything written so far        */
+	struct fax_ring out_ring;	/* +0x229c the out side: count is
+					 * out_produced, rd out_read_cursor,
+					 * blk out_write_half; wr unused (F12040) */
+	struct fax_ring in_ring;	/* +0x25ac the in side: count is
+					 * in_pending, wr in_write_cursor, blk
+					 * in_read_half; rd unused (F12040) */
 };
 
 /*
@@ -168,7 +143,16 @@ struct fax_ctx {
  * of the object, not resolved further here.
  */
 
-#define FAX_MODELLED_BYTES	0x283c
+/*
+ * Compatibility aliases: `test/unit/t_faxcreate.c` was written against the
+ * pre-F12040 flat names for the two out-ring members.  A macro is a
+ * compile-time substitution, so neither the object's code generation nor the
+ * reference function's can move because of it; the real model is the ring.
+ */
+#define out_produced	out_ring.count
+#define out_write_half	out_ring.blk
+
+#define FAX_MODELLED_BYTES	0x28bc
 
 /**
  * @brief Create a FAX session: a Class 1 state machine plus, where the

@@ -43,7 +43,9 @@ ModulusDecoder::progress(unsigned char *bytes, unsigned int *in)
 {
 	long long acc;
 	unsigned int i;
-	acc = (long long)in[5] * constellationSize4 + in[4];
+	acc = in[5];
+	acc *= constellationSize4;
+	acc += in[4];
 	acc = acc * constellationSize3 + in[3];
 	acc = acc * constellationSize2 + in[2];
 	acc = acc * constellationSize1 + in[1];

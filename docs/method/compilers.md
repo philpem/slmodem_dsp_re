@@ -407,8 +407,68 @@ applies.
 | `make portability` | modern GCC, 64-bit, interop and coverage/debug-site gate |
 
 The modern build stays as an explicit opt-in. It compiles in seconds against
-minutes, it is the portability check, and `make check64` still proves the tree
-is 64-bit clean. It is not the default gate and not the thing that decides.
+minutes, it is the portability check, and `make check64` verifies native
+compilation. It is not the default gate and not the thing that decides.
+
+### Native compilation and runtime portability
+
+`make check64` uses `-fsyntax-only`. It cannot establish pointer round trips,
+correct native member selection, allocation extents or runtime behaviour.
+Casting a pointer through `long` and then `int` still truncates it on LP64;
+casting the integer back through `long` only hides the cast-size warning.
+
+Fax control requests and wrapped modem handles use pointer members, including
+the configuration pointers carried into `FAXVMI_create` and the transmit
+configuration's pulse-shaper `aux` pointer. Their period offsets and sizes
+remain asserted; native allocations use the size of the recovered owner.
+The Class 1 progress callback also carries the host input/output buffers and
+output-count address as pointers throughout dispatch. An integer parameter
+would truncate those addresses before the data and HDLC handlers use them.
+Run `make safety-fax-pointer64 safety-class1-pointer64` for the bounded native
+component checks and their deliberate truncation controls. The modem
+endpoints and the progress fixture's state callback are instrumented; these
+checks do not establish a working 64-bit fax connection.
+
+The request-boundary differential fixture `t_faxctlrequests` observes valid
+creation and reinitialisation histories. It compares the initialized request
+prefix before the real control consumer sees it. This matters when a consumer
+ignores a field: lifecycle output comparisons alone missed V.17 and V.29 TX
+rate stores at +2 where the original uses +0. V.27 TX uses +2. Only V.17 TX
+request construction is reachable through the valid short-training rate-code
+histories; the V.29 correction rests on the original store address.
+
+The V.90 parameter consumers now use typed members instead of the period
+`V90PW`/`V90PF`/`V90PB` overlays ([issue #306](https://github.com/philpem/slmodem_dsp_re/issues/306)).
+Representation copies use `memcpy` on the named members. The fax RX
+constructors allocate their nine recovered owners with `sizeof`, and the
+finishers use typed owner chains ([issue #307](https://github.com/philpem/slmodem_dsp_re/issues/307)).
+The shared FPM SRE configuration now models its context pointer as a pointer,
+rather than copying it into two 16-bit slots. Caller ID also allocates its
+complete native owner.
+
+Only the 32-bit layouts must match the original object. Native pointer size,
+alignment, member offsets and structure sizes may grow; that growth is not a
+defect. Storing a native pointer in a 32-bit integer, allocating only the
+period owner's size, or retaining a period byte offset after its target member
+moves can be defects. Period layout assertions remain conditional on pointer
+size; native tests use the recovered members and owner sizes.
+
+Run `make native-layout-checks` for the maintained native component checks,
+also included in `make portability`. The current set reports 207 checks:
+110 V.90 parameter checks, 38 checks over seven real fax RX
+creation/reinitialisation/deletion histories, 12 Caller ID owner checks and
+the 47 instrumented pointer checks above. ASan/UBSan covers these fixtures.
+Old-offset, undersized-allocation and deliberately truncated-pointer controls
+establish that the checks detect those failures. These are bounded component
+checks, not evidence of a complete native modem connection.
+
+The wider audit parsed all 299 production C/C++ translation units without
+errors and inventoried pointer/integer casts, allocations and raw offsets.
+Its post-fix offset census contains 494 sites across 525 source/header files;
+that is an inventory, not 494 defects or a complete manual review. In
+particular, remaining V.34 literal-address consumers need owner-by-owner
+review. A changed native offset alone is insufficient evidence: the access
+must still select the intended member with the correct width.
 
 ## The shims are gone
 

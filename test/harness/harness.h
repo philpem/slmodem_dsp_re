@@ -181,7 +181,7 @@ struct alloc_log {
 	int allocs;	/* successful sysdep_malloc calls          */
 	int frees;	/* sysdep_free calls that released memory  */
 	int live;	/* outstanding allocations                 */
-	unsigned bytes;	/* outstanding bytes                       */
+	unsigned bytes;	/* cumulative bytes allocated              */
 	int bad_free;	/* frees of unknown pointers               */
 	int free_null;	/* sysdep_free(NULL)                       */
 	int overflow;	/* live set full; counts are unreliable    */

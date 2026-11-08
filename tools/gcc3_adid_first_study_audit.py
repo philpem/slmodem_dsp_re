@@ -81,9 +81,6 @@ def main():
     assert hits(proposed) == [70]
     source = (d.ROOT / 'src/pump/v90/V90AutoDigitalImpDetector.cpp').read_text()
     _, _, fn = d.function(source, 'V90AutoDigitalImpDetector::porcessFirstStudy')
-    locators = json.loads((d.ROOT / 'test/mutations/v90adid.json').read_text())
-    for index in (166, 167, 168, 177, 178, 187):
-        assert source.count(locators[index]['find']) == 1 and locators[index]['find'] in fn
     production = d.ROOT / 'build/tc_out/src_pump_v90_V90AutoDigitalImpDetector.cpp.o'
     assert production.read_bytes() == candidate.read_bytes()
     reports['denominator'] = {'source_cells': total, 'common_body_verdicts': verdicts,

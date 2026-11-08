@@ -2,12 +2,12 @@
 
 Every number cites `docs/findings.md` in this tree.
 
-## Current mutation gate policy
+> **Historical record:** this page documents failures in a mutation apparatus
+> that has since been removed. None of the commands, gates or maintenance
+> procedures below apply to the current tree. The examples remain as lessons
+> about making active checks report what they examined.
 
-[Mutation testing is retired](mutation-policy.md). `refs` validates citations;
-mutation suites, anchors, snapshots and their CI self-tests are outside routine
-gates. The examples below are historical detector lessons, not maintenance or
-execution requirements.
+See the [retirement policy](mutation-policy.md).
 
 ## The pattern
 

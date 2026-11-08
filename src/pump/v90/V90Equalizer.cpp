@@ -194,12 +194,12 @@ V90EQU_OFF(linearEquMmxConversionFactor,	0x0c4, lescale);
 V90EQU_OFF(linearEquMmxOutputConversionFactor,	0x0c8, leoutscale);
 V90EQU_OFF(linearEquMmxBeta,		0x0cc, lebeta);
 V90EQU_OFF(linearEquMmxShift,		0x0d0, leshift);
-V90EQU_OFF(linearEquMmxCoefs,		0x0d4, lemmxcoefs);
-V90EQU_OFF(array_d8,			0x0d8, arrayd8);
-V90EQU_OFF(linearEquMmxCoefsAligned,	0x0dc, lemmxalign);
-V90EQU_OFF(array_d8Aligned,		0x0e0, arrayd8align);
-V90EQU_OFF(linearEquMmxCoefsSkew,	0x0e4, lemmxskew);
-V90EQU_OFF(array_d8Skew,		0x0e8, arrayd8skew);
+V90EQU_OFF(linearEquMmxCoefsHigh,		0x0d4, lemmxcoefs);
+V90EQU_OFF(linearEquMmxCoefsLow,			0x0d8, arrayd8);
+V90EQU_OFF(linearEquMmxCoefsHighAligned,	0x0dc, lemmxalign);
+V90EQU_OFF(linearEquMmxCoefsLowAligned,		0x0e0, arrayd8align);
+V90EQU_OFF(linearEquMmxCoefsHighSkew,	0x0e4, lemmxskew);
+V90EQU_OFF(linearEquMmxCoefsLowSkew,		0x0e8, arrayd8skew);
 V90EQU_OFF(array_ec,			0x0ec, arrayec);
 V90EQU_OFF(array_ecAligned,		0x0f0, arrayecalign);
 V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
@@ -462,6 +462,9 @@ summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
 			mx = a;
 			*maxOut = mx;
 		}
+		/* Native 0x37df1/0x38111 reloads after the maximum store;
+		   phase 4 independently repeats this at 0x36cf1/0x37011. */
+		a = fabsf(coefs[i]);
 		if (a < mn) {
 			mn = a;
 			*minOut = mn;
@@ -609,8 +612,8 @@ V90Equalizer::~V90Equalizer()
 			sysdep_free(block_b8);
 		if (block_b4 != 0)
 			sysdep_free(block_b4);
-		delete[] linearEquMmxCoefs;
-		delete[] array_d8;
+		delete[] linearEquMmxCoefsHigh;
+		delete[] linearEquMmxCoefsLow;
 		delete[] array_ec;
 		delete[] dfeMmxCoefs;
 		delete[] array_118;
@@ -826,8 +829,8 @@ V90Equalizer::zeroLinearEquCoefs()
 
 	if (mmxMode != 0) {
 		for (i = 0; i < linearEquLength + 8; i++) {
-			linearEquMmxCoefs[i] = 0;
-			array_d8[i] = 0;
+			linearEquMmxCoefsHigh[i] = 0;
+			linearEquMmxCoefsLow[i] = 0;
 		}
 	}
 }
@@ -907,13 +910,14 @@ V90Equalizer::loadCoefsFromFile()
 void
 V90Equalizer::linearEquFadeEdges()
 {
+	short *linearHi = linearEquMmxCoefsHighAligned;
+	short *linearLo = linearEquMmxCoefsLowAligned;
 	unsigned int i;
 
 	if (mmxMode != 0) {
 		for (i = 0; i < linearEquLength; i++)
 			linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
-			    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
-						  array_d8Aligned, i);
+			    * (float)mmx_coef_get(linearHi, linearLo, i);
 
 		for (i = 0; i < dfeLength; i++)
 			dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
@@ -933,8 +937,8 @@ V90Equalizer::linearEquFadeEdges()
 			int v = (int)(linearEquCoefs[i]
 				      * linearEquMmxConversionFactor);
 
-			array_d8Aligned[i] = (short)v;
-			linearEquMmxCoefsAligned[i] = (short)(v >> 16);
+			linearLo[i] = (short)v;
+			linearHi[i] = (short)(v >> 16);
 		}
 	}
 }
@@ -1174,8 +1178,8 @@ V90Equalizer::convertEqualizerToMmx()
 	for (i = 0; i < linearEquLength; i++) {
 		int v = (int)(linearEquCoefs[i] * conv);
 
-		array_d8Aligned[i] = (short)v;
-		linearEquMmxCoefsAligned[i] = (short)(v >> 16);
+		linearEquMmxCoefsLowAligned[i] = (short)v;
+		linearEquMmxCoefsHighAligned[i] = (short)(v >> 16);
 	}
 
 	/*
@@ -1193,7 +1197,7 @@ V90Equalizer::convertEqualizerToMmx()
 	fabsSum = 0.0f;
 
 	for (i = 0; i < linearEquLength; i++) {
-		int hi = linearEquMmxCoefsAligned[i];
+		int hi = linearEquMmxCoefsHighAligned[i];
 		int a = __builtin_abs(hi);
 
 		sumHi += hi;
@@ -1479,8 +1483,8 @@ V90Equalizer::restoreEqualizerToFloat()
 
 	for (i = 0; i < linearEquLength; i++)
 		linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
-		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
-					  array_d8Aligned, i);
+		    * (float)mmx_coef_get(linearEquMmxCoefsHighAligned,
+					  linearEquMmxCoefsLowAligned, i);
 
 	for (i = 0; i < linearEquHistoryLength; i++)
 		array_18[i] = (float)array_ecAligned[i];
@@ -1702,6 +1706,17 @@ V90Equalizer::enterChannelVerification()
  *   - `fdot` carries TWO accumulators and is unrolled by four.  GCC 3.4.2 at
  *     -O3 neither unrolls a loop nor reassociates a float sum, so both are in
  *     the source; collapsing them changes the arithmetic.
+ *   - EVERY `getDecision` RESULT IS NARROWED AT THE CALL SITE.  The object
+ *     emits `cwtl` after each of the five calls in `process` (0x39b45,
+ *     0x39bab, 0x39d2c, 0x39ff0, 0x3a09f) -- a widening only an `int`
+ *     caller handed a 16-bit value performs.  `getDecision` itself returns
+ *     `int` (its own two arms are what widen), so the narrowing is the
+ *     caller's and is spelled as the cast it is; `demapper->hardDecision`
+ *     already carries one in its declared return type.
+ *   - the linear-equ update is unrolled four taps per pass, like `fdot`,
+ *     and forms `-linearEquBeta * lerr` ONCE before the loop: the object's
+ *     four-store body at 0x39970 and scalar tail at 0x399b0 are source-
+ *     level, and the multiplier is one x87 register loaded at 0x39951.
  *   - the high-error test is a `long double`, and the TYPE is what selects
  *     the object's `fld %st(0); fabs; flds; fcomp %st(1); jae`.  Every
  *     `float` spelling emits `fcoms mem; jbe` whatever the operand order and
@@ -1885,7 +1900,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			dfeSum = mmxDot(dfeMmxCoefsAligned, array_12cAligned,
 					(int)dfeLength);
 			dfeSum /= dfeMmxOutputConversionFactor;
-			leSum = mmxDot(linearEquMmxCoefsAligned, &ec[k],
+			leSum = mmxDot(linearEquMmxCoefsHighAligned, &ec[k],
 				       (int)linearEquLength);
 			leSum /= linearEquMmxOutputConversionFactor;
 			/* `sub` then `cwtl`: an int difference truncated to
@@ -1927,7 +1942,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_CHANNEL_VERIFY: {
 			int st;
 
-			decision = phase3Demod->getDecision(soft);
+			decision = (short)phase3Demod->getDecision(soft);
 			st = (int)phase3Demod->eventCode;
 			if (st) {
 				stateCount = st;
@@ -1942,7 +1957,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_FPE: {
 			int st;
 
-			decision = phase4Demod->getDecision((short)softInt);
+			decision = (short)phase4Demod->getDecision((short)softInt);
 			st = phase4Demod->int_0028;
 			if (st) {
 				stateCount = st;
@@ -1978,7 +1993,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_RRN: {
 			int st;
 
-			decision = phase4Demod->getDecision((short)softInt);
+			decision = (short)phase4Demod->getDecision((short)softInt);
 			st = phase4Demod->int_0028;
 			if (st) {
 				stateCount = st;
@@ -2134,7 +2149,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			else if (soft < -32767.0f)
 				soft = -32767.0f;
 
-			decision = phase4Demod->getDecision(
+			decision = (short)phase4Demod->getDecision(
 			    (short)(phase4Demod->state > 1 ? soft : y));
 			st = phase4Demod->int_0028;
 			if (st) {
@@ -2237,7 +2252,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		case V90EQU_STATE_PHASE3: {
 			int st;
 
-			decision = phase3Demod->getDecision(soft);
+			decision = (short)phase3Demod->getDecision(soft);
 			st = (int)phase3Demod->eventCode;
 			if (st) {
 				stateCount = st;
@@ -2274,8 +2289,8 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 								 * not the
 								 * aligned
 								 * views */
-								linearEquMmxCoefs[i] = 0;
-								array_d8[i] = 0;
+								linearEquMmxCoefsHigh[i] = 0;
+								linearEquMmxCoefsLow[i] = 0;
 							}
 						resampler->setBllState(V90_BLL_INITIAL, 1);
 					}
@@ -2357,6 +2372,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			}
 
 			/* <TAIL-P3>, 0x3a1d0. */
+			unsigned int phase3Samples = phase3Demod->samplesInState;
 			if (phase3Demod->state == 0 && phase3Demod->byte_424) {
 				if (mmxMode) {
 					resampler->SdHalfBaudDft((float)
@@ -2372,20 +2388,20 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			}
 			if (phase3Demod->state == 3
 			    && params->LINEAR_EQU_TRN1D_FREEZE_DURATION
-			       == phase3Demod->samplesInState
+			       == phase3Samples
 			    && !quickConnect)
 				setLinearEquBeta(params->LINEAR_EQU_TRN1D_BETA);
 			if (phase3Demod->state == 3
 			    && params->DFE_TRN1D_FREEZE_DURATION
-			       == phase3Demod->samplesInState
+			       == phase3Samples
 			    && !quickConnect)
 				setDfeBeta(params->DFE_TRN1D_BETA);
 			if (quickConnect && phase3Demod->state == 4) {
 				if (params->LINEAR_EQU_QC_TRN1D_FREEZE_DURATION
-				    == phase3Demod->samplesInState)
+				    == phase3Samples)
 					setLinearEquBeta(params->LINEAR_EQU_DATA_BETA);
 				if (params->DFE_QC_TRN1D_FREEZE_DURATION
-				    == phase3Demod->samplesInState)
+				    == phase3Samples)
 					setDfeBeta(params->DFE_DATA_BETA);
 			}
 			if (phase3Demod->state == 5 || phase3Demod->state == 10
@@ -2400,7 +2416,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				updateCoefs = (int)phase3Demod->word_408;
 			else if (phase3Demod->state == 4
 				 && params->NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3
-				    == phase3Demod->samplesInState)
+				    == phase3Samples)
 				meanErrorRecordEnable = 1;
 			if (phase3Demod->state == 10
 			    || phase3Demod->state == 13)
@@ -2459,8 +2475,8 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				 * errors, one slot apart, that the float arm
 				 * uses.
 				 */
-				hi = linearEquMmxCoefsAligned;
-				lo = array_d8Aligned;
+				hi = linearEquMmxCoefsHighAligned;
+				lo = linearEquMmxCoefsLowAligned;
 				x = &array_ecAligned[historyIndexSaved];
 				beta = -linearEquMmxBeta * diff;
 				for (i = 0; i < (int)linearEquLength; i++) {
@@ -2559,7 +2575,6 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * of counts there.  Finding F6203.
 			 */
 			err = soft - fdec;
-			lerr = (long double)y - (long double)fdec;
 			/*
 			 * The magnitude in `long double`, computed once,
 			 * tested and then printed -- and the TYPE is what
@@ -2590,6 +2605,15 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				}
 			}
 
+			/*
+			 * `fsubrs 0xb0(%esp)` at 0x396bb, after the print
+			 * and not before it: the object computes this
+			 * difference once the high-error block has closed,
+			 * so it does not have to survive the `edprintf`
+			 * call and never reaches a stack slot.
+			 */
+			lerr = (long double)y - (long double)fdec;
+
 			if (updateCoefs) {
 				/*
 				 * 0x396e0 multiplies by %st(2), which the
@@ -2601,10 +2625,38 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				for (i = 0; i < dfeLength; i++)
 					dfeCoefs[i] += (dfeBeta * err)
 					    * array_44[i];
-				for (i = 0; i < linearEquLength; i++)
-					linearEquCoefs[i] +=
-					    (-linearEquBeta * lerr)
-					    * array_18[historyIndex + i];
+				float *lc = linearEquCoefs;
+				const float *xh = &array_18[historyIndex];
+				unsigned int m = linearEquLength;
+				/*
+				 * The object forms `-linearEquBeta * lerr` ONCE,
+				 * before the loop (`flds 0x10; fchs; fmul
+				 * %st(1)` at 0x39951), and every tap multiplies
+				 * by that register.  Spelled inline at each tap
+				 * GCC reloads and redoes it four times.
+				 */
+				long double k = -linearEquBeta * lerr;
+				/*
+				 * FOUR TAPS PER PASS, the same source-level
+				 * unroll `fdot` carries: the object emits
+				 * `cmp $0x3,%ebx; ja` around a four-store
+				 * body at 0x39970 and a scalar tail at
+				 * 0x399b0, and our single `for` loop is
+				 * nothing like it.  Lever 26.
+				 */
+				while (m > 3) {
+					lc[0] += xh[0] * k;
+					lc[1] += xh[1] * k;
+					lc[2] += xh[2] * k;
+					lc[3] += xh[3] * k;
+					xh += 4;
+					lc += 4;
+					m -= 4;
+				}
+				while (m != 0) {
+					*lc++ += *xh++ * k;
+					m--;
+				}
 			}
 
 			/* 0x39830, and the update path rejoins at 0x39840. */
@@ -2665,7 +2717,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		blockErrorEnergyRms = (float)rms;
 		meanErrorEnergyCurrent = errorEnergyMeanK
 		    * meanErrorEnergyCurrent
-		    + (1.0f - errorEnergyMeanK) * rms;
+		    + (1.0 - errorEnergyMeanK) * rms;
 		connEval->updateAvePdsnr(meanErrorEnergyCurrent, blockSampleCount);
 		blockSampleCount = 0;
 		blockErrorEnergySum = 0;
@@ -2829,8 +2881,8 @@ V90Equalizer::reset(unsigned int cursor)
 	 */
 	if (mmxArraysPresent) {
 		for (i = 0; i < linearEquLength + 8; i++) {
-			linearEquMmxCoefs[i] = 0;
-			array_d8[i] = 0;
+			linearEquMmxCoefsHigh[i] = 0;
+			linearEquMmxCoefsLow[i] = 0;
 		}
 
 		for (i = 0; i < linearEquHistoryLength + 8; i++)
@@ -2957,9 +3009,9 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		block_b8 = (short *)sysdep_malloc(0x200);
 		block_b4 = (short *)sysdep_malloc(0x400);
 
-		linearEquMmxCoefs = (short *)sysdep_malloc(
+		linearEquMmxCoefsHigh = (short *)sysdep_malloc(
 		    (linearEquLength + 8) * sizeof(short));
-		array_d8 = (short *)sysdep_malloc(
+		linearEquMmxCoefsLow = (short *)sysdep_malloc(
 		    (linearEquLength + 8) * sizeof(short));
 		array_ec = (short *)sysdep_malloc(
 		    (linearEquHistoryLength + 8) * sizeof(short));
@@ -2970,12 +3022,12 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		array_12c = (short *)sysdep_malloc(
 		    (dfeLength + 8) * sizeof(short));
 
-		linearEquMmxCoefsSkew = mmx_skew(linearEquMmxCoefs);
-		linearEquMmxCoefsAligned = linearEquMmxCoefs +
-		    linearEquMmxCoefsSkew;
+		linearEquMmxCoefsHighSkew = mmx_skew(linearEquMmxCoefsHigh);
+		linearEquMmxCoefsHighAligned = linearEquMmxCoefsHigh +
+		    linearEquMmxCoefsHighSkew;
 
-		array_d8Skew = mmx_skew(array_d8);
-		array_d8Aligned = array_d8 + array_d8Skew;
+		linearEquMmxCoefsLowSkew = mmx_skew(linearEquMmxCoefsLow);
+		linearEquMmxCoefsLowAligned = linearEquMmxCoefsLow + linearEquMmxCoefsLowSkew;
 
 		array_ecSkew = mmx_skew(array_ec);
 		array_ecAligned = array_ec + array_ecSkew;

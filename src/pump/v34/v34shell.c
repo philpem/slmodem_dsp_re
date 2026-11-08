@@ -807,11 +807,12 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	int st = (unsigned short)(s->state_idx - 1) & 0x1f;
 	int branch = s->state[st].seed;
 	int code;
-	int a, b, c, d;
+	/* Native rounded coordinates are word stores, signed before each nudge. */
+	short a, b, c, d;
 	short r0, r1, r2, r3;
 	int k1, k2;
 	int packed, g;
-	short prev;
+	unsigned short prev;
 	int n;
 
 	/*
@@ -870,23 +871,23 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	/* The quadrant pair, and the running quadrant folded back. */
 	prev = s->prev_k;
 	quad[0] = (short)(((k2 - k1) & 2) >> 1);
-	quad[1] = (short)((k1 - (unsigned short)prev) & 3);
+	quad[1] = (short)((k1 - prev) & 3);
 	s->prev_k = (short)k1;
 
 	/* First grid lookup, from the first half's residues. */
 	packed = (unsigned short)(a - r0)
 	       | ((unsigned)(unsigned short)(b - r1) << 16);
 	g = grid[(depth_rotate(packed, k1) + 0x408) >> 2];
-	idx[0] = (short)((g >> (s->idx_width & 31)) & 0x1f);
+	idx[0] = (short)((g >> ((unsigned short)s->idx_width & 31)) & 0x1f);
 	/* The mask is truncated to a short first, so idx_width == 16 gives -1. */
-	quad[2] = (short)(g & (short)((1 << (s->idx_width & 31)) - 1));
+	quad[2] = (short)(g & (short)((1 << ((unsigned short)s->idx_width & 31)) - 1));
 
 	/* Second, from the second half's. */
 	packed = (unsigned short)(c - r2)
 	       | ((unsigned)(unsigned short)(d - r3) << 16);
 	g = grid[(depth_rotate(packed, k2) + 0x408) >> 2];
-	idx[1] = (short)((g >> (s->idx_width & 31)) & 0x1f);
-	quad[3] = (short)(g & (short)((1 << (s->idx_width & 31)) - 1));
+	idx[1] = (short)((g >> ((unsigned short)s->idx_width & 31)) & 0x1f);
+	quad[3] = (short)(g & (short)((1 << ((unsigned short)s->idx_width & 31)) - 1));
 }
 
 
@@ -941,7 +942,8 @@ demap_candidates(int p, int div, short *lo, short *hi)
 	int q = p / div;
 
 	q = ((p > 0 ? q + 1 : q) & ~3) + 1;
-	q *= div;
+	/* The native neighbour arithmetic consumes the signed low word. */
+	q = (short)(q * div);
 
 	*lo = (short)q;
 	*hi = (short)(p > (short)q ? q + 2 * div : q - 2 * div);
@@ -958,8 +960,9 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	short code[8];
 	short cost[8];
 	short best[16];
+	short *par;
 	int st = s->state_idx;
-	int i, j;
+	short i, j;
 
 	if (!(n & 1)) {
 		/* Even: fill four frame shorts and two sub-indices. */
@@ -969,16 +972,20 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	}
 
 	s->state[st].pair[1] = *(int *)ap;
+	par = s->state[s->state_idx].par;
 
-	/* 1. Eight candidates, two per parameter. */
-	for (i = 0; i < 4; i++)
-		demap_candidates(s->state[st].par[i], div,
-				 &cand[i * 2], &cand[i * 2 + 1]);
+	/* 1. Two parameter pairs, each producing four candidates in order. */
+	for (i = 0; i < 2; i++) {
+		demap_candidates(par[i * 2], div,
+				 &cand[i * 4], &cand[i * 4 + 1]);
+		demap_candidates(par[i * 2 + 1], div,
+				 &cand[i * 4 + 2], &cand[i * 4 + 3]);
+	}
 
 	/* 2. Squared distances, four combinations per parameter pair. */
 	for (i = 0; i < 2; i++) {
-		int p0 = s->state[st].par[i * 2];
-		int p1 = s->state[st].par[i * 2 + 1];
+		int p0 = par[i * 2];
+		int p1 = par[i * 2 + 1];
 		int sh = s->cost_shift & 31;
 		int d0 = ((p0 - cand[i * 4 + 0]) * (p0 - cand[i * 4 + 0])) >> sh;
 		int d1 = ((p0 - cand[i * 4 + 1]) * (p0 - cand[i * 4 + 1])) >> sh;
@@ -1016,10 +1023,10 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	{
 		int overall = 0x7fff;
 		const short *kt = kTable;
+		int bestb = 3;
 
 		for (i = 15; i >= 0; i--) {
 			int bestc = 0x7fff;
-			int bestb = 3;
 			const short *prior = &s->cost[3 - (i >> 2)];
 			int hi;
 
@@ -1059,11 +1066,12 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 
 	{
 		int seed = s->state[st].seed;
-		int t = (short)s->trellis[(st << 4) + seed];
+		int t = (short)s->trellis[(s->state_idx << 4) + seed];
 		int k = (t >> 1) & 1;
 
 		((short *)bp)[0] = cand[4 + k];
-		k ^= t & 1;
+		/* The first output precedes a fresh index/trellis read. */
+		k ^= (short)s->trellis[(s->state_idx << 4) + seed] & 1;
 		((short *)bp)[1] = cand[6 + k];
 	}
 
@@ -1135,28 +1143,41 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 void
 getFrame(void *objp)
 {
-	struct v34_shell *s =
-	    (struct v34_shell *)((char *)objp + V34_SHELL_TX);
-	v34_scramble_fn scramble = s->scramble;
-	int w = s->idx_width;
+	/*
+	 * THE OBJECT NEVER MATERIALISES `objp + V34_SHELL_TX`.  Every field of
+	 * the transmit context is addressed at its object-absolute
+	 * displacement from `objp` itself -- 0x25e0 for `span`, 0x2a64 for
+	 * `bitpos` -- and `objp` is still live for the callback.  Hoisting a
+	 * `struct v34_shell *` local makes the compiler form 0x1be0 and then
+	 * reach each field at an 0xa00-relative displacement, which is one
+	 * `add` and a different operand set from the object's; deriving the
+	 * pointer per use folds the constant into the displacement instead.
+	 */
+#define TX ((struct v34_shell *)((char *)objp + V34_SHELL_TX))
+	v34_scramble_fn scramble = TX->scramble;
+	int w = TX->idx_width;
 	int small = 2;
 	int small_last = 2;
 	int sum;
 	int nb;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short pos;
+#else
 	int pos;
+#endif
 	unsigned bitbuf;
 
-	sum = (unsigned short)s->wide_accum + (unsigned short)s->remainder;
+	sum = (unsigned short)TX->wide_accum + (unsigned short)TX->remainder;
 
-	if ((unsigned short)s->span > (unsigned short)sum) {
-		s->wide_accum = (short)sum;
-		nb = s->wide_bits_alt;
+	if ((unsigned short)TX->span > (unsigned short)sum) {
+		TX->wide_accum = (short)sum;
+		nb = TX->wide_bits_alt;
 	} else {
-		s->wide_accum = (short)(sum - s->span);
-		nb = s->wide_bits;
+		TX->wide_accum = (short)(sum - TX->span);
+		nb = TX->wide_bits;
 	}
 
-	pos = (unsigned short)s->bitpos;
+	pos = (unsigned short)TX->bitpos;
 
 	/*
 	 * Refill before reading, and keep refilling while short.  The position
@@ -1165,7 +1186,7 @@ getFrame(void *objp)
 	 */
 	while (pos > 15) {
 		pos = scramble(objp, (short)pos);
-		s->bitpos = (short)pos;
+		TX->bitpos = (short)pos;
 	}
 
 	if (nb > 16) {
@@ -1185,18 +1206,19 @@ getFrame(void *objp)
 		 * Found by modulatevector, whose fixture is the first thing in
 		 * this tree to drive `nb` above 16.  Finding F185.
 		 */
-		s->frame[0] = (short)((unsigned)s->bitbuf >> (pos & 31));
+		TX->frame[0] = (short)((unsigned)TX->bitbuf >> (short)pos);
 		(void)scramble(objp, 0);
-		pos = (unsigned short)s->bitpos;
-		s->frame[1] = (short)(((unsigned)s->bitbuf >> (pos & 31))
+		pos = (unsigned short)TX->bitpos;
+		TX->frame[1] = (short)(((unsigned)TX->bitbuf >> (short)pos)
 				      & lsbMask[nb & 15]);
 		pos += nb & 15;
-		s->bitpos = (short)pos;
+		TX->bitpos = (short)pos;
 	} else if (nb > 0) {
-		s->frame_wide =
-		    (int)(((unsigned)s->bitbuf >> (pos & 31))
+		TX->frame_wide =
+		    (int)(((unsigned)TX->bitbuf >> (short)pos)
 			  & lsbMask[nb]);
 		pos += nb;
+		TX->bitpos = (short)pos;
 	} else {
 		/*
 		 * No wide field: frame[0..1] is EXPLICITLY zeroed, as one
@@ -1204,22 +1226,22 @@ getFrame(void *objp)
 		 * putFrame simply emits nothing here, so the zeroing has no
 		 * counterpart on that side and is easy to miss.
 		 */
-		s->frame_wide = 0;
-		small = 2 - ((unsigned short)s->group_count < 9 ? 1 : 0);
+		TX->frame_wide = 0;
+		small = 2 - ((unsigned short)TX->group_count < 9 ? 1 : 0);
 		small_last = (short)(nb + small);
 	}
 
 	{
-		short *p = &s->frame[2];
+		short *p = &TX->frame[2];
 		int sw = small;
 		unsigned v;
 
 		if (pos > 15)
 			pos = scramble(objp, (short)pos);
 
-		s->bitpos = (short)pos;
-		bitbuf = (unsigned)s->bitbuf;
-		v = bitbuf >> (pos & 31);
+		TX->bitpos = (short)pos;
+		bitbuf = (unsigned)TX->bitbuf;
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1233,27 +1255,28 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
 
 	{
-		short *p = &s->frame[6];
+		short *p = &TX->frame[6];
 		int sw = small;
 		unsigned v;
 
+		pos = (unsigned short)TX->bitpos;
 		if (pos > 15) {
 			pos = scramble(objp, (short)pos);
-			bitbuf = (unsigned)s->bitbuf;
+			bitbuf = (unsigned)TX->bitbuf;
 		}
 
-		s->bitpos = (short)pos;
-		v = bitbuf >> (pos & 31);
+		TX->bitpos = (short)pos;
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1267,27 +1290,28 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
 
 	{
-		short *p = &s->frame[10];
+		short *p = &TX->frame[10];
 		int sw = small;
 		unsigned v;
 
+		pos = (unsigned short)TX->bitpos;
 		if (pos > 15) {
 			pos = scramble(objp, (short)pos);
-			bitbuf = (unsigned)s->bitbuf;
+			bitbuf = (unsigned)TX->bitbuf;
 		}
 
-		s->bitpos = (short)pos;
-		v = bitbuf >> (pos & 31);
+		TX->bitpos = (short)pos;
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1301,27 +1325,28 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
 
 	{
-		short *p = &s->frame[14];
+		short *p = &TX->frame[14];
 		int sw = small_last;
 		unsigned v;
 
+		pos = (unsigned short)TX->bitpos;
 		if (pos > 15) {
 			pos = scramble(objp, (short)pos);
-			bitbuf = (unsigned)s->bitbuf;
+			bitbuf = (unsigned)TX->bitbuf;
 		}
 
-		s->bitpos = (short)pos;
-		v = bitbuf >> (pos & 31);
+		TX->bitpos = (short)pos;
+		v = bitbuf >> (short)pos;
 
 		/*
 		 * `sw` is NOT bounds-checked, here or in the object.  On the
@@ -1335,14 +1360,15 @@ getFrame(void *objp)
 		p[0] = (short)(v & 1);
 		v >>= 1;
 		p[1] = (short)(v & lsbMask[sw]);
-		v >>= sw & 31;
-		p[2] = (short)(v & lsbMask[w & 31]);
-		v >>= w & 31;
-		p[3] = (short)(v & lsbMask[w & 31]);
+		v >>= sw;
+		p[2] = (short)(v & lsbMask[w]);
+		v >>= w;
+		p[3] = (short)(v & lsbMask[w]);
 
-		pos += 1 + sw + 2 * w;
-		s->bitpos = (short)pos;
+		pos += (short)(1 + sw + 2 * w);
+		TX->bitpos = (short)pos;
 	}
+#undef TX
 }
 
 
@@ -1386,7 +1412,7 @@ getFrame(void *objp)
  */
 struct v34_shell_fields {
 	short		span;			/* +0x000 */
-	short		subframe_limit;		/* +0x002 */
+	unsigned short	subframe_limit;		/* +0x002 */
 	short		group_count;		/* +0x004 */
 	short		remainder;		/* +0x006 */
 	short		wide_accum;		/* +0x008 */
@@ -1577,12 +1603,18 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	unsigned span, q, m, u, idx, w;
 	unsigned i, j, k, n, top, cursor, len;
 
-	if (rate > 0xaf0)
-		span = (unsigned short)(16 - (rate != 0xc80));
-	else if (rate == 0xaf0)
-		span = 14;
-	else
+	/*
+	 * The object lays the COMMON case -- 12, the two rates below 2800 --
+	 * on the fall-through path and branches out for both exceptions, so
+	 * the source tests for the common case first.
+	 */
+	if (rate <= 0xaf0) {
 		span = 12;
+		if (rate == 0xaf0)
+			span = 14;
+	} else {
+		span = (unsigned short)(16 - (rate != 0xc80));
+	}
 
 	s->span = (short)span;
 	s->subframe_limit = (short)(2 * span);
@@ -1629,17 +1661,22 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	 * steps it took.  The two early exits are the same test unrolled: no
 	 * steps needed at all, then one subtraction's worth.
 	 */
-	if ((unsigned short)u <= 12) {
-		idx = 0;
-	} else if ((unsigned short)(u - 12) <= 0x1f) {
-		idx = u - 12;
-	} else {
-		j = 0;
-		do {
-			j++;
-			idx = u - 8 * (unsigned short)j - 12;
-		} while ((unsigned short)idx > 0x1f);
-		s->idx_width = (short)j;
+	/*
+	 * `idx` and `idx_width` are cleared BEFORE the test: the object's
+	 * `xor` and `movw $0,0x14` both precede the branch.
+	 */
+	idx = 0;
+	if ((unsigned short)u > 12) {
+		if ((unsigned short)(u - 12) <= 0x1f) {
+			idx = u - 12;
+		} else {
+			j = 0;
+			do {
+				j++;
+				idx = u - 8 * (unsigned short)j - 12;
+			} while ((unsigned short)idx > 0x1f);
+			s->idx_width = (short)j;
+		}
 	}
 
 	s->wide_bits = (short)idx;
@@ -1688,13 +1725,18 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	 * and takes the 7 the search would have returned.
 	 */
 	s->divisor = divisor;
+	/*
+	 * The search shifts by `w` itself (the object has no mask on the
+	 * count) and compares the ZERO-EXTENDED divisor as a signed int, which
+	 * is what makes the object's `movzwl`/`cmp $0x80` a 32-bit compare.
+	 */
 	s->cost_shift = 7;
-	if ((int)(unsigned)(unsigned short)divisor > 0x80) {
+	if ((unsigned short)divisor > 0x80) {
 		w = 7;
 		do {
 			w++;
-		} while ((int)(1u << (w & 31))
-			 < (int)(unsigned)(unsigned short)divisor);
+		} while ((int)(1u << w)
+			 < (int)(unsigned short)divisor);
 		s->cost_shift = (short)w;
 	}
 	s->cost_shift = (short)((unsigned short)s->cost_shift + 1);
@@ -1940,13 +1982,13 @@ initdigital(void *obj)
 	}
 
 	cfg->depth = (short)((info >> 11) & 3);
-	cfg->use_max = (short)((info >> 14) & 1);
+	cfg->use_max = (info >> 14) & 1;
 
 	/* Bit 13 of the same word is modulatevector's non-linear encoder. */
 	if (info & 0x2000)
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_NLENCODE);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags | V34_TXFLAG_NLENCODE);
 	else
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_TXFLAG_NLENCODE);
+		o->tx.tx_flags = (short)((unsigned short)o->tx.tx_flags & ~V34_TXFLAG_NLENCODE);
 
 	if (level > 1)
 		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d," "rxbitrate %d\n",
@@ -1956,7 +1998,7 @@ initdigital(void *obj)
 	/* --- the transmit context --- */
 	{
 		int bits = (unsigned short)cfg->txbits;
-		int umax = (unsigned short)cfg->use_max;
+		int umax = cfg->use_max;
 		int div;
 
 		/*
@@ -1981,7 +2023,7 @@ initdigital(void *obj)
 					     (short)bits, o->ptc,
 					     o->nof_tx_bits);
 			bits = (unsigned short)cfg->txbits;
-			umax = (unsigned short)cfg->use_max;
+			umax = cfg->use_max;
 		}
 
 		initV34((char *)obj + V34_SHELL_TX + V34_SHELL_FIELDS,
@@ -2004,7 +2046,7 @@ initdigital(void *obj)
 	/* --- the receive context --- */
 	{
 		int bits = (unsigned short)cfg->rxbits;
-		int umax = (unsigned short)cfg->rx_use_max;
+		int umax = cfg->rx_use_max;
 		int div;
 
 		/*
@@ -2018,7 +2060,7 @@ initdigital(void *obj)
 			if (level > 1) {
 				dsplibs_debug_printf("FATAL ERROR(initdigital)" " - ZERODIV expected!");
 				bits = (unsigned short)cfg->rxbits;
-				umax = (unsigned short)cfg->rx_use_max;
+				umax = cfg->rx_use_max;
 			}
 			div = 1;
 		}
@@ -2087,46 +2129,26 @@ initdigital(void *obj)
  */
 
 /*
- * Peel `d` off the running total in `tab` steps: subtract tab[0]*tab[d], then
- * tab[1]*tab[d-1], and so on until it goes negative.  Returns how many steps
- * were taken and leaves the last NON-NEGATIVE total in `*rem`.
- *
- * The object has this three times, inlined, once against t2 and twice against
- * t1.  Unsigned throughout with an explicit sign-bit test, because a 16x16
- * product can legitimately carry past INT_MAX and the object's `jns` reads
- * the bit rather than the value.
- */
-static unsigned
-shell_peel(const short *tab, unsigned d, unsigned *rem)
-{
-	unsigned r = *rem;
-	unsigned saved = r;
-	unsigned k = 0;
-
-	r -= (unsigned)(unsigned short)tab[0] * (unsigned)(unsigned short)tab[d];
-	while (!(r & 0x80000000u)) {
-		saved = r;
-		k++;
-		r -= (unsigned)(unsigned short)tab[k]
-		     * (unsigned)(unsigned short)tab[d - k];
-	}
-	*rem = saved;
-	return k;
-}
-
-/*
  * One sub-index and one frame field into a packed pair of signed byte
  * offsets: the entry's HIGH byte in the low half of the result, and its LOW
  * byte -- sign-extended by an explicit test of bit 7 rather than by a shift,
  * which is the same thing -- in the high half.
  */
+#define QUARTER_LOW_BYTE_SIGN 0x80
+
 static unsigned
 quarter_pair(int sub, unsigned shift, short field)
 {
 	int q = quarter[(sub << (shift & 31)) + (unsigned short)field];
 
-	return ((unsigned)(signed char)(q & 0xff) << 16)
-	       | (unsigned short)(q >> 8);
+	int low;
+
+	if (q & QUARTER_LOW_BYTE_SIGN)
+		low = q | (int)0xffffff00;
+	else
+		low = q & 0xff;
+
+	return ((unsigned)low << 16) | (unsigned short)(q >> 8);
 }
 
 /*
@@ -2288,14 +2310,14 @@ modulatevector(void *obj)
 	unsigned n = (unsigned short)o->vect_idx;
 
 	if (n == 8) {
-		unsigned flags = (unsigned short)o->tx_flags;
-		unsigned count = (unsigned short)tx->count;
-		unsigned shift = (unsigned short)tx->idx_width;
-		unsigned target, quad, lo, hi, mid, si, rem, d;
+		unsigned flags = (unsigned short)o->tx.tx_flags;
+		unsigned count, shift;
+		unsigned target, quad, si, rem, d;
+		short lo, hi, mid;
 		unsigned n1, n2, n3, q2, s2, s6, a, b, g;
 		const short *coeff;
 		short sub[V34_SHELL_SUBS];
-		int i;
+		short i;
 
 		/*
 		 * Training to data.  While bit 4 is clear the mapper still
@@ -2309,45 +2331,112 @@ modulatevector(void *obj)
 			o->train_symcount = c + 1;
 			if (c >= (int)(unsigned short)tx->span) {
 				o->data_enable = 1;
-				o->tx_flags = (short)(flags | PROG_TXBIT_DATA);
+				o->tx.tx_flags = (short)(flags | PROG_TXBIT_DATA);
 			}
 		}
 
 		getFrame(obj);
 
+		count = (unsigned short)tx->count;
+		shift = (unsigned short)tx->idx_width;
 		target = (unsigned)tx->frame_wide;
 		quad = (unsigned short)(short)tx->prev_k;
 
-		/* 1. Seven halvings over t3, unsigned. */
+		/* Unsigned table comparison; signed-short bisection state. */
 		lo = 0;
 		mid = 0x40;
 		hi = 0x80;
 		for (i = 0; i <= 6; i++) {
 			if ((unsigned)tx->t3[mid] > target) {
 				hi = mid;
-				mid = (unsigned short)(short)((lo + hi) / 2);
+				mid = (lo + hi) / 2;
 			} else {
 				lo = mid;
-				mid = (unsigned short)(short)((hi + mid) / 2);
+				mid = (hi + mid) / 2;
 			}
 		}
-		lo = (unsigned short)lo;
 
-		/* 2. Peel against t2, then twice against t1. */
+		/*
+		 * Opposing table pointers recover the three sub-indices.
+		 * Products and differences retain all 32 bits; the object's
+		 * jns tests the sign bit after each subtraction.
+		 */
 		rem = target - (unsigned)tx->t3[lo];
-		n1 = shell_peel(tx->t2, lo, &rem);
-		q2 = rem / (unsigned short)tx->t2[n1];
-		rem = rem % (unsigned short)tx->t2[n1];
+		{
+			const short *up = tx->t2 + 1;
+			const short *down = tx->t2 + lo;
+			unsigned trial = rem - (unsigned)(unsigned short)tx->t2[0]
+					       * (unsigned)(unsigned short)*down--;
 
-		n2 = shell_peel(tx->t1, n1, &rem);
-		s2 = (unsigned short)(rem / (unsigned short)tx->t1[n2]);
-		a = (unsigned short)(rem % (unsigned short)tx->t1[n2]);
+			/* 0x59fc4..0x5a03a: the index comes from the pointer. */
+			while (!(trial & 0x80000000u)) {
+				rem = trial;
+				trial -= (unsigned)(unsigned short)*up++
+				       * (unsigned)(unsigned short)*down--;
+			}
+			n1 = (unsigned short)(up - tx->t2 - 1);
+		}
+		/*
+		 * The original uses signed division of the saved remainder,
+		 * not unsigned division of the shell-peel accumulator.  Each
+		 * table word is zero-extended first, so the divisor is a
+		 * positive int when the initialized table entry is nonzero.
+		 * 0x5a056 takes the remainder; 0x5a05c subtracts it from the
+		 * saved dividend before the second IDIV at 0x5a063.
+		 */
+		{
+			int dividend = (int)rem;
+			int divisor = (unsigned short)tx->t2[n1];
+
+			rem = (unsigned)(dividend % divisor);
+			q2 = (unsigned)((dividend - (int)rem) / divisor);
+		}
+
+		{
+			const short *up = tx->t1 + 1;
+			const short *down = tx->t1 + n1;
+			unsigned trial = rem - (unsigned)(unsigned short)tx->t1[0]
+					       * (unsigned)(unsigned short)*down--;
+
+			while (!(trial & 0x80000000u)) {
+				rem = trial;
+				trial -= (unsigned)(unsigned short)*up++
+				       * (unsigned)(unsigned short)*down--;
+			}
+			n2 = (unsigned short)(up - tx->t1 - 1);
+		}
+		{
+			int divisor = (unsigned short)tx->t1[n2];
+			int quotient = (int)rem / divisor;
+
+			/* 0x5a0ef..0x5a10e: IDIV, multiply, subtract. */
+			s2 = (unsigned short)quotient;
+			a = (unsigned short)((int)rem - quotient * divisor);
+		}
 
 		rem = q2;
 		d = (unsigned short)(lo - n1);
-		n3 = shell_peel(tx->t1, d, &rem);
-		s6 = (unsigned short)(rem / (unsigned short)tx->t1[n3]);
-		b = (unsigned short)(rem % (unsigned short)tx->t1[n3]);
+		{
+			const short *up = tx->t1 + 1;
+			const short *down = tx->t1 + d;
+			unsigned trial = rem - (unsigned)(unsigned short)tx->t1[0]
+					       * (unsigned)(unsigned short)*down--;
+
+			while (!(trial & 0x80000000u)) {
+				rem = trial;
+				trial -= (unsigned)(unsigned short)*up++
+				       * (unsigned)(unsigned short)*down--;
+			}
+			n3 = (unsigned short)(up - tx->t1 - 1);
+		}
+		{
+			int divisor = (unsigned short)tx->t1[n3];
+			int quotient = (int)rem / divisor;
+
+			/* 0x5a17f..0x5a18b: the same signed quotient chain. */
+			s6 = (unsigned short)quotient;
+			b = (unsigned short)((int)rem - quotient * divisor);
+		}
 
 		/*
 		 * 3. Four pairs, each summing to a value checked against
@@ -2466,10 +2555,10 @@ modulatevector(void *obj)
 	}
 
 	o->vect_idx = (short)(n + 1);
-	if (o->tx_flags & V34_TXFLAG_NLENCODE)
-		V34nlencoder(&o->vect[2 * n], o->txpoint.c);
+	if (o->tx.tx_flags & V34_TXFLAG_NLENCODE)
+		V34nlencoder(&o->vect[2 * n], o->tx.txpoint.c);
 	else
-		o->txpoint.word = o->vectp[n];
+		o->tx.txpoint.word = o->vectp[n];
 
 	txmit(obj);
 }
@@ -2567,6 +2656,12 @@ typedef char v34shf_size[(sizeof(struct v34_shell_fields)
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
+/* Same, for a field that is now reached through a nested member. */
+#define V34OB_SUB_ASSERT(name, path, off) \
+	typedef char v34ob_off_##name[ \
+		((int)__builtin_offsetof(struct v34_object, path) == (off)) \
+		? 1 : -1]
+
 V34OB_ASSERT(rx_data, 0x014);
 V34OB_ASSERT(rx_n, 0x114);
 V34OB_ASSERT(tx_data, 0x118);
@@ -2576,8 +2671,8 @@ V34OB_ASSERT(data_enable, 0x2214);
 V34OB_ASSERT(train_symcount, 0xaa74);
 V34OB_ASSERT(vect, 0x2a80);
 V34OB_ASSERT(vect_idx, 0x2aa2);
-V34OB_ASSERT(txpoint, 0x25d0);
-V34OB_ASSERT(tx_flags, 0x25c2);
+V34OB_SUB_ASSERT(txpoint, tx.txpoint, 0x25d0);
+V34OB_SUB_ASSERT(tx_flags, tx.tx_flags, 0x25c2);
 /* initdigital's, including the two that grew the struct past 0xac10. */
 V34OB_ASSERT(ptc, 0x008);
 V34OB_ASSERT(nof_tx_bits, 0x010);

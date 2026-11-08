@@ -882,35 +882,29 @@ setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
  * order unobservable either way (finding F256); and `sign_of` selects on CF
  * alone, so zero prints as '-'.
  *
- * WHAT DIFFERS IS THE SCALE'S TYPE, and it is forced.  `V92ParamsInfo.c`'s
- * copy multiplies by a constant in `.rodata.cst4` -- four bytes, a `float`.
- * This one multiplies by `.rodata.cst8 + 0x30`, EIGHT bytes, and it holds
- * 1000000.0 exactly.  GCC never widens a `float` constant into a `double`
- * pool entry, so the source constant here is a `double` where the sibling's
- * is a `float`.  Nothing observable turns on it -- both are exactly 1e6 and
- * the multiply happens in the x87's extended registers either way -- and it
- * is written as the object holds it because that is what the object holds.
- * Finding F5822.
+ * The native scale is materialised as a DF value, unlike the SF scale in
+ * the V92ParamsInfo print cones.  F5822/F5823 recorded isolated constant and
+ * sign-helper experiments; those experiments do not uniquely establish the
+ * original C types.  Forced long-double fraction arithmetic promoted this
+ * scale to XF in the complete function despite its double spelling.
  *
- * `sign_of` TAKES A `long double` AND THAT IS MEASURED, NOT COPIED.  The
- * object's comparison is `fldz; fcompp` -- the zero materialised in a
- * register and both operands popped -- and every `float` spelling of it
- * compiled on the period compiler gives `fcomps` against a four-byte
- * constant in memory instead, whichever way round the operands are written.
- * `0.0L < v` with a `long double` parameter is what emits the object's form.
- * The rule: at a comparison whose shape will not reproduce, vary the TYPE
- * before the operand order, and compile the candidates rather than reasoning
- * about them.  Finding F5823 records all seven spellings and what each emitted,
- * and names the second site that reached the same conclusion.
+ * Prepare magnitude, fraction and sign in the order supported by all four
+ * native groups.  The original scalar remains live through its truncating
+ * integer conversion, fractional subtraction and final sign comparison.
+ * That lifetime permits FIST without popping, and leaves both inputs dead
+ * at the final FCOMPP.  The sign is already an int variadic argument; no
+ * intermediate char truncation is needed.  These are partial producer-graph
+ * recoveries: the remaining integer allocation and x87 scheduling still
+ * differ, so this spelling does not reproduce the whole native function.
  */
 
 /*
  * The scale, and the `06` in the format strings is its number of digits.
- * Spelled `double` on the evidence above.
+ * Its native storage mode is double; the original spelling is not unique.
  */
 #define SPECTRAL_FRAC_SCALE	1.0e6
 
-static char
+static int
 sign_of(long double v)
 {
 	return (0.0L < v) ? '+' : '-';
@@ -925,36 +919,35 @@ whole_of(float v)
 static int
 frac_of(float v)
 {
-	return __builtin_abs((int)(((long double)v - (long double)(int)v)
+	return __builtin_abs((int)((v - (int)v)
 				   * SPECTRAL_FRAC_SCALE));
 }
 
 extern "C" void
 displaySpectralParams(V90MappingParams *params)
 {
-	char s;
-	int w, f;
+	int s, w, f;
 
 	edprintf("V90MappingParams: Sr = %d\r\n", params->shaperSR);
 	edprintf("V90MappingParams: Id = %d\r\n", params->shaperId);
 
-	s = sign_of(params->shaperA1);
 	w = whole_of(params->shaperA1);
 	f = frac_of(params->shaperA1);
+	s = sign_of(params->shaperA1);
 	edprintf("V90MappingParams: A1  = %c%d.%06d\r\n", s, w, f);
 
-	s = sign_of(params->shaperA2);
 	w = whole_of(params->shaperA2);
 	f = frac_of(params->shaperA2);
+	s = sign_of(params->shaperA2);
 	edprintf("V90MappingParams: A2  = %c%d.%06d\r\n", s, w, f);
 
-	s = sign_of(params->shaperB1);
 	w = whole_of(params->shaperB1);
 	f = frac_of(params->shaperB1);
+	s = sign_of(params->shaperB1);
 	edprintf("V90MappingParams: B1  = %c%d.%06d\r\n", s, w, f);
 
-	s = sign_of(params->shaperB2);
 	w = whole_of(params->shaperB2);
 	f = frac_of(params->shaperB2);
+	s = sign_of(params->shaperB2);
 	edprintf("V90MappingParams: B2  = %c%d.%06d\r\n", s, w, f);
 }

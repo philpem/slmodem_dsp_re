@@ -138,13 +138,22 @@ txinit(void *objp)
 int
 bitreverse(unsigned short v, short nbits)
 {
-	int out = (v & 1) ? 1 : 0;
+	int out;
+
+	if (v & 1)
+		out = 1;
+	else
+		out = 0;
 	short i;
 
 	/*
 	 * Starts at one, not zero: bit 0 is taken before the loop.  The
 	 * accumulator is truncated to 16 bits on each shift, so a `nbits`
 	 * above 16 silently drops the top of the result.
+	 *
+	 * The initial bit is a two-armed `if`, not a ternary: the object
+	 * pre-zeroes `out` and materialises the flag with `test/setne`, which
+	 * the compiler only emits for the if/else form.
 	 */
 	for (i = 1; i < nbits; i = (short)(i + 1)) {
 		v = (unsigned short)(v >> 1);
@@ -161,7 +170,8 @@ txmit(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_tx_control *tx = &obj->tx_control;
 	short local[38];
-	int sym, n, i;
+	int sym;
+	short n, i;
 
 	sym = (int)(((unsigned)(unsigned short)tx->txpoint.c[1] << 16)
 		    | (unsigned short)tx->txpoint.c[0]);
@@ -237,7 +247,7 @@ int
 adaptecho(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	struct v34_queue *txq = &obj->txq;
+	struct v34_queue *txq = &obj->tx.txq;
 	short lag;
 	short acc;
 	int y;
@@ -267,7 +277,7 @@ adaptecho(void *objp)
 	e = (short)(acc + ((y * 4 + 0x8000) >> 16));
 	obj->echo_residual = (short)e;
 
-	if (obj->tx_flags & V34_EC_FROZEN)
+	if (obj->tx.tx_flags & V34_EC_FROZEN)
 		return 0;
 
 	count = obj->echo_calls + 1;

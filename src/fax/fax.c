@@ -144,13 +144,13 @@ FAX_create(void *modem, int originate, unsigned int rate)
 
 	ctx->host_frame_samples =
 	    (int)((rate * (unsigned int)CLASS1_BLOCK_SAMPLES) / 8000U);
-	ctx->out_produced = ctx->host_frame_samples;
-	ctx->out_write_half = ctx->host_frame_samples;
+	ctx->out_ring.count = ctx->host_frame_samples;
+	ctx->out_ring.blk = ctx->host_frame_samples;
 
 	sysdep_memset(&local, 0, sizeof(local));
-	s7 = modem_get_sreg(modem, 7);
 	local.mode = (originate != 0) ? CLASS1_ANS_ORG_NORMAL
 				      : CLASS1_ANS_ORG_ANSWER;
+	s7 = modem_get_sreg(modem, 7);
 	local.s7_timeout = s7;
 	local.iir_enable = 1;
 
@@ -233,15 +233,15 @@ FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg)
 
 	switch (cmd) {
 	case FAXC1_FTS:
+		inner_cmd = FAX_CLASS1_TS_COMMAND;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("fax:  FAXC1_FTS, %x\n", rate);
-		inner_cmd = FAX_CLASS1_TS_COMMAND;
 		break;
 
 	case FAXC1_FRS:
+		inner_cmd = FAX_CLASS1_RS_COMMAND;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("fax:  FAXC1_FRS, %x\n", rate);
-		inner_cmd = FAX_CLASS1_RS_COMMAND;
 		break;
 
 	case FAXC1_FTM:
@@ -276,7 +276,7 @@ FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg)
 		inner_cmd = FAX_CLASS1_TH_COMMAND;
 		break;
 
-	default:	/* FAXC1_FRH */
+	case FAXC1_FRH:
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("fax:  FAXC1_FRH %x\n", rate);
 		if (rate != 3)
@@ -382,51 +382,56 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 
 	ret = 0;
 	while (count > 0) {
-		int host_frame, chunk, remaining;
-		int out_read_cursor_snap;
+		unsigned int chunk;
 		const unsigned char *in_cur;
 		unsigned char *out_cur;
+		int remaining;
+		struct fax_ring *in_ring, *out_ring;
 		int last_status;
 
-		host_frame = ctx->host_frame_samples;
-		chunk = (count < host_frame) ? count : host_frame;
+		chunk = count;
+		if (chunk > ctx->host_frame_samples)
+			chunk = ctx->host_frame_samples;
 
 		in_cur = (const unsigned char *)in;
 		out_cur = (unsigned char *)out;
 		remaining = chunk;
 		last_status = 0;
-		out_read_cursor_snap = ctx->out_read_cursor;
+		in_ring = &ctx->in_ring;
+		out_ring = &ctx->out_ring;
 
 		while (remaining > 0) {
-			int cap, copy, room;
+			unsigned int copy, room;
 			short *in_ptr, *out_ptr;
 			short *rx_buf, *tx_buf;
 			int rx_count;
+			int forced;
 			int ebx;
+			unsigned char *host_tx_buf;
 
-			cap = 2 * host_frame;
-
-			copy = host_frame;
+			copy = ctx->host_frame_samples;
 			if (copy > remaining)
 				copy = remaining;
-			room = cap - ctx->in_write_cursor;
+			room = 2 * ctx->host_frame_samples - in_ring->wr;
 			if (copy > room)
 				copy = room;
-			room = cap - out_read_cursor_snap;
+			room = 2 * ctx->host_frame_samples - out_ring->rd;
 			if (copy > room)
 				copy = room;
 
-			sysdep_memcpy(&ctx->in_ring[ctx->in_write_cursor],
+			sysdep_memcpy(&in_ring->data[in_ring->wr],
 			    in_cur, copy * (int)sizeof(short));
 			in_cur += copy * (int)sizeof(short);
 
-			ctx->in_pending += copy;
-			ctx->in_write_cursor =
-			    (ctx->in_write_cursor + copy) % cap;
+			in_ring->count += copy;
+			in_ring->wr =
+			    (in_ring->wr + copy) % (2 * ctx->host_frame_samples);
 
-			if (ctx->in_pending >= host_frame) {
-				in_ptr = &ctx->in_ring[ctx->in_read_half];
-				out_ptr = &ctx->out_ring[ctx->out_write_half];
+			if (in_ring->count >= ctx->host_frame_samples) {
+				unsigned int host_frame = ctx->host_frame_samples;
+
+				in_ptr = &in_ring->data[in_ring->blk];
+				out_ptr = &out_ring->data[out_ring->blk];
 
 				if (ctx->rc_a != NULL) {
 					int oc = 0xa0;
@@ -443,6 +448,7 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 					tx_buf = out_ptr;
 				}
 
+				forced = 0;
 				if (rx_count != 0xa0) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
@@ -455,45 +461,50 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 					rxc = 0xa0;
 					txc = 0xa0;
 					w7 = 0;
-					recv_n = 0;
 
-					if (ctx->host_rx_enable != 0 &&
-					    ctx->host_rx_want != 0) {
-						int want = ctx->host_rx_want;
-
-						if (want > 0x1000)
-							want = 0x1000;
-						recv_n = modem_recv_from_tty(
-						    ctx->modem,
-						    ctx->host_rx_buf, want);
-						if (recv_n > 0 &&
-						    DSPLIB_DEBUG_ON())
-							dsplibs_debug_printf(
-							    "fax: snd: %d (%d)\n",
-							    recv_n,
-							    ctx->host_rx_want);
+					if (ctx->host_rx_enable != 0) {
+						if (ctx->host_rx_want != 0) {
+							recv_n = ctx->host_rx_want;
+							if ((unsigned int)recv_n > 0x1000)
+								recv_n = 0x1000;
+							recv_n = modem_recv_from_tty(
+							    ctx->modem,
+							    ctx->host_rx_buf, recv_n);
+							if (recv_n > 0 &&
+							    DSPLIB_DEBUG_ON())
+								dsplibs_debug_printf(
+								    "fax: snd: %d (%d)\n",
+								    recv_n,
+								    ctx->host_rx_want);
+						} else {
+							recv_n = 0;
+						}
+					} else {
+						recv_n = 0;
 					}
 
-					int status, forced;
+					int status;
 
+					host_tx_buf = ctx->host_tx_buf;
 					status = fax_class1_progress(
 					    ctx->class1, rx_buf, tx_buf,
-					    (int)(long)ctx->host_tx_buf,
-					    (int)(long)ctx->host_rx_buf,
+					    host_tx_buf,
+					    ctx->host_rx_buf,
 					    &rxc, &txc, &w7, &recv_n);
 					ctx->host_rx_want = recv_n;
 
 					if (ctx->host_rx_enable != 0 &&
 					    w7 > 0) {
-						modem_send_to_tty(ctx->modem,
-						    ctx->host_tx_buf, w7);
+						int sent;
+
+						sent = modem_send_to_tty(
+						    ctx->modem, host_tx_buf, w7);
 						if (DSPLIB_DEBUG_ON())
 							dsplibs_debug_printf(
 							    "fax: rcv: %d (%d)\n",
-							    recv_n, w7);
+							    sent, w7);
 					}
 
-					forced = 0;
 					switch (status) {
 					case FAX_CLASS1_NO_MESSAGE:
 						break;
@@ -575,32 +586,32 @@ FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
 				}
 
 				if (ctx->rc_b != NULL) {
-					int oc2 = 0xa0;
+					int oc2 = host_frame;
 
 					RcFixed_Resample(ctx->rc_b,
-					    ctx->tx_pump_rate, host_frame,
+					    ctx->tx_pump_rate, rx_count,
 					    out_ptr, &oc2);
 				}
 
 				if (ebx != 0)
 					last_status = ebx;
 
-				ctx->in_pending -= host_frame;
-				ctx->in_read_half =
-				    (ctx->in_read_half != 0) ? 0 : host_frame;
-				ctx->out_produced += host_frame;
-				ctx->out_write_half =
-				    (ctx->out_write_half != 0) ? 0 :
-				    host_frame;
+				in_ring->count -= ctx->host_frame_samples;
+				in_ring->blk =
+				    (in_ring->blk != 0) ? 0 : ctx->host_frame_samples;
+				out_ring->count += ctx->host_frame_samples;
+				out_ring->blk =
+				    (out_ring->blk != 0) ? 0 :
+				    ctx->host_frame_samples;
 			}
 
 			sysdep_memcpy(out_cur,
-			    &ctx->out_ring[ctx->out_read_cursor],
+			    &out_ring->data[out_ring->rd],
 			    copy * (int)sizeof(short));
 			out_cur += copy * (int)sizeof(short);
-			ctx->out_produced -= copy;
-			ctx->out_read_cursor =
-			    (ctx->out_read_cursor + copy) % cap;
+			out_ring->count -= copy;
+			out_ring->rd =
+			    (out_ring->rd + copy) % (2 * ctx->host_frame_samples);
 
 			remaining -= copy;
 		}

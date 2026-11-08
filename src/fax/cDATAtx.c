@@ -171,8 +171,8 @@ _tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code)
  */
 int
 _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		int word3, int word4, int *rx_count, int *tx_count,
-		int word7, int *word8)
+		unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		int *word7, int *word8)
 {
 	short cnt;
 	unsigned short result;
@@ -200,7 +200,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_TX_DATA_STATE;
 
-		_handle_data_input(ctx, (const unsigned char *)(long)word4,
+		_handle_data_input(ctx, word4,
 		    (unsigned short *)(void *)ctx, word8);
 
 		n = (unsigned short)FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
@@ -245,8 +245,8 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 int
 _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			 int unused_dst, int src, int *rx_count, int *tx_count,
-			 int unused_out_count, int *tx_data_count)
+			 unsigned char *unused_dst, const unsigned char *src, int *rx_count, int *tx_count,
+			 int *unused_out_count, int *tx_data_count)
 {
 	short cnt;
 	unsigned short result;
@@ -278,7 +278,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if (*tx_data_count > 0) {
 		int n;
 
-		_handle_data_input(ctx, (const unsigned char *)(long)src,
+		_handle_data_input(ctx, src,
 		    (unsigned short *)(void *)ctx, tx_data_count);
 
 		n = (unsigned short)FIFO_write(ctx->tx_fifo,
@@ -373,8 +373,8 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 int
 _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
-	       int word3, int word4, int *rx_count, int *tx_count,
-	       int word7, int *word8)
+	       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+	       int *word7, int *word8)
 {
 	short cnt;
 	unsigned short result = (unsigned short)*tx_count;
@@ -393,7 +393,7 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if (*word8 > 0) {
 		int n;
 
-		_handle_data_input(ctx, (const unsigned char *)(long)word4,
+		_handle_data_input(ctx, word4,
 		    (unsigned short *)(void *)ctx, word8);
 
 		n = (short)FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
@@ -467,8 +467,8 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 int
 _tx_silence_before_scrm_ones(struct fax_class1 *ctx, const short *rx,
-			     short *tx, int word3, int word4,
-			     int *rx_count, int *tx_count, int word7,
+			     short *tx, unsigned char *word3, const unsigned char *word4,
+			     int *rx_count, int *tx_count, int *word7,
 			     int *word8)
 {
 	(void)rx;

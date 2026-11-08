@@ -56,10 +56,19 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 
 
 /* Branchless circular increment, as the original writes it. */
+#ifdef DSPLIB_REPRODUCE_BUGS
+static short
+advance(short idx, short len)
+#else
 static int
 advance(int idx, int len)
+#endif
 {
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short next = idx + 1;
+#else
 	int next = idx + 1;
+#endif
 
 	return (next < len) ? next : 0;
 }
@@ -67,20 +76,44 @@ advance(int idx, int len)
 unsigned short
 FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 {
+#ifdef DSPLIB_REPRODUCE_BUGS
+	const short branches = state->cfg.branches;
+	const short decimate = state->cfg.decimate;
+#else
 	const int branches = state->cfg.branches;
 	const int decimate = state->cfg.decimate;
+#endif
 	const short *coeff = state->cfg.coeff;
 	short *history = state->history;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	const short hlen = state->history_len;
+	short phase = state->phase;
+	short widx = state->widx;
+	short need = state->need;
+#else
 	const int hlen = state->history_len;
 	int phase = state->phase;
 	int widx = state->widx;
 	int need = state->need;
+#endif
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short produced = 0;
+#else
 	int produced = 0;
+#endif
 	/* The blob narrows the incoming slot here, not in every caller. */
+#ifdef DSPLIB_REPRODUCE_BUGS
+	short remaining = (short)count;
+#else
 	int remaining = (short)count;
+#endif
 
 	while (remaining != 0) {
 		const short *c;
+#ifdef DSPLIB_REPRODUCE_BUGS
+		short *cursor;
+		short sample;
+#endif
 		int acc = 0;
 		int k;
 
@@ -91,7 +124,12 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 		 */
 		if (remaining < need) {
 			need -= remaining;
+#ifdef DSPLIB_REPRODUCE_BUGS
+			/* The blob consumes a wrapping word countdown (F12124). */
+			while (remaining-- != 0) {
+#else
 			while (remaining-- > 0) {
+#endif
 				widx = advance(widx, hlen);
 				history[widx] = *in++;
 			}
@@ -110,16 +148,34 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 		 * The walk wraps from index 0 round to the top of the buffer.
 		 */
 		c = coeff + phase;
+#ifdef DSPLIB_REPRODUCE_BUGS
+		cursor = history + widx;
+#endif
 		for (k = widx; k >= 0; k--) {
+#ifdef DSPLIB_REPRODUCE_BUGS
+			acc += *cursor-- * *c;
+#else
 			acc += history[k] * *c;
+#endif
 			c += branches;
 		}
+#ifdef DSPLIB_REPRODUCE_BUGS
+		cursor += hlen;
+#endif
 		for (k = hlen - 1; k > widx; k--) {
+#ifdef DSPLIB_REPRODUCE_BUGS
+			acc += *cursor-- * *c;
+#else
 			acc += history[k] * *c;
+#endif
 			c += branches;
 		}
 
+#ifdef DSPLIB_REPRODUCE_BUGS
+		sample = (short)(acc >> 15);
+#else
 		out[produced++] = (short)(acc >> 15);
+#endif
 
 		/* Advance the phase; each wrap past `branches` costs an input. */
 		phase += decimate;
@@ -128,6 +184,9 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 			phase -= branches;
 			need++;
 		}
+#ifdef DSPLIB_REPRODUCE_BUGS
+		out[produced++] = sample;
+#endif
 	}
 
 	state->phase = (short)phase;

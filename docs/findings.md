@@ -3895,7 +3895,7 @@ be compared by dereferencing.
 
 ## F66. initTxSequence: where V.8's negotiation becomes bits
 
-> **Deviation D134** (`docs/deviations.md`): `initTxSequence` reads a fourth byte it does not own.
+> **Deviation D134** (`docs/deviations.md`) records the original DWORD flag access. The earlier claim that the fourth byte is outside the owner is unproved.
 
 This is the function the monitoring goal depends on. It reads the call menu
 -- three flag bytes and two optional four-character extension fields -- and
@@ -3933,10 +3933,17 @@ would be a surprise in most code; here it is load-bearing.
 
 ### The tail is chosen by two bits read as one word
 
-The original tests `*(int *)cm & 0x80008` -- a single 32-bit read across the
-flag bytes, which is bit 3 of the first byte or bit 3 of the third. Written
-out as the two byte tests it plainly is, since a 32-bit read of a
-three-byte-plus structure is only correct by accident of layout.
+The object tests the four bytes at `cm + 0` with mask `0x80008`: bit 3 of
+`b0` or bit 3 of `b2`. This establishes the access width and mask, not the
+original pointer-cast syntax. `DSPLIB_REPRODUCE_BUGS` preserves that DWORD
+access; the normal build keeps the two byte tests.
+
+The original bounds interpretation is unproved. The complete model owns
+`b3` at `+3` and fields through `+0x2f`; the runtime menu supplied to
+`V8Create` is inside a `0x88`-byte allocation. Those owners do not establish
+a three-byte allocation boundary at this read. D134 records the distinction.
+The encoder still caches its menu and sequence owners across extension calls;
+restoring the DWORD test does not recover the object's later owner reloads.
 
 ## F67. v8handshakinit: the map before the code
 
@@ -138779,3 +138786,4657 @@ bystander trace is equal through flow2 and first differs at peephole2. This fixe
 an observer, without changing native byte grading or inferring original state.
 [Diagnostic](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/gcc3-stage-divergence-diagnostic.md),
 [corrected trace](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/service-constructor-fidelity-results.md).
+
+## F12010. CID_process's frame is recovered; its initialiser's register home is not
+
+`CID_process` is 386 bytes and 99 instructions in the blob. The tree's
+`src/service/cid.c` emits 368 / 102, and the placement ledger already attributes
+the first positional divergence to it: `vce_hook_on` sits -32, of which -18 is
+the body and -14 is the padding that size difference absorbs.
+
+The earlier raw-P-code probe established the storage facts: a memory-resident,
+non-SSA return local at 0x14 written 0 at 0x4e1, -1 at 0x48f and 1 at 0x513;
+one source `if (ret)` duplicated at 0x4a0 and 0x59f; `&n` escaping as the fourth
+argument; `buf` in %ebp; `i` at 0x10. A bounded enumeration with the period
+compiler (GCC 3.4.2-r2, the tree's own flags) now recovers the *source shape*:
+
+- the `res` arms test zero first -- `if (res != 0) { if (res == 1) ... else ... }`
+  (equivalently, an empty `res == 0` arm). This emits `test res; je continue;
+  dec; jne failure`, where the current `if (res == 1) ... else if (res != 0)`
+  emits the `cmp $1`-first form with `dec %ax`.
+- the loop is `for (;;) { if (count <= 0) break; ... }`, not `while (count > 0)`.
+  The infinite-loop form gives the blob's single shared count test and one
+  epilogue; the `while` form rotates the loop and duplicates the epilogue.
+- `ret` must be observed through a forced memory read (`*(volatile int *)&ret`,
+  or an equivalent saved pointer). That keeps it memory-resident and stops the
+  success path specialising; a plain `int ret` is folded away.
+
+That shape reproduces the whole frame and allocation: a 0x1c frame, `i` at
+0x10, `ret` at 0x14, `n` at 0x1a, `buf` in %ebp, and `i` spilled and incremented
+in memory (`incl 0x10(%esp)`). The "dead res at 0x18" recorded by the probe is
+not a variable: `n` is allocated first at 0x1a because its address escapes, and
+a 4-byte `ret` can no longer use 0x18-0x1b, so 0x18-0x19 is alignment. `res`
+lives in EAX.
+
+Measured with the period compiler (bytes from `nm`, stripped instruction count
+and run/LCS from `structsim`, referenced slots from `objdump`):
+
+| shape | bytes | insns | run | LCS | slots | buf | i |
+|---|---:|---:|---:|---:|---|---|---|
+| blob | 386 | 99 | 99 | 99 | 10/14/1a | %ebp | 0x10 |
+| current source | 368 | 102 | 10 | 73 | 14/1a | %edi | %esi |
+| volatile test, `res == 1` first, `while` | 441 | 113 | 16 | 83 | 10/14/1a | 0x10 | %ebp |
+| zero-first, `for (;;)`, `int ret = 0` | 386 | 101 | 75 | 97 | 10/14/1a | %ebp | 0x10 |
+| zero-first, `for (;;)`, `int ret;` | 386 | 99 | 75 | 97 | 10/14/1a | %ebp | 0x10 |
+| `int ret;`, early `return ret`, final `return 0` | 396 | 106 | 75 | 97 | 10/14/1a | %ebp | 0x10 |
+| plain `int ret` (not addressable) | 335 | 104 | 10 | 69 | 14/1a | %edi | %esi |
+| `volatile int ret` (declared volatile) | 386 | 99 | 34 | 90 | 10/16/18 | %ebp | 0x10 |
+| local struct state (i/ret/res/n) | 389 | 103 | 17 | 71 | 10/14/18/1a, 40/44/48 | %ebp | 0x40 |
+
+The residual is one allocation decision, not a missing statement. The blob
+keeps the initialiser's SSA version of `ret` in EAX (`xor %eax,%eax` at entry,
+no store) and reuses each test's reload as the return value (two loads, both
+%eax, no epilogue load). Every evidence-implied spelling that makes the test a
+forced memory read and initialises `ret` makes GCC 3.4.2 store the initialiser
+(`xor %ebx,%ebx; mov %ebx,0x14`), costing two instructions. Removing the
+initialiser reaches the blob's 99 instructions and 386 bytes, but the zero is
+then emitted in the epilogue and the return reloads `ret` (three loads, two of
+them %ecx): the mnemonic multiset is the blob's with one `xor` displaced from
+entry to epilogue. `-fno-rename-registers` moves the test reloads to %eax, so
+the register split is the `-frename-registers` cursor, which also swaps
+count/chunk (%edi/%esi here against %esi/%edi in the blob). Declaration order
+and scope, initialiser placement (declaration, `for` init, assignment), `while`
+/ `for` / `do` / `goto`, `res` type (`short` or `int`), initialisers on `n`, `i`
+and `p`, `i <= 3` versus `i < 4`, and a local struct grouping do not move it.
+
+No source change was made. The closest 99-instruction shapes are not the blob's
+bytes (LCS 97 of 99) and the semantically valid ones either store the
+initialiser or reload in the epilogue. A source form that keeps an addressable
+`ret`'s initialiser in EAX was not produced by any tested evidence-implied
+spelling. A 386-byte near-miss would move `vce_hook_on` by +32 but is a fitted
+body, so it is declined under the fit-versus-recovery rule.
+
+Gate on the unchanged tree: `make period J=3` 394 passed, 0 failed. Census
+1,145 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK
+(1,145 / 1,182 / 1,148, one displaced entry). Partial compare: 72,849 / 943,398
+positioned reference bytes (7.7%); ledger blob `vce_hook_on` start 1,536,
+candidate 1,504.
+
+## F12011. V.34 wave 12: the AGC rail arms are separate constant stores; receiver's HImode flags and demodulate's third gain check are not source facts
+
+`V34agc` (blob 0x5b680): the object stores both rails directly to
+memory -- `movw $0x7f00,(%ebx)` at 0x5b775 and `movw $0x8100,(%ebx)` at
+0x5b968 -- and the negative arm jumps to the shared `add $0x2,%ebx` at
+0x5b77a. Our ternary `over > 0 ? 0x7f00 : (short)0x8100` materialised the
+constant in a register first (`mov $0x7f00,%ecx; ...; mov %cx,(%edx)`).
+Spellings measured: the ternary (baseline), `short`/`unsigned short`
+temporaries assigned from a ternary or from if/else (branchless
+`setle/dec/and/add` and SIZE 10, not the object's stores), explicit casts
+on either arm, `(short)(over > 0 ? ... : ...)`, and `(short)-0x7f00`.
+Only two separate `*p++ = constant` arms reproduce the object's direct
+immediate stores; both arms then match instruction for instruction.
+LCS 206 -> 209, longest run 36 -> 42, instructions 221 -> 219, symbol size
+unchanged at 0x33b (same as the object), positional differing bytes 617 ->
+616. Adopted; no other symbol in the TU changes (object byte diff confined
+to `V34agc`'s body and its call-site relocation addends).
+
+`receiver`: the cached local is 16-bit in the object (`mov %cx,0x30(%esp)`
+at 0x5c307, `testw $0x400,0x30(%esp)` at 0x5c3fb) beside the `int` at
+0x2c; here it is SImode in two SSA-promoted spill slots (`mov %ebx,0x28`
+and the earlier 0x78, `testl` at 0x1db3/0x219d). GCC 3.4.2 promotes a
+non-addressable, non-volatile short local; measured negatives: `short`
+(LCS 470), `unsigned short` (475), `int`, `register` short/unsigned short
+(470/475), `volatile unsigned short` (517, but it reloads the field at
+every assignment and removes the register caching the object shows between
+0x5c02a and 0x5c100), `(void)&flags` address-taken (436, extra stores and
+reloads) and an inline `unsigned short *` flag-setter (436). No measured
+source form both keeps the local HImode and preserves the object's
+register/memory mix; the frame/width residual stays open (SIZE 86).
+
+`V34demodulate`: the object has three `shr $0x19` (0x5af78, 0x5afb8,
+0x5b1fe); 0x5b1fe is the target of the `q_next` wrap branch at 0x5af35,
+not a third gain range check. The -O3 tracer duplicated the rms-store plus
+gain block on that path; our build joins it at 0x930. An if/else spelling
+of the `rms_idx` update is byte-identical to the baseline, and an explicit
+`q_next` pointer form gives LCS 199 -> 201 but still two checks. No source
+statement is missing; declined (SIZE 54, LCS 199, run 36).
+
+Gate: `make period J=3` 394 passed, 0 failed. Census 1,145 EXACT / 0
+UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK. No padding,
+flags, attributes, fixtures or ratchet policy changed.
+
+### F12014. `VOICE_process`'s ring pointers and `VOICE_command`'s DTMF floor are source facts; `RingDetector_Reset` and `VOICE_create` stay allocation-bound
+
+*2026-10-24.* Baseline `a86a15e7a` on Gentoo GCC 3.4.2-r2: `VOICE_create`
+505 B (object 493), `VOICE_command` 530 (548), `VOICE_process` 1932 (2016),
+`RingDetector_Reset` 417 (449). Two of the four are body facts and were
+recovered; the other two are register allocation and are reported, not fitted.
+
+**`VOICE_process` keeps both ring addresses as pointer locals.** The object's
+prologue materialises them once -- `lea 0x1174(%edi),%eax` at 0xbf3 and
+`lea 0xe64(%edi),%edx` at 0xbf9 -- stores them to `0x24(%esp)`/`0x2c(%esp)`,
+and thereafter reloads them there (7 and 8 uses) instead of addressing
+`v->in_ring`/`v->out_ring` each time. Declaring
+`struct vce_ring *in_ring = &v->in_ring;` and `*out_ring = &v->out_ring;` and
+using `in_ring->`/`out_ring->` reproduces that: body 1932 -> 2003 B against
+2016, instructions 439 -> 464 against 466, LCS 300 -> 321, longest run 69
+(unchanged). The 13-byte residue is two instructions.
+
+**`VOICE_command`'s DTMF floor is a conditional expression.** The object
+preloads the fallback (`mov $0x1,%ecx` at 0xa8c) before `mull 0x1c(%ebx)` at
+0xa91, tests with `je` at 0xa99 and conditionally moves (`mov %eax,%ecx` at
+0xa9b) -- the signature of `dur ? dur : 1` -- where the `if (dur == 0) dur = 1;`
+spelling emits `jne` plus `mov $0x1,%eax`. The ternary takes the body 530 ->
+532 B against 548, instructions 120 -> 121 against 123, LCS 90 -> 92, run 52.
+Its remaining two instructions are `mov $1,%eax` (0xb30) and `xor %eax,%eax`
+(0xb46), which the object rematerialises inside the TX and RX cold debug
+stubs; two case-order permutations were compiled and are byte-different but
+measurably identical in size, instructions, LCS and run, so source case order
+does not explain them (GCC rematerialises 0 and 1).
+
+**`RingDetector_Reset` is not a missing clear.** Both sides store the same set
+of `struct ring_detector` offsets (`+0x00/04/08/0c/10/14/18/1c/20/28/2c/2e/30/32/34/36/38/3a/3c/3e/40/42/44/46/48/4a/4c/4e/50`); the gap is a 0x3c
+frame against 0x1c (32 bytes) and four spills the object makes and we do not --
+the `fs/80` divisor at `0x34(%esp)` (0x23b6, reloaded by `idivl` at 0x23be),
+`3*fs` at `0x2c(%esp)` (0x23d3/0x23d7), the threshold sign at `0x20(%esp)`
+(0x2456/0x245a) and `guard_limit` at `0x28(%esp)` (0x23f2). F11351's 116-cell
+store-order domain did not move it; no measured source spelling does.
+
+**`VOICE_create` is allocation-bound too.** `if (!rc_in || !rc_out)` is
+if-converted to `sete/sete/or/test` (7 instructions) where the object has two
+`test`/`je` pairs (4). The two-statement spelling matches that shape (129
+against 127 instructions, LCS 101, run 35) but grows the body 505 -> 513 B
+because the prologue keeps `modem` in `%ebp` (four pushes and a 0x3c frame
+against the object's three and 0x30); it was declined as a size regression,
+not adopted.
+
+**Placement effect, disclosed.** The two recovered bodies are +2 and +71
+bytes: the ledger's cumulative delta at `STRM_VCE_GetFDSPEnvironmentalParams`
+moves -112 -> -32 (the `VOICE_process` term becomes absorbed by alignment),
+and `FAX_class1_command`/`FAX_process` -112 -> -32, `RD_create` -464 -> -384,
+`RingDetector_Create` -496 -> -416. The whole-file positioned reference-byte
+count moves 72,839 -> 72,683 of 943,398 with the exact-section count unchanged
+at 68; that aggregate is a layout coincidence measure, not fidelity, and is
+recorded rather than treated as a target. Measured again after merging
+origin/master's `FAX_process` change (f6d5a242), the merged tree is
+72,449/943,398 against master's own 72,322 -- the voice change adds 127
+positioned bytes there and the same ledger rows are unchanged (-112 -> -32 at
+`STRM_VCE_GetFDSPEnvironmentalParams`, `FAX_class1_command`/`FAX_process`
+-32, `RD_create` -400, `RingDetector_Create` -432), which is why the
+aggregate is recorded and not targeted.
+
+Gate `make period J=3`: 394 passed, 0 failed. Census 1,145 EXACT / 0
+UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE, grade 0-or-1 1,182; ratchet
+OK (link-selected exact 1,148). No flags, padding, fixtures or ratchet policy
+changed.
+## F12012. `FAX_process` is not missing an arm or a helper: its 343-byte gap is a register/address-allocation difference, and only the loop locals' unsignedness is a recoverable source fact
+
+`FAX_process` (blob 0x1a10, 1,809 bytes) was the largest early placement
+drift: 408 instructions against our 340, SIZE 343. The census rule says a
+size gap is either an absence or a factoring difference, so this was
+checked at the instruction level rather than by name.
+
+**Nothing is missing.** The call multiset is identical on both sides:
+14 `dsplibs_debug_printf`, one each of `fax_class1_progress`,
+`modem_recv_from_tty`, `modem_send_to_tty`, two `RcFixed_Resample` and two
+`sysdep_memcpy`. All fourteen debug strings are present in both objects
+(the seven `.rodata.str1.4` ones at 0x350/0x378/0x39c/0x3c0/0x3e0/0x400/
+0x428 and their `.rodata.str1.1` siblings). Every Class 1 arm, the
+out-of-range default, the samples-count mismatch path and the two
+resamplers are emitted. There is no unwritten callee and no inlined helper
+on one side only.
+
+**The gap is the compiler's base-register choice.** `contentgap`'s
+operand-masked surplus is 79 blob / 11 ours, and the surplus is
+addressing, not operations. The object spills `ctx` to `0x90(%esp)` and
+reloads it 26 times (`mov 0x90(%esp),%eax` etc.); it hoists
+`&ctx->in_pending` into `0x30(%esp)` (`add $0x25ac,%eax`) and
+`ctx+0x229c` (`&out_produced` and the `out_ring`/`out_write_half` base)
+into `%ebp` (`lea 0x229c(%edx),%ebp`). Our build keeps `ctx` in `%esi` and
+addresses the same fields by displacement (`mov 0x25ac(%esi),%eax`,
+`lea 0x22ac(%esi,%eax,2)`). The object's extra
+`mov 0x90(R),R`/`mov 0x2298(R),R` reloads are the same difference. No
+source statement is absent; the allocation is determined outside the
+statement, and no tested source spelling reproduces the spill/hoist mix
+(direct `ctx->host_frame_samples` use at every site instead of the cached
+local made it worse: 330 instructions, LCS 186, run 9).
+
+**One forced difference was recoverable: the loop arithmetic is
+unsigned.** The object divides with `div` at 0x1b10 and 0x1c3d and
+compares with `jbe` at 0x1a6a/0x1aa6/0x1abc/0x1ac6, `jb` at 0x1b28 and
+`jbe` at 0x1d1e; our source emitted `cltd`/`idivl` and `jle`/`jl`. Adopted
+the minimal spelling implied by those instructions: `host_frame`, `chunk`,
+`remaining`, `cap`, `copy`, `room` and the clamped `want` are `unsigned
+int`. Retyping the struct fields instead produces identical code (the
+fields are only extended by the unsigned locals), so the header is
+unchanged. Before: 1,466 bytes / 340 instructions, LCS 197, run 15,
+SIZE 343. After: 1,450 bytes / 338 instructions, LCS 197, run 15, SIZE
+359. The byte gap grows because the signed `cltd` pair is gone; the
+forced `div`/`jbe` family now matches, and the ours-only operand-masked
+surplus falls 11 -> 9. The remaining 359 bytes are the allocation
+difference above and stay open.
+
+Linked-position collateral, disclosed: the ordered partial link moves
+72,839 -> 72,322 positioned reference bytes (candidate delta -16,304 ->
+-16,320, the 16-byte body shrink) and 1,005 -> 1,007 exact relocations. It
+is DIFFERENT both before and after; the per-TU exact set is unchanged.
+
+Gate: `make period J=3` 394 passed, 0 failed. Census 1,145 EXACT / 0
+UNRESOLVED / 37 REGALLOC / 87 BYTES / 583 SIZE; ratchet OK.
+
+## F12013. `RD_create` is byte-identical except the physical order of three identical switch arms; the order is a block-reordering outcome, not a missing or different body
+
+`RD_create` (blob 0x2130) is 293 bytes and 77 instructions on both sides,
+so it is not a size drift. The grade is BYTES 11. The eleven differing
+bytes are exactly the register/immediate bytes of the three threshold
+arms, at relative offsets 0xf8-0xfa, 0xfe, 0x103-0x105, 0x109 and
+0x10e-0x10f/0x114: the object lays the arms out 1000, 650, 850
+(`mov $0x3e8,%edi` at 0x2228, `mov $0x28a,%esi` at 0x2233,
+`mov $0x352,%ecx` at 0x223e), ours lays them out 650, 850, 1000
+(0xf8, 0x103, 0x10e). Every other instruction, including the arm bodies
+and the `RingDetector_Create` tail, is identical; longest common run is 64
+of 77, LCS 74.
+
+It is one function, in the object's own `rd.c` FILE record (F11351), not
+the `ringDetector.c` half; its only call into that TU is the
+`RingDetector_Create` CALL, which both sides emit. The `.rodata` jump table
+maps identically (`param-4` -> 0/8 = 1000, 9/11 = 650, 10 = 850, else the
+default), read from the object's table at `.rodata` 0xa4..0xd0. The
+`--why` row 60 addend (`.rodata` 164 against 0) is the final object's
+section placement, not a source difference; the eight arm-mapping slots
+agree.
+
+The remaining difference is physical basic-block order. Enumerated against
+the period compiler, all in `rd.c` with the fixed flags: the six case-group
+orders (all emit 650, 850, 1000); the two label orders within each group
+(no effect); `default` first, middle and last; no `default` with the
+threshold pre-initialised; the five labels written individually in
+ascending, descending and by-body orders; a `switch` on a local; and an
+`if`/`else if` chain (which loses the jump table). None gives the object's
+1000, 650, 850. `-fno-reorder-blocks` reproduces it exactly, which
+identifies the mechanism and also why no source spelling in this domain
+moves it: the reorder pass, not the switch text, selects the layout. A flag
+change is out of bounds, so no edit is retained. The 11-byte residual is
+recorded as a measured compiler-block-ordering blocker (same class as the
+`CID_process` / `RD_create` arm-order note in
+`docs/method/placement-ledger.md`).
+
+No source change for this symbol; no linked-position effect. Gate and
+census for the wave are those in F12012.
+
+**Superseded by F12044.** The enumerated domain above varies the switch
+*text* while every case body stays shared; the member it does not contain is
+body duplication. Splitting the two 1000-valued cases (4 and 12) into two
+source blocks is a source fact that changes the pre-merge table-edge count and
+hence the reorder frequencies, and it reproduces the object's 1000, 650, 850
+at the same 293 bytes and 77 instructions. The mechanism (`-freorder-blocks`
+STC), not the switch text, still selects the layout; F12044 measures what the
+pass is responding to.
+
+## F12015. `V21RX_control`'s HDX flag assignment is a `> 0` comparison, not `!= 0`; the fold chooses shift-and for one and setcc for the other
+
+`V21RX_control` (blob 0x0a2410, 75 bytes) was grade 0 BYTES 23 with
+`--why` rejecting on `row 8 MNEMONIC xor vs mov`. The object's block is
+
+    mov    0x4(%edx),%ecx
+    xor    %eax,%eax
+    mov    %ecx,0x8(%ebx)
+    mov    0x4c(%ebx),%ecx
+    movzbl 0xd(%edx),%edx
+    test   $0x10,%dl
+    setne  %al
+    mov    %eax,(%ecx)
+    test   $0x2,%dl
+
+and ours computed the same predicate as `(flags & 0x10) >> 4`, i.e.
+`mov %edx,%eax ; shr $0x4,%eax ; and $0x1,%eax`, with no zeroing `xor`.
+Every other instruction and both fields agree; the symbol is 75 bytes on
+both sides and both `int_0000` (0x4c/%ecx) and `cfg->int_0008` stores are
+present at the same relative offsets.
+
+Nine equivalent predicate spellings were compiled as complete
+`V21r_stc.c` translation units with the period compiler and
+`DSPLIB_REPRODUCE_BUGS`; `flags` is an `unsigned char` local loaded once, so
+`(flags & 0x10)` is an `int` in {0,16} and every cell below is semantically
+identical:
+
+| source spelling | emission | bytes differ |
+|---|---|---|
+| `(flags & V21RXCTL_SET_HDX_INT0000) != 0` (baseline) | `shr $0x4 / and $0x1` | 23 |
+| `... ? 1 : 0` | same as baseline | 23 |
+| `!!(flags & V21RXCTL_SET_HDX_INT0000)` | same as baseline | 23 |
+| `int set = (...) != 0; int_0000 = set;` | still no setcc | 22 |
+| `unsigned char set = (...) != 0;` | still no setcc | 22 |
+| `(flags >> 4) & 1` | shift/and (the value, written out) | 22 |
+| `(...) == V21RXCTL_SET_HDX_INT0000` | same as baseline | 23 |
+| `(flags & 0x10) == 0x10` | same as baseline | 23 |
+| `(flags & V21RXCTL_SET_HDX_INT0000) > 0` | `xor/test/setne`, exactly the object | **EXACT** |
+
+The mechanism is GCC 3.4.2's fold of an unsigned bit test: `(x & C) != 0`
+canonicalises to `(x >> log2 C) & 1`, while the ORDERING comparison `> 0`
+is left as a compare against zero and if-converts to `setne`. Exactly one
+cell maps onto the object, so the source's comparison operator is recovered
+within that declared family rather than chosen by byte count. The recovered
+line is `rx->hdx->int_0000 = (flags & V21RXCTL_SET_HDX_INT0000) > 0;`.
+
+Complete-TU collateral was measured by compiling the baseline and the
+candidate `src_fax_V21r_stc.c.o` separately and dumping
+`V21RX_status` (the TU's only other symbol, 0x50..0xd9) with relocations:
+byte, operand and relocation identical. Census moves **1,144 -> 1,145
+EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 -> 86 BYTES / 583 SIZE** over 1,852
+(the single UNRESOLVED is `v22_local_loop`, resolved through the partial
+link in the CI census). Gate: `make period J=3` **394 passed, 0 failed**
+on the merged base `6ee2bd277`. No exact symbol was lost.
+
+## F12016. Closest-SIZE screen, wave 13: four residuals bounded to their compiler mechanism
+
+A general closest-SIZE screen (`byteident.py --near 60`, then the census's
+BYTES list sorted by differing bytes; 1852 symbols, 707 not exact) was run
+on a fresh `build/tc_out`. Excluding the documented closures (arrangement,
+allocation/scheduling list, compiler-behaviour list, exhausted spelling
+domains, the V90 call-edge rows, the SUV wrapper, `DialerProgress`, the
+datapump order family, V.34 waves 9-11, COMDAT/link-selected bodies), the
+smallest residuals were worked and bounded. Each was compiled as complete
+period translation units with the fixed flags:
+
+- `fComputeRMSValueFloatBuf` (BYTES 5/82). The only difference is the entry
+  order of two independent constants: object `xor %eax,%eax ; fld %st(0)`,
+  ours `fld %st(0) ; xor %eax,%eax`; the other 36 instructions, the x87
+  stack use and both fdiv directions agree (`dis.py` Intel pass checked, no
+  discrepancy flagged). Eight declaration/initialiser cells -- `i = 0`
+  declared first, `i` declared first without initialiser, separate
+  declaration lines, `acc` before `sum`, `sum = 0; acc = 0;` assignments,
+  one merged declaration, and `acc = sum` -- all emitted the identical
+  0x52-byte body with the same row-4 `xor vs fld`. Class: scheduler/RTL
+  placement of two constants, not statement order in the tested family.
+- `TxHdxDataV17` (BYTES 8/349, the wave-2 landing). Three live ranges carry
+  `%eax`/`%ecx` swapped (`0x24(%esi)` then its `0x8` field; the underrun
+  arm's `out` argument load; the final `*budget` subtraction), and
+  `alpha_equal` reports a USE CONFLICT, so it is not a consistent renaming.
+  Nine cells: hoisting `short/unsigned short nsamples` to function scope
+  (SIZE 351/348), `short nsamples` in the underrun arm (SIZE 348), the
+  compound `*budget -= taken;` in both/final sites, and the uncast final
+  subtraction all leave the 8 bytes unchanged or make the length wrong.
+  Class: allocator live-range choice; the block-scoped `unsigned short` is
+  the best measured form.
+- `v90RateReneg` (BYTES 14/555). Two independent stores
+  (`seg_symcount` and `txpoint.word = vect4[3]` at r==11, `vect4[1]` at
+  r==12) are emitted in the opposite order from the object at both second
+  increment sites. Swapping the statements at one or both sites measures
+  55 differing bytes, or a one-byte-short SIZE body; `seg_symcount++` and
+  `seg_symcount + 1` leave the 14 bytes unchanged. Class: store scheduling;
+  the source order already matches the object and the compiler reorders it.
+- `voice_command` (`src/voice/voice.c`, BYTES 18/802). The `--why` row is
+  the jump-table relocation (`.rodata` 0xed80 against 0), but the differing
+  bytes outside relocation fields are register roles in the
+  `VOICE_VLS_COMMAND` arm (`%edx/%esi` against `%ecx/%ebx`); the string
+  addends differ only because the section is laid out differently and are
+  not counted. The table base is the TU's `.rodata` placement, not a
+  statement. Class: TU data placement plus allocation; not a per-function
+  source fact.
+
+**Update (wave 13): the initialiser-bearing shape was landed.** The shape
+above with `int ret = 0;` (zero-first `res` arms, `for (;;)` with the count
+test at the top, and the forced memory read at the break test) emits
+**386 bytes / 101 instructions, LCS 97, run 75**, against the previous
+368 / 102 / LCS 73 / run 10. It is byteident **BYTES** (same size, 111 bytes
+differ) rather than SIZE, and it moves the first placement divergence past
+`CID_process`: `vce_hook_on` now reaches the blob's 0x600, the next drift is
+`VOICE_create` (+12), and positioned reference bytes rise 72,841 -> 73,994 of
+943,398. The `int ret;` 99-instruction variant stays declined: it is the same
+near-miss by bytes but leaves the empty-input return uninitialised, which the
+blob's entry `xor %eax,%eax` says is not the source. The remaining two
+instructions are the allocator choice recorded above. Gate 394/0; census
+1,146 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; ratchet OK.
+
+## F12017. `VOICE_create` is byte-exact once the ring setup precedes the `cfg` fill and the converter guard reads the stored fields; `RingDetector_Reset`'s frame is forced by a local `fs`; `VOICE_process` is allocation-bound
+
+*2026-10-24.* Baseline 3d18a4a34, Gentoo GCC 3.4.2-r2. The wave-13 state had
+the first placement divergence at `VOICE_delete`, attributed to
+`VOICE_create` (+12). Both were worked at the instruction level; one closed,
+one moved to its forcing source fact, and one is a measured blocker.
+
+| symbol | blob | before | after | insns blob/before/after | LCS before->after | run before->after |
+|---|---:|---:|---:|---|---:|---:|
+| `VOICE_create` | 493 | 505 | **493** | 127 / 132 / 127 | 100 -> **127** | 29 -> **127** |
+| `VOICE_command` | 548 | 532 | **547** | 123 / 121 / 123 | 92 -> 95 | 52 -> 22 |
+| `VOICE_process` | 2016 | 2003 | 2003 | 466 / 464 / 464 | 321 | 69 |
+| `RingDetector_Reset` | 449 | 417 | **424** | 121 / 117 / 116 | 91 -> 98 | 14 -> 18 |
+
+**`VOICE_create` is EXACT, and it is two source facts, not one.** The object's
+prologue has three callee-saved pushes and a `0x30` frame (`0x720-0x726`) --
+`edi` = modem, `ebx` = rate, `esi` = v -- so a fourth long-lived local is
+what grew our frame to `0x3c`. The object stores each converter into
+`v->rc_in`/`v->rc_out` in its ladder (`mov %eax,0x18(%esi)` at `0x78e` and
+`0x8cc`, `mov %edx,0x1c(%esi)` at `0x7ab`) and its guard tests the two
+registers (`test %eax,%eax` `0x7ae`, `test %edx,%edx` `0x7b6`); the
+`0x8e0` arm reloads `0x18(%esi)` into `%eax` at `0x8ee` after the rc_out
+`RcFixed_Create` clobbers it. Writing the field stores in the ladders and
+testing `v->rc_in`/`v->rc_out` in the guard recovers the three-push frame,
+127 instructions and 493 bytes; the earlier `if (!rc_in || !rc_out)`
+declined in F12014 because it kept the locals live across the ladder.
+
+The remaining 71-byte block-order difference closed by moving the
+`v->block`/`out_ring.count`/`out_ring.blk` statements BEFORE the four
+`cfg.*` assignments. The object emits the block ladder at `0x7d5-0x810`
+(`lea (%ebx,%ebx,4)` `0x7d5`, `shl $0x5` `0x7d8`, `mul` `0x7e9`,
+`shr $0x9` `0x801`, the three `0xe60/0xe64/0xe70(%esi)` stores) and only
+then `cfg.modem` (`mov %edi,0x20(%esp)` `0x7db` is scheduled between them);
+the source order that produces it is rings-first, config-second. Exact at
+`127` instructions / `493` bytes, LCS 127, longest run 127.
+
+**`RingDetector_Reset`'s 0x3c frame and three of its four spills are forced
+by one local.** The object loads `c->fs` exactly once, at `0x23a6`
+(`mov (%edi),%ebx`), and uses that value for the `fs/80` divisor
+(`imul %ebx` `0x23a8`), `s->fs` (`0x23c2`) and `3*fs` (`lea (%ebx,%ebx,2)`
+`0x23d0`). Our source read `c->fs` twice (`0x37` and `0x5e`). A local
+`int fs = c->fs;` reproduces the single load AND the object's frame:
+`0x1c` -> `0x3c`, the object's own value, and the spills at `0x38`
+(divisor, object `0x34`), `0x30` (`3*fs`, object `0x2c`) and `0x2c`
+(`guard_limit`, object `0x28`) appear where the object has them. Two of the
+four offsets differ by one slot because the object's debug-argument slots
+and ours are ordered differently around them; the set is the same kind of
+spill, not a missing operation. The threshold-sign spill at `0x20`
+(`0x2456`/`0x245a`) is NOT reproduced: the object keeps the second
+`c->threshold` in `%ecx` (`0x2443`), so `cltd` is unavailable and the sign
+gets a stack slot, while ours keeps it in `%eax` and uses `cltd`
+(`0xf2`-`0xff`). That is register allocation, and it is the remaining
+25-byte / 5-instruction gap. The `fs` local is retained: it is
+evidence-backed and moves LCS 91 -> 98.
+
+**`VOICE_command` improved as TU collateral, and its last difference is not
+source.** `VOICE_create` is emitted before it in the same translation unit,
+and the allocator state the earlier function leaves moved the four
+state-arm materialisations to the object's shape: `547` against `548`
+bytes, `123` instructions on both sides, and the TX/RX cold stubs now
+duplicate `mov $1,%eax` / `xor %eax,%eax` instead of sharing the hot copy.
+The only `--why` row is the switch's jump-table addend: ours
+`*@section .rodata+0`, the blob `+8`. `objdump -s -j .rodata` shows why --
+the final `.rodata` begins with the 8-byte string `2.7.14` from another TU
+and the blob's table therefore starts at `+8`; a per-TU object's table
+starts at `+0`. It is the section-placement artifact F12013 records, not a
+statement, and the 1-byte `st_size` difference is the same per-TU layout.
+
+**`VOICE_process` has no missing operation; it is allocation-bound.** Both
+sides have the same call multiset (20 `dsplibs_debug_printf`, two
+`modem_recv_from_tty`, two `modem_send_to_tty`, two `RcFixed_Resample`,
+two `sysdep_memcpy`, one `VOICE_command`, one `voice_modem`) and every loop
+body, clamp and switch arm is present. The 2-instruction deficit and the
+0x10 frame difference (`0x6c` against `0x7c`) are exactly four object
+spills: `rlen` at `0x3c` (`0xd8a`, reloaded `0xd8e`/`0xdb1`/`0xe8e`/`0xec9`/
+`0xee1`), `block` at `0x44` (`0xd2e`, reloaded `0xd57`/`0xee5`),
+`from_line` at `0x38` (`0xdc8`, reloaded `0xdfe`) and `to_line` at `0x34`
+(`0xdd5`, reloaded `0xe0a`). Each is an address or value the object keeps in
+the frame and ours keeps in a register; `v->block` is still loaded nine times
+on both sides, so it is a CSE spill and not a source local. Two
+evidence-implied spellings were compiled and declined: `float *from_line =
+v->from_line;` / `*to_line = v->to_line;` at function scope measures
+467 insns / 2019 bytes (the leas hoist into the prologue), and the same two
+locals inside the `count >= block` block measure 463 / 2005 (the leas hoist
+to block entry, the object computes them at `0xdc0`/`0xdcf` after the first
+loop). Neither closes; F12014's ring-pointer recovery is retained unchanged.
+
+Placement effect, disclosed: the first positional divergence moves from
+`VOICE_delete` (+12) to `RD_create` (-368), whose predecessor
+`FAX_process` is 1,809 -> 1,450 bytes; `VOICE_create` is no longer a drift
+row. On this branch alone positioned reference bytes move 73,994 -> 74,726
+of 943,398; merged with origin/master's `FAX_process`/`V34RX` work (whose
+own tree reads 73,996) the merged tree reads 75,008/943,398, exact sections
+unchanged at 68, and `RD_create` remains the first divergence. As before,
+that aggregate is a layout coincidence measure, not a fidelity target.
+
+Gate `make phase J=2`: 394 passed, 0 failed; all structural tiers OK.
+Census 1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE;
+grade 0-or-1 1,184; ratchet OK (exact 1,146 -> 1,147, grade 0-or-1 1,182 ->
+1,184, link-selected exact 1,149 -> 1,150). No flags, padding, fixtures,
+tests or ratchet policy changed.
+## F12038. `FAX_process`: the object's `&ctx->in_pending` base and live read cursor are source facts; the `ctx` spill itself is not reachable from the tested source domain
+
+F12012 left `FAX_process` at 1,450 B / 338 instructions against the blob's
+1,809 / 408, SIZE 359, with the instruction gap attributed to the object's
+`ctx` stack spill rather than missing code. This pass treated the spill as a
+source/register-pressure question and measured evidence-implied spellings one
+at a time against the Gentoo 3.4.2-r2 period compiler.
+
+**The object's slot map, from the forcing instructions.** `ctx` is the
+incoming argument at `0x90(%esp)` and is reloaded 27 times (`0x1a2c`,
+`0x1a33`, `0x1a50`, `0x1af1`, `0x1b19`, `0x1b40`, `0x1b8b`, `0x1bac`,
+`0x1bd5`, `0x1c18`, `0x1c4a`, ...): the parameter's home slot, not a copied
+local. `&ctx->in_pending` (`ctx+0x25ac`) is computed at `0x1a3a` and stored in
+`0x30(%esp)`; every later `in_pending`/`in_write_cursor`/`in_read_half`/
+`in_ring` access is based on it (`0x1aaf`, `0x1aca`, `0x1aed`, `0x1b12`,
+`0x1b2e`, `0x1ba8`, `0x1bce`). `ctx+0x229c` (`&out_produced`, and the base
+for `out_read_cursor` +8, `out_write_half` +0xc, `out_ring` +0x10) is hoisted
+into `%ebp` at `0x1a43`. `ctx->host_frame_samples` is re-read from memory
+after each call (`0x1a5e`, `0x1b03`, `0x1b20`, `0x1bdc`, `0x1be1`, `0x1c26`,
+`0x1c51`), and `ctx->out_read_cursor` is read *inside* the inner loop at
+`0x1a9c` for the second room clamp. The object's local slots ascend
+`0x40` tx_buf, `0x44` rx_buf, `0x48` out_ptr, `0x4c` last_status, `0x50`
+remaining, `0x54` out_cur, `0x58` in_cur, `0x5c` chunk, `0x60` ret, `0x64`
+oc2, `0x68`/`0x6c`/`0x70`/`0x74` the four progress outs, `0x78` oc.
+
+**Adopted, each independently witnessed.** (1) `int *in_pending =
+&ctx->in_pending`, used for the increment, the full-frame test and the flush
+decrement: this reproduces the object's `0x30` base. (2) The
+`out_read_cursor_snap` local is removed and the second clamp reads
+`ctx->out_read_cursor` live, exactly as `0x1a9c` does; the snapshot was ours,
+not the object's. (3) The outer-loop locals are declared so the stack slots
+come out `remaining` `0x50`, `out_cur` `0x54`, `in_cur` `0x58`, `chunk`
+`0x5c`, matching the object. Result: 338 -> 339 instructions, LCS 197 -> 221,
+longest run 15 -> 19, our body 1,450 bytes both before and after (SIZE stays
+359). Slot `0x30` now holds the `in_pending` base; `0x50`-`0x5c` match the
+object's meanings.
+
+**The spill is still not reproduced.** Every tested spelling that removed a
+local or added a base pointer left `ctx` in `%esi`/`%edi` and did not reduce
+the 69-instruction gap: no `host_frame` local at all (330, LCS 186, run 9),
+no snapshot alone (336, 181, 10), `&out_produced` added (340, 214, 19), both
+clamp bases and both host buffers added (343-345, LCS 190-214, frame still
+`0x6c`), and a local `&ctx->out_produced`-based view of the out cluster
+(340, 202, 10). A diagnostic `volatile` cursor on the parameter reaches
+384 instructions / 50 bytes' size gap, which shows the object's shape is
+essentially "`ctx` in memory with CSE", but it is not a source fact and was
+not retained. The object's choice to spend `%ebp` on `ctx+0x229c` and reload
+`ctx` 26 times is an allocator outcome that no tested source spelling
+constrains; F12012's finding stands.
+
+**Declined as a fit.** Declaring `host_frame` inside the inner loop (read per
+iteration rather than per outer chunk) measures 340 / LCS 229 / run 20 /
+SIZE 352, but the object reloads `host_frame_samples` from `ctx` after every
+call, which a live local cannot do. The eight extra LCS points come from the
+near-match, not from the object's source, so the spelling is not retained.
+
+Linked-position collateral: `FAX_process`'s body size is unchanged (1,450
+candidate bytes), its placement-ledger step stays 0, and the link-selected
+EXACT set stays 1,149. Positioned reference bytes move 73,994 -> 73,996 of
+943,398 (candidate delta -16,208) because two bytes inside the body now match
+in place. Gate `make period J=2`: 394 passed, 0 failed. Census 1,146 EXACT /
+0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 582 SIZE; grade 0-or-1 1,183;
+ratchet OK with the reviewed `dp_vpcm_exit` displacement.
+
+## F12039. `VOICE_process`'s ring pointers are declared inside the outer loop; the four object spills remain an allocator outcome and the measured source ceiling is 465/2013
+
+*2026-10-24.* Baseline `1b6bc4bdf`, Gentoo GCC 3.4.2-r2. `VOICE_process` is
+2,016 B / 466 instructions in the blob and 2,003 / 464 before this pass;
+F12017 attributed the 0x10 frame difference to four object spills (`rlen`
+0x3c, `block`/`outlen` 0x44, `from_line` 0x38, `to_line` 0x34). This pass
+looked for a source structure that forces them, found one source fact that
+is independent of them, and bounded the rest.
+
+| `VOICE_process` | blob | before | after |
+|---|---:|---:|---:|
+| bytes | 2,016 | 2,003 | 2,003 |
+| instructions | 466 | 464 | 464 |
+| LCS | -- | 321 | **331** |
+| longest run | -- | 69 | 69 |
+
+**Adopted: the ring-pointer initialisers belong inside the outer loop.** The
+object tests `count` at 0xbeb/0xbed (`test %esi,%esi` / `jle 0xf91`) and only
+then materialises the two addresses -- `lea 0x1174(%edi),%eax` at 0xbf3,
+`lea 0xe64(%edi),%edx` at 0xbf9, stored to 0x24/0x2c at 0xbff/0xc03. That is
+the loop preheader: the leas execute only when `count > 0`. A function-scope
+initialiser emits them before the test (ours 0x5eb/0x5f5, test 0x5fb); moving
+both declarations to the top of the `while (count > 0)` body emits them after
+the exit test (0x5f3/0x5f9, test 0x5ed), matching the object. The placement
+domain was enumerated: function scope measures LCS 321, top of the outer loop
+331, and top of the inner loop 331 (GCC hoists it to the same preheader), so
+"inside the outer loop" is the only placement consistent with the object.
+Body size and instruction count are unchanged.
+
+**The four spills are not reachable from the tested source domain.** The
+object's 0x7c frame is our 0x6c plus exactly the four slots 0x34, 0x38, 0x3c
+and 0x44; each is a store and a reload our build keeps in a register.
+
+- `outlen` is a real local. The object reloads 0x44 into `%esi` at 0xed1
+  *after* `voice_modem`, then stores it to 0x64 at 0xee5 and passes `0x64` as
+  the second resampler's `out_count` at 0xed5/0xeed; the value therefore
+  crossed the call. Using `int outlen = (int)v->block;` as the first
+  resampler's input count and as `&outlen` later is the matching spelling:
+  461 B / 461 instructions alone (LCS 323), 465 / 2013 with the two pointer
+  locals (LCS 331).
+- `from_line`/`to_line` are source pointer locals. The object computes
+  `lea 0x960(%edi)` at 0xdc0 and stores 0x38 at 0xdc8, computes
+  `lea 0xbe0(%edi)` at 0xdcf and stores 0x34 at 0xdd5, then reloads them at
+  0xdfe/0xe0a into the `voice_modem` arguments. Declaring the two pointers
+  and assigning them after the first scaling loop reproduces the store/reload
+  pair (ours at 0x3c/0x40); declared at function scope they hoist into the
+  prologue (2,019 B / 468 instructions, LCS 322), which is not the object.
+- What does **not** reproduce is the `rlen` pseudo store (`mov 0x70,%esi`
+  0xd84, `mov %esi,0x3c` 0xd8a) and the `block` store at 0xd2e. Enumerated
+  and declined: `rlen` declared / initialised / assigned at block and
+  function scope; a separate `int len = rlen` copy (471 / 2,038, LCS 316,
+  run 35); a `block` local in signed and unsigned form (2,001 / 464);
+  `outlen` unsigned/int and initialised at block, while and function scope;
+  `hostcount`/`blkcount` and `msg`/`i`/`code` declaration orders. Every
+  placement of the two pointers and `outlen` gives the same codegen. The
+  ceiling is 2,013 B / 465 instructions (one instruction and three bytes
+  short, LCS 331); the LCS maximum 336 is at 1,997 / 461. The object holds
+  `v` in `%edi` with `%esi`/`%ebx`/`%ebp` all contended; ours holds `v` in
+  `%ebp` and has those values free, so these are allocator choices and not a
+  statement.
+
+**Measured but not adopted: the outer-local declaration order.** The object's
+outer slots descend `chunk` 0x58, `tx` 0x54, `rx` 0x50, `remaining` 0x4c,
+`pending` 0x48, which is the order GCC assigns to the declarations; their
+declaration order in the object is therefore `chunk`, `tx`, `rx`,
+`remaining`, `pending`, not our `rx`, `tx`, `chunk`, `pending`, `remaining`.
+With the ring-pointer fact this order reproduces the same relative slot map
+(ours 0x48/0x44/0x40/0x3c/0x38) and measures LCS 331 -> 333 at the same
+2,003 / 464. It is recorded rather than adopted because the 5! order domain
+was not fully enumerated and it does not move the target.
+
+Placement effect, disclosed: positioned reference bytes move 75,008 ->
+75,035 of 943,398; the candidate delta is unchanged at -16,064 and the exact
+sections remain 68. Gate `make period J=3`: **394 passed, 0 failed**. Census
+1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE; grade 0-or-1
+1,184; ratchet OK (link-selected 1,150, the reviewed `dp_vpcm_exit`
+displacement unchanged). No flags, padding, fixtures or tests changed.
+
+## F12040. `FAX_process`: the object's tail is two 0x310-byte RING STRUCTURES, and that sub-structure is what spills `ctx`
+
+F12012/F12038 left `FAX_process` at 1,450 B / 339 instructions against the
+blob's 1,809 / 408, LCS 221, run 19, and concluded the `ctx` home-slot spill
+was "not reachable from the tested source domain". This pass found the source
+fact that was missing, and it is a LAYOUT fact rather than a declaration order:
+the object's two clusters are each one object addressed through one hoisted
+base, and their size is forced.
+
+**The tail is two back-to-back 0x310-byte rings, measured.** `&ctx->in_...`
+is `add $0x25ac,%eax` at 0x1a3a; `&ctx->out_...` is `lea 0x229c(%edx),%ebp`
+at 0x1a43. Every in-cluster access is based on the 0x30(%esp) copy of
+`ctx+0x25ac` -- count `(%ebx)` at 0x1af8/0x1bb3, wr `0x4(%ebx)` at
+0x1afa/0x1b16, blk `0xc(%ebx)` at 0x1b2e/0x1bd2, data `lea 0x10(%edx,%esi,2)`
+at 0x1ad9 and `lea 0x10(%ebx,%eax,2)` at 0x1b34 -- and every out-cluster
+access on `%ebp` -- count `0x0(%ebp)` at 0x1be7, rd `0x8(%ebp)` at
+0x1a9c/0x1c1f, blk `0xc(%ebp)` at 0x1b31, data `lea 0x10(%ebp,%edx,2)` at
+0x1b38/0x1c08. Neither cluster is ever reached through `ctx` with a
+displacement. Two adjacent bases plus the object's own allocation size pin the
+size: out starts at 0x229c and the in base is 0x229c + 0x310, in starts at
+0x25ac and the allocation (0x28bc, FAX_create's `movl $0x28bc,(%esp)` at
+0x151b) is 0x25ac + 0x310. That is exactly `struct vce_ring`'s size
+(`vce.h`), and the count/wr/rd/blk/data offsets are its offsets; each side
+simply uses a different subset (out uses count/rd/blk, in uses
+count/wr/blk). Adopted as `struct fax_ring` in `fax.h`, two of them in
+`struct fax_ctx`, reached through `struct fax_ring *in_ring`/`*out_ring`
+locals as `VOICE_process` already does for its rings.
+
+**Two more forced differences fell out once the cluster locals existed.**
+`cap` is NOT a source local: the object recomputes `2*host_frame` three times,
+at 0x1aac (`lea (%eax,%eax,1),%ecx`), 0x1b0b (`lea (%edx,%edx),%ebx`) and
+0x1c34 (`lea (%ebx,%ebx),%esi`); our cached `cap` was ours. And
+`host_frame` is NOT a local: the object re-reads `ctx->host_frame_samples`
+at 0x1a5e, 0x1b03, 0x1b20, 0x1bc8, 0x1be1, 0x1bee, 0x1c26 and 0x1c51, i.e.
+at every use after a call, so the source reads the field at each site (the
+unsigned loop arithmetic of F12012 is unchanged). With the local gone the
+`chunk` clamp is an unsigned compare, and the object's `jbe` at 0x1a6a
+(before which `cmp %eax,%esi` compares `count` with `ctx->host_frame_samples`)
+forces the field itself to be `unsigned int`, adopted.
+
+**Result: the `ctx` spill appears.** 339 -> 389 instructions of the object's
+408; LCS 221 -> 253 (62.0%); longest run 19 -> 15; body 1,450 -> 1,704 bytes
+(SIZE 359 -> 105). `ctx` now lives in its argument home slot and is reloaded
+25 times (the object: 27), `&ctx->in_ring` is computed once and kept in a
+stack slot (0x2c in ours because our frame is 0x6c; 0x30 in the object), and
+`&ctx->out_ring` is hoisted into `%ebp`, all as in the object. The residual
+0x10-byte frame difference is the object spilling FOUR more inner temporaries:
+it has 18 value slots (0x34 host_tx_buf, 0x38 forced, 0x3c rx_count,
+0x40 tx_buf, 0x44 rx_buf, 0x48 out_ptr, then 0x4c..0x78) where ours has 14,
+and its `cmpl $0xa0,0x3c(%esp)` at 0x1b63/0x1ccc reads `rx_count` from memory
+where ours compares a register. That last 0x10 is still an allocation
+outcome; F12012's "the allocation is determined outside the statement" now
+applies to four inner values, not to `ctx`.
+
+**Enumerations, all measured and rejected.** (1) Direct nested member access
+with no ring locals (`ctx->in_ring.count` etc.): 336 instructions, LCS 181,
+run 10 -- the compiler does not hoist the bases, so the ring POINTERS are
+real source locals, not incidental. (2) The two pointer assignments in the
+opposite order: identical code (both leas, no register change). (3) The six
+inner temporaries hoisted to the outer `while` block: LCS 254, frame still
+0x6c. (4) All branch-scoped locals (`rxc`/`txc`/`w7`/`recv_n`, `status`/
+`forced`, `oc`, `oc2`) moved into the inner `while` scope: no change (GCC
+3.4.2 still overlaps their slots), so the missing 0x10 is not a scope fact.
+(5) The flat model plus member-base pointers (`int *in_pending =
+&ctx->in_pending; int *out_produced = &ctx->out_produced;`, other members via
+`ctx`): 343 instructions, LCS 194, run 9 -- `ctx->in_write_cursor` is not
+folded onto the saved base, so a COMMON TYPE is required and the ring
+sub-structure is the witness. (6) A `host_tx_buf` local (the object keeps
+`ctx+0x10` in 0x34): 391 instructions, LCS 244, run 11 -- declined as a fit.
+
+**Test compatibility, disclosed.** `test/unit/t_faxcreate.c` compares
+`ctx->out_produced` and `ctx->out_write_half`, the pre-F12040 flat names. The
+header defines those two names as macros onto `out_ring.count`/`out_ring.blk`;
+a macro is a compile-time substitution, so neither the object's nor the
+test's code generation moves, and no test source was edited. `struct
+fax_ctx`'s modelled bytes are now 0x28bc, the allocation size, because the
+rings are modelled to their ends.
+
+**Linked position.** The first positional divergence is still `RD_create`,
+but its delta moves -368 -> -112: the predecessor `FAX_process` is 1,809 ->
+1,704 bytes (-105) rather than -359. `placement-ledger` attributes the step to
+(c) upstream size drift, with padding 15 -> 8. Positioned reference bytes
+75,826 of 943,398 (candidate delta -15,808), 68 exact sections, 1,090 ordered
+relocation matches; the aggregate is a layout-coincidence measure, not a
+fidelity target. Gate `make period J=3`: 394 passed, 0 failed. Census 1,147
+EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE; grade 0-or-1
+1,184; link-selected EXACT 1,150 (1,147 + the three multiply-defined names
+whose selected body is exact); ratchet OK, no flags, padding, attributes or
+fixture changes.
+
+## F12041. `FAX_process`: two resample operands and two stack-homed values are source facts; the frame and the persistent slot map now match, and one inner spill (0x40 bytes / 9 instructions) remains
+
+*2026-10-24.* Baseline `ff2c732c2` (PR #373), Gentoo GCC 3.4.2-r2.
+F12040 left `FAX_process` at 1,704 B / 389 instructions against the blob's
+1,809 / 408, frame `0x6c` against `0x7c`, LCS 253, run 15, and attributed the
+residual to "four inner temporaries the object spills and ours keeps in
+registers". This pass mapped every `%esp` slot in both bodies, found that four
+of the six temp slots are reachable from source facts the object states
+directly, and reproduced the frame and every persistent slot.
+
+| `FAX_process` | blob | before | after |
+|---|---:|---:|---:|
+| bytes | 1,809 | 1,704 | **1,769** |
+| instructions | 408 | 389 | **399** |
+| frame | `0x7c` | `0x6c` | **`0x7c`** |
+| LCS | -- | 253 | **313** |
+| longest run | -- | 15 | **24** |
+| `RD_create` delta | 0 | -112 | **-48** |
+
+**The two bodies' slot maps, from the forcing instructions** (blob
+`0x1a10`, candidate `0x5c0`; `in_ring` is `ctx+0x25ac`, `out_ring` is
+`ctx+0x229c` in `%ebp`):
+
+| slot | blob | forcing stores | candidate before | candidate after |
+|---:|---|---|---|---|
+| 0x30 | `in_ring` base | `0x1a3f` | `in_ring` (0x30) | **0x34** |
+| 0x34 | `ctx->host_tx_buf` | `0x1db9`, read `0x1deb` | `rx_buf` | `in_ring` |
+| 0x38 | `forced` | `0x1b6f`,`0x1eac`,`0x1fb7`,`0x1fd6`,`0x1ffc`,`0x2040`,`0x2066`,`0x207d` | `out_ptr` | **`host_tx_buf`** |
+| 0x3c | `rx_count` | `0x1b55`,`0x1cbc` | `last_status` | **`forced`** |
+| 0x40 | `tx_buf` | `0x1b6b`,`0x1cc6`, read `0x1d93` | `remaining` | **`rx_count`** |
+| 0x44 | `rx_buf` | `0x1b5d`,`0x1cad`, read `0x1d9b` | `out_cur` | **`tx_buf`** |
+| 0x48 | `out_ptr` | `0x1b3c`, read `0x1b59`,`0x1e28` | `in_cur` | **`out_ptr`** |
+| 0x4c | `last_status` | `0x1a7d`,`0x1ba4`,`0x1e66` | `chunk` | **`last_status`** |
+| 0x50 | `remaining` | `0x1a92`, `0x1c2e`, `0x1c39` | `ret` | **`remaining`** |
+| 0x54 | `out_cur` | `0x1a8e`,`0x1c22`,`0x1bfa` | `oc2` | **`out_cur`** |
+| 0x58 | `in_cur` | `0x1a8a`,`0x1ae9`,`0x1ad1` | `rxc` | **`in_cur`** |
+| 0x5c | `chunk` | `0x1a64`,`0x1a6c`,`0x1a70` | `txc` | **`chunk`** |
+| 0x60 | `ret` | `0x1a19`,`0x1e92` | `w7` | **`ret`** |
+| 0x64 | `oc2` (address taken, `lea` `0x1e24`) | `0x1e20` | `recv_n` | **`oc2`** |
+| 0x68 | `rxc` (`lea` `0x1d8f`) | `0x1cf7` | `oc` | **`rxc`** |
+| 0x6c | `txc` (`lea` `0x1d87`) | `0x1cec` | -- | **`txc`** |
+| 0x70 | `w7` (`lea` `0x1d83`) | `0x1cfb` | -- | **`w7`** |
+| 0x74 | `recv_n` (`lea` `0x1d74`) | `0x1d15`,`0x1d54` | -- | **`recv_n`** |
+| 0x78 | `oc` (`lea` `0x1c95`) | `0x1c91` | -- | **`oc`** |
+
+Every slot at `0x48` and above, and the `0x7c` frame, now match the object.
+The four values that were register-resident and are now homed are exactly
+`host_tx_buf`, `forced`, `rx_count` and `tx_buf`; all four are live across at
+least one call (`modem_recv_from_tty` at `0x1d4f`, `fax_class1_progress` at
+`0x1dc3`), and no `lea` in the body names `0x34`-`0x48`, so none is
+address-taken. The remaining difference is that the object also homes
+`rx_buf` (`0x44`), which our build keeps in `%edx`/`%esi`; that one missing
+home pushes `in_ring` from the object's `0x30` to our `0x34` and shifts the
+temp block by four bytes, which is the whole residual 0x40 bytes and nine
+instructions.
+
+**Adopted, each with the object's own instruction as the witness.**
+
+1. **The second `RcFixed_Resample` takes `rx_count` as `in_count`.** The
+   object loads `0x3c` (the `rx_count` home) into `%eax` at `0x1e37` and
+   passes it as arg 3 at `0x1e45`; the source said
+   `ctx->host_frame_samples`. These are not equivalent: in the success path
+   `rx_count` is the first resampler's output count (`0xa0`) while
+   `host_frame_samples` is `rate * CLASS1_BLOCK_SAMPLES / 8000`, so at a real
+   ratio the original converts `0xa0` tx samples where we converted the host
+   frame count. Recovered, and the object's `0x1ca4` (arg 3 of the *first*
+   call is `ctx->host_frame_samples`, in `%esi`) shows the asymmetry is
+   deliberate rather than a shared local.
+2. **`oc2`'s outgoing limit is `ctx->host_frame_samples`.** `0x1e20` stores
+   `%esi` into `0x64` before `lea 0x64(%esp),%esi`; `%esi` has held
+   `ctx->host_frame_samples` since `0x1b20` and is callee-saved across the
+   intervening calls. `RcFixed_Resample`'s `out_count` is IN/OUT (a limit,
+   `fixedrc.h`), so `0xa0` and `host_frame_samples` are different requests,
+   not two spellings of the same one. Recovered.
+3. **`forced = 0` is placed before the `rx_count` test.** The object stores
+   `0x38 = 0` at `0x1b6f` (fall-through arm) and `0x1cd4` (resample arm), both
+   *before* the `je 0x1ce0` that tests `rx_count`, and both arms reach it.
+   With the initialisation left inside the `else`, GCC sinks it past the
+   calls and the value never becomes call-crossing; at this position it does.
+4. **`ctx->host_tx_buf` is held in a named local.** Weakest of the four: the
+   object's `0x34` home is shared by a local and by a CSE'd pair of
+   expressions, so the slot alone does not distinguish them (usage
+   inference). It is selected because it is the only member of the tested
+   domain that yields the object's `0x7c` frame together with 1-3; F12040's
+   "declined as a fit" entry measured it *alone* (LCS 244) and stands.
+
+**Measured domain, all on the Gentoo period compiler.** `V0` baseline
+1,704/391 lines/`0x6c`/run 15/LCS 253. H1 alone 1,716/`0x6c`/11/248. H1+H2
+1,718/`0x6c`/11/249. H1+H2+`host_tx_buf` 1,734/`0x6c`/11/247. H1+H2+
+`forced`-move (no local) 1,752/`0x6c`/11/258. `forced`-move alone
+1,752/`0x6c`/11/251. H1+`forced`-move 1,764/`0x6c`/11/250. All four
+1,769/**`0x7c`**/**24**/**313**. Declaring every inner temporary at function
+scope, moving `int status;`, and moving `rxc`/`txc`/`w7`/`recv_n` into the
+inner block each leave the four-fact result byte-identical, so neither the
+declaration positions nor the block scopes are the lever. Only the four-fact
+combination moves the allocation, and it is the unique member of that domain
+that reproduces the frame.
+
+**The last `rx_buf` home is not reachable from the domain tested.** It is
+live from `0x1b5d`/`0x1cad` to `0x1d9b` across the recv call exactly as in
+the object, and the difference is one callee-saved-register home: the object
+spends `%esi` on `ctx->host_frame_samples` (which is why `0x1e20` can store
+it), while ours rematerialises it at the `oc2` initialisation. No tested
+source spelling extends that operand's range without moving its statement.
+Recorded as the next lead, not closed by fit.
+
+**Fixture note, disclosed.** No shipped fixture distinguishes facts 1-2.
+`t_faxprocess.c`'s "real rc_a/rc_b resampler" trials do install mode 3
+(`RcFixed_Check_Combination(9600, 8000)` = 3), but in those trials
+`RcFixed_Resample` emits nothing: the out ring's data is all zero and its
+count is 0 afterwards (measured by a temporary probe: `in_count=0
+out_count=0 data=0,0,0` at every trial), so the second resample's `in_count`
+and limit are never exercised on either side. The gate therefore passes both
+before and after; the object's instructions, not the fixture, are the
+evidence. No test source was changed.
+
+**Linked position, and why the aggregate moved the other way.** First
+positional divergence is still `RD_create`, delta -112 -> **-48** (predecessor
+`FAX_process` 1,809 -> 1,769; padding 15 -> 7), and `FAX_process` itself is at
+delta `+0` in both. Positioned reference bytes move **75,853 -> 74,668**
+(candidate delta -15,808 -> -15,744 over a `.text` of 711,575 -> 711,639), and
+`placement-ledger`'s "matched with a moved start" goes 1,745 -> 1,749
+("unmoved" 28 -> 24). That is the expected artifact of a *correct* body
+change: `FAX_process` is 64 bytes longer, so everything after it shifts +64,
+which moves four functions that the previous size error happened to place
+exactly, and 1,229 of the aggregate's byte coincidences are downstream of
+that. `FAX_process`'s own body gains 44 in-place bytes. The aggregate is the
+"layout coincidence" measure F12040 also calls it, not a fidelity target;
+`byteident`'s floors are untouched (see below).
+
+**Verified.** Gate `make period J=3`: **394 passed, 0 failed**. Census
+**1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
+0-or-1 **1,184**, link-selected EXACT **1,150**, ratchet OK (no displacement,
+no flags, no padding, no attributes, no fixture edit).
+
+## F12042. `FAX_process`: the missing `rx_buf` home is a `host_frame` lifetime, and four accompanying source facts close the instruction count; 10 bytes of branch encoding remain
+
+*2026-10-24.* Baseline `2df773bea` (PR #375), Gentoo GCC 3.4.2-r2.
+F12041 left `FAX_process` at 1,769 B / 399 instructions against the blob's
+1,809 / 408, frame `0x7c`, LCS 313, run 24, and one missing home: `rx_buf`
+in `0x44`, which pushed `in_ring` from `0x30` to `0x34` and shifted the
+temp block four bytes. F12041 attributed the whole residual 0x40 bytes /
+nine instructions to that home. The home is real, but closing it exposed
+four further source facts the earlier pass had not separated.
+
+| `FAX_process` | blob | before | after |
+|---|---:|---:|---:|
+| bytes | 1,809 | 1,769 | **1,799** |
+| instructions | 408 | 399 | **408** |
+| frame | `0x7c` | `0x7c` | **`0x7c`** |
+| LCS | -- | 313 | **388 (95.1%)** |
+| longest run | -- | 24 | **130** |
+| `RD_create` delta | 0 | -48 | **-16** |
+
+**The slot map now matches the object end to end.** Blob forcing addresses
+are F12041's table; candidate addresses are this build (`FAX_process` at
+0x5c0, frame `sub $0x7c` at 0x5c4):
+
+| slot | value | blob forcing | candidate forcing |
+|---:|---|---|---|
+| 0x30 | `in_ring` base | 0x1a3f | 0x5ef |
+| 0x34 | `ctx->host_tx_buf` | 0x1db9 | 0x95a |
+| 0x38 | `forced` | 0x1b6f, 0x1cd4, ... | 0x71f, 0x884, ... |
+| 0x3c | `rx_count` | 0x1b55, 0x1cbc | 0x705, 0x872 |
+| 0x40 | `tx_buf` | 0x1b6b, 0x1cc6 | 0x71b, 0x876 |
+| 0x44 | `rx_buf` | 0x1b5d, 0x1cad | **0x70d, 0x85d** |
+| 0x48 | `out_ptr` | 0x1b3c | 0x6ec |
+| 0x4c | `last_status` | 0x1a7d, 0x1ba4, 0x1e66 | 0x62d, 0x754, ... |
+| 0x50 | `remaining` | 0x1a92, 0x1c2e, 0x1c39 | 0x642, ... |
+| 0x54 | `out_cur` | 0x1a8e, 0x1c22, 0x1bfa | 0x63e, ... |
+| 0x58 | `in_cur` | 0x1a8a, 0x1ae9, 0x1ad1 | 0x63a, ... |
+| 0x5c | `chunk` | 0x1a64, 0x1a6c, 0x1a70 | 0x614, 0x61c |
+| 0x60 | `ret` | 0x1a19, 0x1e92 | 0x5c9, 0xa16 |
+| 0x64 | `oc2` (address taken) | 0x1e20 | 0x9d0 |
+| 0x68 | `rxc` | 0x1cf7 | 0x89c |
+| 0x6c | `txc` | 0x1cec | 0x8a7 |
+| 0x70 | `w7` | 0x1cfb | 0x8ab |
+| 0x74 | `recv_n` | 0x1d15, 0x1d54 | 0x8c5, 0x8da |
+| 0x78 | `oc` | 0x1c91 | 0x841 |
+
+**The lifetime fact, and the four facts it exposed.**
+
+1. **`unsigned int host_frame = ctx->host_frame_samples` in the
+   `in_ring->count >= ...` block.** The object loads the field into `%esi`
+   at 0x1b20 and holds it across `RcFixed_Resample`,
+   `modem_recv_from_tty`, `fax_class1_progress` and `modem_send_to_tty`;
+   `%esi` is stored to `rx_count` (0x1b55), passed as the first
+   resampler's `in_count` (0x1ca4) and stored as `oc2` (0x1e20). The field
+   is re-read at every ring-update site outside that block, so the local is
+   block-scoped, not a function-scoped `host_frame`. Once `oc2` is
+   `host_frame`, `%esi` is committed to the local and `rx_buf` takes its
+   object home at 0x44; that alone moves `in_ring` to 0x30 and restores the
+   whole temp block (H1: 1,763 B / 400 instructions, LCS 354, run 107,
+   frame `0x7c`, slots aligned).
+2. **`recv_n` is clamped in place, and zeroed in both skip arms.**
+   The object stores `ctx->host_rx_want` to `0x74` at 0x1d15 before the
+   unsigned `cmp $0x1000`/`jbe` at 0x1d19/0x1d1e, stores `0x1000` back at
+   0x1d2a, and stores zero to `0x74` in *both* failure blocks
+   (0x1ec2 for `host_rx_enable == 0`, 0x1eda for `host_rx_want == 0`).
+   The source is therefore nested `if`s with an `else recv_n = 0` at each
+   level, not one `&&` test with a shared else and not an initialiser
+   before the test. The `want` local was ours.
+3. **`remaining` is `int`, not `unsigned int`.** The object's loop guards
+   are signed `jle` at 0x1a96, 0x1c3f and 0x1e5e (`test` + `jle`), while
+   F12012's unsigned spellings produce `je`. The `div`/`jbe` family
+   F12012 adopted is `chunk`/`copy`/`room`, not `remaining`. Retyping only
+   `remaining` moves 1,799 -> 1,819 bytes and LCS 313 -> 386 before the
+   `chunk` fact below.
+4. **`chunk` is a store-then-clamp, not a ternary.** The object stores
+   `count` to `0x5c` at 0x1a64, compares it with `host_frame` and only then
+   stores `host_frame` (0x1a6c). `chunk = count; if (chunk >
+   ctx->host_frame_samples) chunk = ctx->host_frame_samples;` reproduces
+   that; the ternary emits the opposite initialisation and an extra
+   register move (408 vs 410 instructions, 1,799 vs 1,815 bytes).
+5. **The `rcv` debug prints `modem_send_to_tty`'s return, not `recv_n`.**
+   The object's `fax: rcv: %d (%d)` block loads `%eax` at 0x1efb with no
+   reload from `0x74`; `%eax` is the return of the call at 0x1df8. A named
+   `sent` local reproduces it (0x1efb `mov %eax,0x4(%esp)`), and removes
+   the `0x74` reload (1815 -> 1799 bytes, 410 -> 408 instructions).
+
+**Measured domain, Gentoo period compiler.** H1 (`host_frame` only)
+1,763 B / 400 / frame `0x7c` / run 107 / LCS 354. H1 + in-place `recv_n`
+clamp and two zero arms 1,793 / 404 / 355. Adding `int remaining`
+1,819 / 411 / run 130 / LCS 386. Adding the `chunk` if-form 1,799 / 408 /
+run 130 / LCS 388. Adding `sent` was measured at 1,815 / 410 / LCS 388
+before the `chunk` if-form; the two together are the final row. Reordering
+the switch cases to the object's cold-block order (10 cases), to its
+debug-block order, and to the reverse enumeration each changed the block
+layout but measured 1,808-1,828 bytes and 410 instructions with lower LCS
+(379-383); source case order is not the lever, and none was adopted.
+`int status` at the head of the block and `unsigned int count` casts left
+the final body byte-identical.
+
+**The last 10 bytes are branch encoding, not code.** After the five facts
+the two bodies have the same 408 instructions, the same seven alignment
+rows and the same 25 padding bytes; the instruction multiset differs only
+in compare operand order and in block placement. The 10-byte size gap is
+exactly the object's two near `jmp` (5 B) and one near `ja` (6 B) against
+our two short `jmp` (2 B) and one short `ja` (2 B): `6 + 4 = 10`. They are
+GCC block-placement outcomes on the status dispatch tails, not a missing
+source statement. Matching them would require selecting a case ordering
+for its jump distances, which is the fit F7782 declines; the object's own
+cold-block order does not reproduce the distances.
+
+**Corrections to the two earlier findings.** F12012's "`remaining` is
+unsigned" is wrong for the loop guard only; its `div`/`jbe` evidence
+belongs to `chunk`/`copy`/`room` and is unchanged. F12041's "the whole
+residual 0x40 bytes and nine instructions is the missing `rx_buf` home"
+is too strong: the home is necessary but not sufficient; the `recv_n`,
+`remaining`, `chunk` and `sent` facts each move the body, and 10 bytes of
+branch encoding remain. `FAX_process` itself is still SIZE, not EXACT.
+
+**Linked position.** First positional divergence remains `RD_create`,
+delta **-48 -> -16**: predecessor `FAX_process` 1,809 -> 1,799 (-10) and
+padding 15 -> 9 (-6). `FAX_process`'s own delta is `+0`; the step is
+attributed to (c) upstream size drift. Positioned reference bytes move
+74,668 -> **76,081 / 943,398 (8.1%)** (candidate delta -15,744 ->
+-15,696), 68 exact sections unchanged, exact relocations 1,061 -> 1,076,
+ordered relocation matches 1,090 -> 1,066, symbols 468 -> 465. The
+aggregate is the layout-coincidence measure F12040 names, not a fidelity
+target; the 30-byte body growth shifts everything after `FAX_process`.
+
+**Fixture note, disclosed.** No shipped fixture observes `sent` (the
+debug-only send return) and the clamp's `0x1000` arm is not exercised by
+the fax lifecycle trials. The evidence for all five facts is the object's
+own instructions; the period suite is green before and after. No test
+source was changed.
+
+**Verified.** Gate `make period J=3`: **394 passed, 0 failed**. Census
+**1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
+0-or-1 **1,184**, link-selected EXACT **1,150**; ratchet OK (floor moved
+exact 1,146 -> 1,147, grade 0-or-1 1,182 -> 1,184, link-selected 1,149 ->
+1,150, with no lost exact or grade-0/1 symbol). No flags, padding,
+attributes or fixture edit.
+## F12043. `receiver`'s predictor output pointers were taken as addresses the object does not form; the frame goes `0xcc -> 0xbc`, and the remaining `0x20` is two allocator homes the object keeps in registers
+
+*2026-10-24.* Baseline `2df773bea` (PR #374 merged), Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686`. Every receiver `%esp`
+slot was mapped in both bodies and the two inlined predictor instances were
+compared instruction for instruction. The result is one source-form fact and
+a bounded negative on the AGC expression.
+
+| `receiver` | blob | before (#374) | after |
+|---|---:|---:|---:|
+| bytes | 4,326 | 4,397 | **4,349** |
+| instructions | 994 | 1,007 | **993** |
+| frame | `0x9c` | `0xcc` | **`0xbc`** |
+| LCS | -- | 525 | **538** |
+| longest run | -- | 17 | 17 |
+| grade | -- | SIZE | SIZE (23 bytes) |
+
+**The frame gap the capture change opened.** #374's product-before-shift loops
+made the second predictor's accumulator and both shift counters stack-homed:
+`0x18` (`mov $0x2000`, `sarl $0xe` at `0x1f5c`), `0x14`/`0x1c` (counters) and
+the first instance's `0x50`/`0x4c`/`0x54`. Those are the same spills the
+object has (`0x18` at `0x5c699`, `0x44` at `0x5c199`, `0x40`/`0x48` at
+`0x5c1f8`/`0x5c1b0`), so the change moved the spill set TOWARDS the object
+while the frame grew `0xbc -> 0xcc`.
+
+**What remained was the predictor's output pointers.** A `static` function
+taking `unsigned short *px, unsigned short *py` inlines to four `lea` bases --
+`0x208`/`0x20a` (precode call) and `0x214`/`0x216` (decision-error call) --
+each spilled to its own home (`0x94`/`0x98`, `0xa4`/`0xa8` in the #374 body),
+and the tail addresses through `(%reg)` at displacement zero. The object forms
+no base for either pair: `0x5c235`/`0x5c240` read `0x208`/`0x20a` directly and
+`0x5c745`/`0x5c74c` read `0x214`/`0x216` directly, after the same four
+15-instruction native shift loops at `0x5c1c0`, `0x5c200`, `0x5c6c0`,
+`0x5c710` that #374 matched. This is refinement.md Lever 24's fingerprint.
+Writing the predictor as a `do { } while (0)` macro so the call sites
+substitute the field pairs textually removes all four bases and moves
+`0xcc -> 0xbc`; the four native shift-loop graphs still match under register
+renaming. The tested domain was `{static, static inline, __inline__, macro}`;
+only the macro removes the `lea` bases. No type, owner, attribute or flag
+change is involved.
+
+**The remaining `0x20`, slot by slot.** Both bodies now home the same 29
+values except two. The object keeps `rx->flags` in `%edi` across the retrain
+block (`movzwl 0x122(%ebp),%edi` at `0x5c02a`, tested again at `0x5c100`) and
+keeps `f208` in `%edx` after storing it (`0x5c03f..0x5c04e`, reused at
+`0x5c093`, reloaded only for `eq_out_i2` at `0x5c0bb`). Ours spills them: the
+halfword flags CSE to `0x70` and `f208` to `0x9c`. Those two homes (8 bytes)
+plus the 12-byte inter-group packing and the 12-byte tail alignment are the
+whole `0xbc` against `0x9c`. They are live-range outcomes, not source values,
+and no tested source form moved them.
+
+**AGC: the shared energy expression still cannot satisfy both callers.** The
+object's `V34agc` stores the sum to `0x12c` at `0x5b8ae` and shifts the same
+register at `0x5b8b4`; `V34demodulate` stores at `0x5b0de` and shifts at
+`0x5b0e4`, with the other native stores at `0x5b1bb` and `0x5b25a`. Measured
+domain over `agcadapt`'s input, all on the period compiler:
+
+| form | `V34agc` LCS | `V34demodulate` LCS | demod `0x12c` stores | `shr $0x10` | reload `0x12e` |
+|---|---:|---:|---:|---:|---:|
+| union `energy.h.agc_input` (kept) | 209 | **199** | **3** | 0 | 1 |
+| `(unsigned)energy.sum >> 16` | **211** | 198 | 2 | 1 | 0 |
+| `(unsigned)(energy.sum >> 16)` | 210 | 197 | 2 | 0 | 0 |
+| signed `energy.sum >> 16` | 210 | 197 | 2 | 0 | 0 |
+| local `int e` then `(unsigned)e >> 16` | 211 | 198 | 2 | 1 | 0 |
+| helper `agc_energy_input()` | 211 | 198 | 2 | 1 | 0 |
+| halfword pointer casts (3 spellings) | 209 | 199 | 3 | 0 | 1 |
+| unconditional store, then shift form | -- | 189 | 3 | 0 | 1 |
+
+The `>>16` family restores AGC's register forwarding but lets DSE delete the
+demodulator's pre-adaptation store; the union and pointer forms preserve all
+three stores but reload the high half. The object has both behaviours because
+its 16-bit union load is forwarded late while DSE has already seen it as a
+use; our surrounding receiver/demodulator RTL does not trigger that combine.
+No contract in the domain satisfies both, so the union is retained (it keeps
+the stronger evidence, the native store). This is a measured negative, not a
+claim that no source form exists.
+
+**`V34demodulate` unchanged.** No new witness emerged; the third `shr $0x19`
+at `0x5b1fe` remains the `q_next` wrap-branch target, as recorded before.
+
+Validation: `make period J=3` **394 passed, 0 failed**; census unchanged at
+**1,147 EXACT / 0 UNRESOLVED / 37 REGALLOC / 87 BYTES / 581 SIZE**, grade
+0-or-1 **1,184**, link-selected **1,150**, ratchet OK with the existing
+displacement. Positioned reference bytes moved 76,081 -> **75,942** of
+943,398 on the merged base (#376 included) on the same host: the -48-byte
+symbol pulls 139 downstream positions out of coincidence. That diagnostic is
+not the basis for retaining source; the graded sets and the gate are.
+
+
+## F12044. `RD_create`'s arm order is a source-frequency fact: cases 4 and 12 are separate `break` bodies, and the reorder pass sees five table targets before it merges them
+
+F12013 enumerated the switch *text* with shared case bodies and concluded
+that no source spelling moves the physical arm order. That domain was one
+member short: **body duplication**. `RD_create` (blob 0x2130, 293 B, 77
+insns) puts its three threshold arms at 0x2228 (1000), 0x2233 (650) and
+0x223e (850). Writing cases 4 and 12 as two separate `cfg.threshold = 1000;
+break;` blocks -- instead of one shared label -- reproduces that order with
+the same size and instruction multiset, and the mechanism is measured rather
+than guessed.
+
+**The CFG the reorder pass is handed.** The `.rodata` jump table at 0xa4 has
+12 entries mapping values 4..15 to 1000, default x7, 1000, 650, 850, 650.
+`cfgbuild.c` scans an `ADDR_VEC` from `j = GET_NUM_ELEM(vec)-1` down to 0 and
+`unchecked_make_edge` PREPENDS each edge (`cfg.c:299`), so the tablejump
+block's successor list is *default, 1000, 850, 650* -- the reverse of the
+first-occurrence order in the table. No successor edge of an indirect jump has
+`EDGE_CAN_FALLTHRU`, so `bb-reorder.c`'s trace builder cannot consume an arm
+as a best edge; every arm is a seed.
+
+**What the pass responds to is the edge probability, not the block index.**
+`estimate_bb_frequencies` gives a block whose last insn is not predictable
+(the tablejump) `(REG_BR_PROB_BASE + nedges/2) / nedges` per edge. With the
+shared bodies there are four unique targets, so each edge is 2500 (25%):
+tablejump bb5 has frequency 3743 and each arm 936. That is below round 2's
+`exec_th` (2000), so all three arms are deferred to round 3, where their heap
+keys are identical, `-(100*BB_FREQ_MAX + 100*936 + 936) = -1,094,536`.
+libiberty's `fibheap` breaks the tie by structure: inserted 1000, 850, 650 and
+key-decreased in that order (`replace_key_data` makes an equal-key node the
+minimum), it extracts **650, 850, 1000** -- our order.
+
+**The witness.** Split only the 1000 arm:
+
+    case 4:
+        cfg.threshold = 1000;
+        break;
+    case 12:
+        cfg.threshold = 1000;
+        break;
+
+At probability-estimation time the two labels are two blocks, so the tablejump
+has five unique targets and every edge is `(10000+2)/5 = 2000` (20%). The
+later CFG cleanup folds the pair; the now-parallel edges are merged by
+`redirect_edge_succ_nodup`, which sums their probabilities (`cfg.c:446`),
+leaving the 1000 block at 40%: frequency 1498, key
+`-(1000000 + 100*1497 + 1498) = -1,151,198`, strictly below the 650/850 keys
+`-1,075,649`. It is therefore extracted first; 650 and 850 stay tied and the
+fixed value-ordered successor list resolves them 650 then 850. Final order
+**1000, 650, 850**, the object's.
+
+**Measured domain (Gentoo period compiler, exact flags, `-dB` dump).**
+
+| source shape | physical arm order |
+|---|---|
+| shared 4/12 (baseline, F12013) | 650, 850, 1000 |
+| **split 4/12** | **1000, 650, 850 (blob)** |
+| split 4/12, 12 written first | 1000, 650, 850 |
+| split 4/12, `default` written first | 1000, 650, 850 |
+| split 4/12, 1000 spelled `10 * 100` | 1000, 650, 850 |
+| split 13/15 only (650 duplicated) | 650, 850, 1000 |
+| split both groups (all five labels) | 650, 1000, 850 |
+
+So the discriminating fact is *which* arm is two source blocks, not the text
+order, the `default` position or the constant's spelling; the several
+spellings of the one fact all map onto the object. Splitting the 650 arm
+instead leaves our order, and splitting both gives a third order, which is why
+the domain is not vacuous.
+
+**Before/after.** `structsim RD_create`: longest common run 64 of 77 and LCS
+74 before, **77 of 77, LCS 77 (100%)** after. Per-TU `byteident --why`: BYTES
+11 -> **UNRESOLVED**, 0 non-relocated bytes differ; the remaining row is the
+`.rodata` displacement relocation (addend 0xa4 against 0), which is section
+layout and not a source fact. In the recovered-order partial link the body
+differs in 12 bytes -> **1**: `+0xe3` alone, the table displacement
+(0xa4 against 0xa0). That 4-byte deficit is *before* the RD table and is
+`FAX_process`'s switch-table segment (`.rodata` 0x78..0xa4, 11 entries in the
+blob, 10 in the link; `relocscan` resolves `.text+0x1e1c -> .rodata+0x78`),
+i.e. the open FAX_process SIZE gap, not `RD_create`. The 12 table entries and
+their targets agree once the link's -0x30 `.text` shift is applied.
+**Corrected by F12045:** `FAX_process`'s table has 11 entries in the link too
+(it is at `.rodata+0x74`, not 0x78); the missing 4 bytes are the sixth entry of
+the *preceding* `FAX_class1_command` table at 0x60, whose FRH arm was written
+as `default:` instead of `case FAXC1_FRH:`.
+
+**Linked position is unchanged.** On the merged base (F12042's FAX_process
+facts), first positional divergence remains `RD_create`, cumulative delta
+-16 (predecessor `FAX_process` 1809 -> 1799, padding 15 -> 9), because the
+change moves no bytes' length; what changes is that the first divergent body
+is now 1 byte from the object instead of 12. Positioned reference bytes
+75,942 / 943,398 (8.0%), candidate delta -15,744.
+
+No flags, no attributes, no fixtures. Only `rd.c`'s switch text changed, so
+the ordered EXACT set is untouched: the single move is RD_create BYTES ->
+UNRESOLVED. Gate `make period J=3`: **394 passed, 0 failed**. Census **1,147
+EXACT / 1 UNRESOLVED / 37 REGALLOC / 86 BYTES / 581 SIZE**, grade 0-or-1
+**1,185** (was 1,184). Ratchet OK (floor exact 1,146 -> 1,147, grade 0-or-1
+1,182 -> 1,185, link-selected 1,149 -> 1,150; the `dp_vpcm_exit` displacement
+stays pinned in `tools/ci/displaced.json`).1,182 -> 1,185, link-selected 1,149 -> 1,150; the `dp_vpcm_exit` displacement
+stays pinned in `tools/ci/displaced.json`).
+
+## F12045. `FAX_process`'s "missing" 11th `.rodata` entry does not exist: both tables have 11, and the 4-byte deficit is `FAX_class1_command`'s explicit `case FAXC1_FRH`
+
+*2026-10-25.* Baseline `2a9d62fc5`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686`. `relocscan` resolves the
+FAX switch-table jump at `.text+0x1e1c` to `.rodata+0x78` in the blob. The
+link's jump was at `+0x74`, and F12044 read the four-byte difference as a
+ten-entry `FAX_process` table. It is not. **The `FAX_process` table has eleven
+entries in the blob and eleven in the link**; the missing entry is the sixth
+entry of the *preceding* `FAX_class1_command` table.
+
+**The two dumps, resolved.** Every entry is an `R_386_32` against `.text`; the
+offsets below are relative to the owning function's start.
+
+    blob .rodata 0x60, FAX_class1_command (0x1740), 6 entries:
+        value 0  FTS  0x196d  +0x22d      value 3  FRM  0x1829  +0x0e9
+        value 1  FRS  0x194a  +0x20a      value 4  FTH  0x1812  +0x0d2
+        value 2  FTM  0x18b7  +0x177      value 5  FRH  0x17bb  +0x07b
+
+    blob .rodata 0x78, FAX_process (0x1a10), 11 entries:
+        0 NO_MESSAGE               0x1eb0 +0x4a0
+        1 OK                       0x206f +0x65f
+        2 ERROR                    0x1fea +0x5da
+        3 OK_NO_CARRIER            0x2027 +0x617
+        4 ERROR_NO_CARRIER         0x1fa5 +0x595
+        5 ERROR_ON_HOOK            0x2054 +0x644
+        6 CONNECT                  0x1fbd +0x5ad
+        7 NO_CARRIER               0x2017 +0x607
+        8 NO_CARRIER_NO_MESSAGE    0x1f81 +0x571
+        9 OTHER_CARRIER            0x1f5d +0x54d
+       10 ACCEPT_RATE              0x1f3b +0x52b
+
+    blob .rodata 0xa4, RD_create (0x2130), 12 entries (values 4..15):
+        +0x0f8, +0x0b0 x7, +0x0f8, +0x103, +0x10e, +0x103
+
+The link before this change had only five `FAX_class1_command` entries at
+0x60..0x73, so its `FAX_process` table began at **0x74** (still eleven entries,
+0x74..0x9f) and RD's at 0xa0 -- four bytes earlier than the blob, whose entry
+at 0x74 (0x17bb) is case 5 of the preceding switch. The link did not gain an
+entry; it was missing one before the FAX_process table, not inside it. After the change the link's 0x60 table is byte-for-byte the
+blob's six entries, the FAX_process table sits at 0x78 with its eleven entries,
+and RD's table sits at 0xa4. `relocscan --at .rodata:0x78` now reports
+`.text+0x1e1c -> .rodata:0x78` in **both** objects (it was `0x74` in ours).
+
+**The source fact is the label set, not a `FAX_process` case.** Our FRH arm was
+spelled `default: /* FAXC1_FRH */`. With the pre-check `(unsigned)cmd > 5`
+admitting only 0..5, GCC emits a five-entry table for cases 0..4 and peels the
+value 5 to the default block (`cmp $0x5; ja precheck; cmp $0x4; ja default;
+jmp *table`). The object has no peel: one `cmp $0x5; ja` and a six-entry
+table, whose entry 5 is the FRH arm at 0x17bb. Making value 5 an explicit
+`case FAXC1_FRH:` and dropping the default reproduces it. Semantics are
+unchanged: the pre-check still returns -1 for every value outside 0..5, so
+the six labels are the complete reachable domain and no behaviour moves.
+
+**Enumerated label domain (period compiler, exact flags).**
+
+| spelling | entries | body bytes | insns | notes |
+|---|---:|---:|---:|---|
+| `default:` (baseline) | 5 | 713 | 198 | F12044's link state |
+| `case FAXC1_FRH:` (A) | **6** | 720 | 196 | entry 5 = FRH |
+| `case` + shared `default:` | 5 | 713 | 198 | two labels, one block: compiler peels 5 again |
+| `default:` then `case` | 5 | 713 | 198 | same |
+| `case` + duplicated default body | 6 | 720 | -- | same size as A; unreachable |
+| `case` + `default: return -1;` | 6 | 720 | -- | same size as A; unreachable block merges with the pre-check |
+
+The last two spellings cannot be distinguished from A by this object: the
+default path is unreachable after the pre-check and GCC merges the bodies. The
+object fixes the *fact* -- value 5 is an explicit case label -- not the text of
+an unreachable default, and A is the minimal spelling.
+
+**The other four instructions were an arm-order fact, not the table.** A alone
+is 720 B / 196 instructions because our FTS and FRS arms print before assigning
+`inner_cmd`, while the blob's two arms hoist the assignment above the debug
+branch (`mov $5,%ebx; jbe` at 0x194d/0x1952 and `mov $4,%ebx; jbe` at
+0x1970/0x1975). Assigning `inner_cmd` first in those two arms and measuring the
+four spellings gives:
+
+| FTS/FRS assignment | bytes | insns |
+|---|---:|---:|
+| after the print (both) | 720 | 196 |
+| **before the print (both)** | **708** | **192** |
+| FRS only | 718 | -- |
+| FTS only | 718 | -- |
+
+708 is the blob's own `nm -S` symbol size for `FAX_class1_command` (0x2c4;
+the 0x2d0 gap to `FAX_process` is padding). With both moved, all six arm
+targets land on the blob's offsets, LCS is 191/192 (99.5%, longest run 153),
+and the only non-relocated difference is six bytes in the FRH arm: the blob
+emits `mov $0x3,%ebx` before `jne`, ours after it. Moving the FRH assignment
+*before* the rate check as well was measured at ten differing bytes, so that
+source order is a measured negative; the residual is instruction scheduling,
+not an absent statement. `FAX_process` itself is untouched: 1,809 B / 408
+instructions in the blob against 1,799 / 408, LCS 388 (95.1%), run 130, the
+F12042 branch-encoding gap.
+
+**Linked result.** `RD_create`'s remaining byte is gone: its table displacement
+is `0xa4` in both objects (it was 0xa0), its 293-byte linked body now has
+**0 non-relocated differing bytes** (it was 1), and the FAX_process table's
+eleven entries sit at the blob's 0x78. The first
+positional divergence is still `RD_create` at delta -16, because `FAX_process`
+is 1,799 against 1,809 (-10) and its trailing padding 15 -> 9 (-6); the change
+moves no `FAX_process` byte. `FAX_class1_command` is at delta +0, step +0
+(0x1740 / 0x2c4 in both), which is the first time its start and size have both
+coincided with the blob.
+
+No flags, no attributes, no padding, no fixtures. Verified: gate `make period
+J=3` **394 passed, 0 failed**; census **1,147 EXACT / 1 UNRESOLVED / 37
+REGALLOC / 87 BYTES / 580 SIZE**, grade 0-or-1 **1,185**, link-selected EXACT
+**1,150**; `byteident --ratchet` OK (the single move is `FAX_class1_command`
+SIZE -> BYTES), `compare.py --ratchet` OK (1,195 identical of 1,852, 76
+same-size). Blob sha256 unchanged at
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+
+
+## F12046. `v8_process`'s 18-entry table is proved by four low-valued labels, not by splitting the timeout arms
+
+`v8_process` (blob 0x3770, 590 B, 145 insns) dispatches with
+`cmp $0x11,%eax; ja default; jmp *0x11c(,%eax,4)`: an 18-entry `.rodata` table,
+base 0.  Our baseline produced no table at all -- seven case values in
+4..17 were low enough in density for GCC to prefer a bit-test tree -- and even
+the wave-17 split of the five timeout cases reached only 14 entries, base 4.
+The missing fact is the switch's *lower* end.
+
+**The entry-to-arm map, from the blob's table.**  Offsets are function-relative
+from 0x3770; the class is what the arm body does.
+
+| index (status) | target | offset | class |
+|---|---:|---:|---|
+| 0 (V8_INIT) | 0x37c0 | 80 | default, `xor %edi,%edi` |
+| 1 (ANS_SEND_ANSAM) | 0x37c0 | 80 | default (hole) |
+| 2 (ANS_CM_DETECTED) | 0x37c2 | 82 | empty, break label |
+| 3 (ANS_SEND_JM) | 0x37c0 | 80 | default (hole) |
+| 4 (ANS_TO_CM) | 0x381e | 174 | timeout |
+| 5 (ANS_TO_CJ) | 0x381e | 174 | timeout |
+| 6 (ORG_WAITING_ANSAM) | 0x37c0 | 80 | default (hole) |
+| 7 (ORG_ANSAM_DETECTED) | 0x37c2 | 82 | empty, break label |
+| 8 (ORG_SEND_CM) | 0x37c0 | 80 | default (hole) |
+| 9 (ORG_JM_DETECTED) | 0x37c2 | 82 | empty, break label |
+| 10 (ORG_SEND_CJ) | 0x37c0 | 80 | default (hole) |
+| 11 (ORG_TO_ANSAM) | 0x381e | 174 | timeout |
+| 12 (ORG_TO_JM) | 0x381e | 174 | timeout |
+| 13 (V8_OK) | 0x3832 | 194 | the OK arm |
+| 14 (ORG_SEND_QC) | 0x37c0 | 80 | default (hole) |
+| 15 (ORG_WAITING_QCA1d) | 0x37c0 | 80 | default (hole) |
+| 16 (ORG_BAD_QCA1d) | 0x3895 | 293 | the QCA1d arm |
+| 17 (ORG_TO_QCA1d) | 0x381e | 174 | timeout |
+
+The guard is `cmp $0x11,%eax` -- an unsigned `ja`, so an `int` expression whose
+negative values take the default path.  The state load in the arm that reads it
+is `movzwl` (`rx_state`, `tx_state`, `rx_substate` are 16-bit fields), but the
+guard itself is on the `int` returned by `V8Process`.
+
+**What the table proves about the source.**
+
+- Base 0 requires a case label *distinct from `default`* at value 0.
+  `case V8_INIT: default:` does not work: GCC drops a case that shares the
+  default label from the jump-table range, and the table stays base 4 (measured).
+  Giving `V8_INIT` its own `ret = 0; break;` keeps the range 0..17; the two
+  identical arms are then cross-jumped and entry 0 and the out-of-range branch
+  both land on 0x37c0, which is what the object shows.  This is F12044's
+  pre-merge label multiplicity, applied one level up from arm order.
+- Entries 2, 7 and 9 land on the break label (0x37c2), two bytes after the
+  default's `xor`; a hole would land on 0x37c0.  So those three values are
+  explicit empty `break` arms.  One arm carrying all three is the minimal
+  spelling (the RTL merges it).
+- The default arm assigns 0 explicitly -- the out-of-range `ja` reaches the
+  `xor %edi,%edi`, while the empty arms skip it.
+- The five timeout values share one target, so grouping them in source is
+  faithful; the wave-17 split was a workaround for the missing low labels and
+  is **not** part of the source (it reaches LCS 136 versus 143 for the grouped
+  form).
+
+**Measured domain (Gentoo period compiler, exact flags).**
+
+| source shape | table | LCS / run |
+|---|---|---|
+| baseline (grouped timeouts, no low labels) | none (bit-test tree) | 93 / 20 |
+| split timeouts, no low labels | 14, base 4 | 101 / 34 |
+| split + `case V8_INIT: default:` | 14, base 4 | -- |
+| split + low labels (0 own `ret=0`, 2/7/9 empty, default `ret=0`) | 18, base 0 | 136 / 46 |
+| **grouped + low labels (the committed form)** | **18, base 0** | **143 / 63** |
+| grouped + low labels, default empty | 18, but targets reordered | 102 / -- |
+| grouped + low labels, `V8_INIT` empty | 18, entry 0 on the break label | 136 / 46 |
+| shared tail as `goto` label instead of the post-switch guard | 18, layout reordered | 111 / 46 |
+| tail duplicated in OK and BAD (RTL cross-jumps it) | 18, base 0 | 144 / 135 |
+
+The last row is the only form that removes the residual `if (arg >= 0)` test
+(see below), but it duplicates a straight-line body across two arms and was
+declined; the label-set question does not require it.
+
+**Before/after.** `structsim v8_process`: 145/158 insns, run 20, LCS 93 ->
+145/153, run **63**, LCS **143 (93.5%)**; blob-only 80 -> **2**, ours-only
+91 -> **10**, structure surplus 17 -> **9**.  Seventeen of the eighteen table
+targets now sit at the object's own function-relative offsets (80, 82, 174,
+194); only entry 16 is +18 because our build keeps a runtime `arg >= 0` guard
+the object threaded away -- the object's shared `modem_set_param` tail is
+reached only from the two arms that set `arg`, and our natural post-switch
+guard survives.  `v8_process` stays SIZE (623 B against 590).
+
+**Collateral and gate.** The change is switch text in `src/v8/v8.c` only.  It
+also takes `dp_v8_init` -- the next function in the same TU -- from REGALLOC
+to byte identity: measured by reverting, the per-TU EXACT count is 1,147
+without the change and 1,148 with it, and the REGALLOC count 37 -> 36, with no
+loss.  Gate `make period J=3`: **394 passed, 0
+failed**.  Census **1,148 EXACT / 1 UNRESOLVED / 36 REGALLOC / 89 BYTES / 578
+SIZE**, grade 0-or-1 **1,185**, link-selected EXACT **1,151**; `byteident
+--ratchet` OK (floor exact 1,146 -> 1,148, grade 1,182 -> 1,185, link 1,149 ->
+1,151).  Phase 3: positioned reference bytes 76,713 -> **76,575** of 943,398
+(8.1%), candidate delta -15,744 -> **-15,712**; exact relocations 1,098 ->
+**1,127**, exact symbols 466 -> **469**.  The positional count dips because the
+candidate layout moves; the total displacement and the record counts improve.
+No flags, no attributes, no padding, no fixture.
+
+## F12047. `v22_process`'s 17-entry table is the protocol's status vocabulary: nine error-valued cases are separate source labels, and 12..15 are default holes
+
+*2026-10-25.* Baseline `8cf656edd`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686`. Wave 17 measured that twelve
+duplicated error bodies give the object's 17-entry table and target order but
+declined the change because the label set was not uniquely determined
+(F12044's boundary). The set is determined, by the producers of
+`struct v22fp::status` rather than by the object alone.
+
+**The blob's table, resolved.** `relocscan`/`dis.py` put the jump at
+`.text+0x5200` (`jmp *0x21c(,%eax,4)`, `R_386_32 .rodata`), so the 17 entries
+start at `.rodata+0x21c`; every entry is an `R_386_32` against `.text` and the
+offsets are relative to `v22_process` (0x5130).
+
+    index  value   target   arm
+      0    393     0x52b9   +0x189   result = DPSTAT_OK
+      1    386     0x52b2   +0x182   tx_bits_wanted = 0; result = DPSTAT_OK
+      2    256     0x5230   +0x100   error
+      3    482     0x5312   +0x1e2   2400: bits = 4, TX/RX rate = 2400
+      4    400     0x52c0   +0x190   1200: bits = 2, TX/RX rate = 1200
+     5..16  256    0x5230   +0x100   error
+
+Five unique targets, in the order the source labels 0, 1, 2, 3, 4 give. The
+shared error body is `mov $0x4,%ebx` at 0x5230 (result = DPSTAT_ERROR) falling
+into the common tail at 0x5235: compare the result with `dp->status`, and if
+they differ and `dsplibs_debug_level > 1`, print `v22: V22STAT: --> %d` with
+the RAW status byte reloaded from the saved result at 0x20(%esp). It then
+stores `dp->status` and returns. The two `DPSTAT_OK` arms jump into that same
+tail, so the error block and the report/store/return tail are shared. Nothing
+in the error arm reads the value it was reached with.
+
+**The label set is the set of values `V22FP_modem` can return.** The switch
+tests `result & 0xff`, and `V22FP_modem` returns the 32-bit word at
+`fp->status`, so the low byte is what every V.22 writer stores. Over 0..16 the
+writers produce exactly
+
+    0   v22_data's local status (v22mod.c:371)
+    1   V22_STATUS_01: v22_data, v22_retrain, connect_1200, v22_answer,
+        v22_originate, and V22FP_create
+    2   v22_retrain (v22mod.c:566)
+    3   V22_MSG_CONNECT_2400: connect_2400 (689, 761), v22_answer (768)
+    4   V22_STATUS_04: connect_1200 (1097, 1128)
+    5   V22_ST_05: v22_ans_rmloop2 (1016)
+    6   v22_org_rmloop2 (896)
+    7   V22_ST_07: v22_org_rmloop2 (900), v22_ans_rmloop2 (984, 1021)
+    8   V22_ST_08: v22_ans_rmloop2 (1044)
+    9   V22_ST_RETRAIN_REQ: v22_ans_rmloop2 (290)
+   10   V22_ST_ANS_RMLOOP2: v22_ans_rmloop2 entry (921)
+   11   V22_ST_RETRAIN: connect_2400 (522), V22FP_modem (313, 329)
+   16   V22_MSG_NO_CARRIER: connect_2400 (535), connect_1200 (1154),
+        v22_data (246, 360)
+
+No writer anywhere in `src/pump/v22/` produces 12, 13, 14 or 15; the values
+above 16 that do exist (17, 19, 20, 21, 22, 23, 24) are outside the table and
+take the `ja` to the same error arm. The nine error-valued labels are
+therefore 2 and 5..11 plus 16, and 12..15 are the object's `default` holes.
+
+**The object also fixes that each value is its own statement.** Collapsing the
+nine values into one fallthrough label group -- the obvious spelling -- makes
+GCC 3.4 emit the decision chain a five-label switch gets, not a table. Measured
+on the period compiler with the exact flags (bytes are `nm -S`; LCS/run are
+`structsim` against the blob's 150 instructions):
+
+| spelling | entries | bytes | insns | LCS | run |
+|---|---:|---:|---:|---:|---:|
+| baseline, `case 16` sharing `default` | 0 | 634 | 169 | 113 | 34 |
+| 13 reachable values, one shared body | 0 | 634 | 169 | 113 | 34 |
+| **13 reachable values, one statement each** | **17** | **585** | **161** | **124** | **34** |
+| 17 values including 12..15, one statement each | 17 | 565 | -- | 104 | 34 |
+
+Both table spellings have the blob's five unique targets in the blob's order.
+The 13-value set is the one the vocabulary supports, and it is also the better
+structural match (LCS 124 against 104): the 17-value spelling is smaller only
+because its exhaustiveness over 0..16 changes GCC's tail-duplication decision.
+`contentgap` moves with it: structure surplus 23 -> 11 (4 blob / 15 ours
+unique), blob-only 20 instructions in 8 hunks, ours-only 31 in 9.
+
+**The remaining 28 bytes are outside the switch.** This TU emits two
+`modem_put_bits` call sites and two copies of the dispatch, one on each loop
+path (0x233/0x238 after the clamp, 0x295/0x29a after the narrowing loop),
+where the object has one join at 0x51dc. The same duplication is present in
+the baseline decision-chain build, so it is not caused by the label set; it is
+a tail-duplication difference in the `if (tx_bits_wanted) ... else rx_len = 0`
+plus `for` structure and stays open.
+
+No flags, no attributes, no padding, no fixtures. Verified on the merged head
+that also carries #385's v8 recovery: gate `make period J=3` **394 passed, 0
+failed**; census **1,148 EXACT / 1 UNRESOLVED / 36 REGALLOC / 89 BYTES / 578
+SIZE** on 1,852, grade 0-or-1 **1,185**. v22 adds no EXACT row --
+`v22_process` stays SIZE -- and `--list-exact` is identical before and after
+it. (At the `8cf656edd` base the default worst-copy view was 1,146 / 2 while
+the link-selected view was 1,147 / 1, which is the state wave 18's brief
+quoted; the difference is COMDAT accounting and a fresh base build measured
+the same 1,146 / 2, so no row was lost.) Link-selected EXACT **1,151**;
+`byteident --ratchet` OK (1146 -> 1148 / 1182 -> 1185 / 1149 -> 1151 / 36 ->
+36); `compare.py --ratchet` OK (1,195 identical of 1,852, 78 same-size).
+Positioned reference bytes **77,081 / 943,398 (8.2%)** (76,713 before both
+waves, 76,575 after #385 alone), candidate delta -15,696. Blob sha256
+unchanged at
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+## F12048. SIZE band at delta 1-3: a dead-store pair in `VPcmV34SetMohMessageBits` closes EXACT, and `_delete_data_rx_modem`'s receiving local
+
+*2026-10-25, worktree `w18-size`, base `8cf656edd`, rebased onto `97c9b83b7`
+(F12046/F12047).* The brief screened the
+SIZE band the recent waves did not: `byteident.py --near 2000` lists 704
+non-exact symbols, and **206 are SIZE with |instruction delta| 1, 2 or 3**.
+After the brief's exclusions (F12016's four; `receiver`, `V34agc`,
+`V34demodulate`, `agcadapt`; `VOICE_process`, `FAX_process`,
+`FAX_class1_command`, `RD_create`; the v23_create/datapump emission order,
+vpcm order, COMDAT/link-selected rows, V90 call-edge rows, the SUV wrapper,
+`CALLPROG_Progress`, v34handshak/v8handshak) **181 remain**; `structsim` and
+`contentgap` were run over all of them. Two rows carry source facts; the rest
+are allocation, scheduling or block-merge residues.
+
+**`VPcmV34SetMohMessageBits` (350 B) becomes EXACT.** The object stores
+`bits[0] = 0x50` at 0x8842 and `bits[0] = 0x90` at 0x88c1, then overwrites
+both (`0xabe0`-based MHack, and the three `moh_clrd_sel` values); ours omitted
+the two dead base stores, leaving 69 instructions against the object's 71.
+The source comment had reasoned that the object's compiler "would have been
+free to drop them too" -- it did not. Restoring the two statements gives
+**71/71 instructions, grade 0 EXACT**, LCS 100%. Only the final value is
+observable either way.
+
+**`_delete_data_rx_modem` (149 B) gets a receiving local.** The object tests
+the slot with `movzwl 0xe(%edx),%eax; cmp $0xc,%ax` (0x941ae/0x941b2); ours
+folded it into `cmpw $0xc,0xe(%eax)`. An `unsigned short` receiving local
+reproduces the object's zero-extending load and 16-bit register compare. The
+symbol stays SIZE, but 40/38 -> **40/39 instructions**, LCS 37 -> **39**
+(92.5% -> 97.5%), longest run 32 -> **38**. The one remaining instruction is
+the object's duplicated `mov 0x10(%edx)` at 0x94230 before the jump to the
+shared free; ours loads the same field once at the join. That is a block merge
+(`sched2`-class), not an absent statement, and no spelling was found that
+keeps the load duplicated without also duplicating the free.
+
+**Measured blockers on the other worked rows** (`dis.py` addresses; all
+first differences are pre-RTL or block layout, no source fact adopted):
+
+- `TxNextStateV21` (SIZE 26 B) and `RxNextStateV21` (SIZE): the object reads
+  the state field twice (`movswl 0xc/0x8(%edx)`) where ours CSEs a
+  `movzwl` + `movswl` pair, or reloads the pointer. Pristine
+  `TxNextStateV21` is three bytes from the object (one `mov 0x20(%ebx)`, the
+  default arm reading `tx->hdx->state`); switching that read to the cached
+  `hdx->state` removes the pointer load but makes the compiler CSE the field,
+  and using the local `state` removes the default reload. Same CSE boundary in
+  both functions; no source spelling escaped it.
+- `porcessFirstStudy` (98.0% LCS) and `setTimingStateParameters` (93.6%):
+  the object keeps a store in each switch arm (`0x280c(%ebp,%esi,1)`, and
+  `0x236(%ebx)`) where ours merges them into one conditional-value store; the
+  arms reach a common tail through a `continue`/`break`.
+- `V32FP_control`: three independent residues -- a duplicated `and $0xfd`,
+  one `mov R,R`, and `2 - (trellis == 0)` emitted as `setne; inc` rather than
+  `sete; movzbw; sub` -- with the last two equivalent for every input.
+- `setQcLinearMapping`: loop rotation; the phase test sits in the preheader
+  instead of the latch.
+- `FPM_iir_filt`, `detector_create`, `V27TX_modem`, `FloatFIR::process`,
+  `V34EqualizerCenterAdapt`: one `mov R,R` copy, one `flds` reload, or two
+  `mov R,(R)` spills before `imul` -- allocation only.
+- `zfFLTUTL_GetMaxAbsValue`: the object's `sub $0x4,%esp` / `pop %eax` is a
+  dead four-byte slot; reproducing it would be padding.
+- `v17tx_create`/`v17rx_create`: duplicate epilogues tail-merged in ours.
+- `SGD_control`: the `sym_bits` unsigned-short receiving-local / 16-bit
+  product domain already measured in F11350; `setV92CPpckFromParamsInfo`:
+  F11940's declaration/reload domain, remaining graphs.
+- `V90MP::infoToBits` / `V90CP::infoToBits`: the 0x21 vs 0x23 difference is a
+  stack-local slot number, not a field; V90 call-edge domain.
+
+**Verified (rebased).** Gate `make period J=3` **394 passed, 0 failed**.
+Census **1,149 EXACT / 1 UNRESOLVED / 36 REGALLOC / 89 BYTES / 577 SIZE** over
+1,852 (rebased master `97c9b83b7`: 1,148/1/36/89/578); grade 0-or-1 **1,186**
+(was 1,185); link-selected EXACT **1,152** (was 1,151). `byteident --ratchet`
+OK: the only EXACT that left the bucket is the pre-existing evidence-pinned
+`dp_vpcm_exit` displacement; no grade-0/1 loss. Phase 3: positioned reference
+bytes **77,070/943,398 (8.2%)**, unchanged from the rebased master baseline,
+and candidate `.text` 711,559 both before and after -- the inserted bytes fall
+inside section alignment, so the linked picture is unmoved; the first
+divergence is still `RD_create`. No flags, attributes, padding or test edits.
+
+## F12049. `v22_process`'s duplicated `modem_put_bits`/dispatch is the clamp arm's source order: the object tests `jne` to the clamp and falls through on zero
+
+*2026-10-25, worktree `w19-v22`, base `02ffc9f6b` (F12046/F12047 merged),
+Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386 -mtune=i686`.* The
+brief was the residual F12047 left open: 28 bytes outside the switch, where
+this TU emitted two `modem_put_bits` call sites and two dispatch copies, one
+on each loop exit, against the object's single join.
+
+**The object's CFG.** After the second `tx_bits_wanted` test,
+`51a0 test %eax,%eax / 51a2 jne 5207` sends the NONZERO case to the clamp and
+lets the zero case fall through: `51a4 xor %edi,%edi / 51a6 xor %eax,%eax /
+51a8 mov %edi,0x28(%esp)` sets `rx_len = 0`, then `51ac xor %edx,%edx /
+51ae cmp %eax,%edx / 51b0 jge 51dc` enters the one narrowing loop. The clamp
+arm at `5207` tests `cmp $0x64; jbe 51ac`, and both its normal and its
+debug-clamped exits `jmp 51ac`. The loop body `51c0..51da` falls through to
+the join at `51dc`, which is the single `modem_put_bits` call site
+(`51f1`) and the single `jmp *0x21c(,%eax,4)` dispatch. So the object has
+one loop preheader with two predecessors, one loop, one exit and one join;
+nothing is shared by duplicating a tail.
+
+**What our source did.** The pre-change source wrote the complement,
+`if (tx_bits_wanted != 0) { clamp } else { rx_len = 0; }`, then the loop.
+GCC 3.4 gives a forward conditional branch a not-taken prediction, so it made
+the clamp the fallthrough arm, laid that arm out before the loop, cloned the
+loop header and exit for it, and tail-duplicated the epilogue: `modem_put_bits`
+at `0x233` and again at `0x295`, the dispatch at `0x238` and again at `0x29a`,
+585 B / 161 insns, LCS 124 (77.0%), run 34.
+
+**The recovered spelling and the enumeration.** Three source-ordered
+spellings of the same decision were compiled; the domain is the arm order
+plus the nesting, and nothing else in the function was touched:
+
+| spelling | put_bits sites | bytes | insns | LCS | run |
+|---|---:|---:|---:|---:|---:|
+| `if (wanted != 0) { clamp } else { rx_len = 0; }` (pre-change) | 2 | 585 | 161 | 124 | 34 |
+| **`if (wanted == 0) { rx_len = 0; } else if (clamp)`** | **1** | **553** | **149** | **134** | **46** |
+| `if (wanted == 0) { rx_len = 0; } else { if (clamp) }` | 1 | 553 | 149 | 134 | 46 |
+
+The two inverted spellings compile identically, so the mapping is unique over
+the domain and exactly one of the two arm orders reproduces the object: the
+emitted test is `jne` to the clamp with the zero arm in the fallthrough, the
+loop preheader at `0x1fc` takes both entries, and the one join at `0x230` is
+the one `modem_put_bits` (`0x245`) and the one dispatch (`0x254`). Splitting
+the clamp arm's body differently (nesting the `if`) is not a second mapping;
+it is the same statement order.
+
+**The remaining four bytes are allocation, not statements.** `553 + 4 = 557`
+and `149 + 1 = 150`. The object keeps the `tx_bits` base in `%edi` (so the
+widening loop loads `movzbl (%edi,%edx,1)`) and the `rx_bits` base in `%esi`
+(so the narrowing store is `mov %al,(%esi,%edx,1)`), and it rematerializes
+the status byte for the debug print (`movzbl 0x20(%esp),%edi` at `0x5290`).
+This build allocates `tx_bits`/`rx_bits` the other way round, folds the
+narrowing base into `0x1b4(%ebx,%edx,1)`, keeps the status in `%esi` across
+the switch, and prefers `cmp %ebx,0x8(%ebp)` to the object's
+`cmp 0x8(%ebp),%ebx`. Those are register-allocation and rematerialization
+choices; no statement is missing, and the checked instruction sequences
+otherwise agree. Per the standing rule, they are not chased inside the
+function, and the symbol stays SIZE (grade 1 rejects on the 150-vs-149 count
+with `--why`).
+
+**Verified.** Gate `make period J=3` **394 passed, 0 failed**. Census
+unchanged on the 1,852 denominator: **1,149 EXACT / 1 UNRESOLVED /
+36 REGALLOC / 89 BYTES / 577 SIZE**; grade 0-or-1 **1,186**; link-selected
+EXACT **1,152**. `byteident --ratchet` OK (1146 -> 1149 / 1182 -> 1186 /
+1149 -> 1152 / 36 -> 36; only the pre-existing evidence-pinned
+`dp_vpcm_exit` displacement). `compare.py --ratchet` OK (the report's
+cumulative identical 629 -> 1,196 and same-size 52 -> 78 against its stored
+baseline; v22_process moves from 585 to 553 bytes and is not an EXACT row
+before or after, so this change contributes no identical row). Phase 3: positioned reference bytes
+**77,325 / 943,398 (8.2%)**, up from 77,070; candidate `.text` **711,527**
+(from 711,559, the function's -32); candidate delta -15,696. No flags,
+attributes, padding or test edits; blob sha256 unchanged.
+
+## F12050. SIZE band at delta 1-3, wave 19: `_delete_data_rx_modem` closes EXACT from its per-arm free, and the status quality tests are ordering comparisons
+
+*2026-10-25, worktree `w19-size`, base `02ffc9f6b`, merged forward onto
+`f5b859357` (which carries F12049 for `v22_process`).* Continued F12048's
+screen. Fresh `make -s tc J=4`: 300/300 objects, denominator **1,852**, and
+the only zero-symbol objects are the nine documented inputs that emit none:
+seven FILE-record placeholders (`V34CONST.c`, `V17txtab.c`, `V32RXTAB.c`,
+`B103.c`, `Tab144.c`, `Tx_rxtab.c`, `MEMORYC.c`), `v34digital.c`'s layout
+checks and `pow.S`'s toolchain-input record. The untouched tree
+measures **1,148 grade-0 EXACT / 2 UNRESOLVED / 36 REGALLOC / 89 BYTES / 577
+SIZE** in the default worst-copy view; the two UNRESOLVED are `RD_create` and
+`v22_local_loop`, both section-relocation-naming limits documented before. The
+`tc_repro` view the ratchet reads reports the handover's **1,149 / 1**
+(`v22_local_loop` resolves there). After merging `f5b859357` (#388) the
+default view also reports **1,149 / 1**: `v22_local_loop`'s verdict flips to
+EXACT on the merged build although this change does not touch its TU
+(`v22mod.c` is byte-identical and the blob sha256 is unchanged); the gain is
+recorded, not claimed as a source recovery. `byteident.py --near 2000` gives **205**
+SIZE rows at |instruction delta| 1-3 today (206 in F12048; the closed
+`VPcmV34SetMohMessageBits` left the band).
+
+**`_delete_data_rx_modem` becomes EXACT (40/40, LCS 40, run 40).** F12048
+stopped at 40/39 with the object's duplicated `mov 0x10(%edx)` at 0x094230
+unexplained. The object loads `vmi->modem_cfg` twice -- 0x0941b8 on the
+non-V.17 path and 0x094230 at the end of the V.17 arm -- and shares only the
+`mov %eax,(%esp)`/`call sysdep_free` tail at 0x0941bb. A single shared
+`sysdep_free(vmi->modem_cfg)` makes GCC 3.4.2 merge the loads too. The source
+fact is the per-arm free: the V.17 arm frees the config itself after its last
+`vmi = ctx->modem_vmi`, and the non-V.17 path has its own `else` arm. GCC
+cross-jumps the two identical calls and keeps the two loads. Four other
+spellings were measured: the shared statement (40/39, LCS 39, run 38); a
+`cfg` local loaded before the branch (39, LCS 38); the `vmi` reload moved out
+of the arm (39, LCS 39); and an outer `cfg` plus an arm-start reload (39,
+LCS 38, GCC CSEs the duplicate read). Only the per-arm free maps onto the
+object.
+
+**The quality bit in `V21RX_status`, `V17RX_status` and `V29RX_status` is an
+ORDERING comparison.** F12014 recovered `V21RX_control` with
+`(flags & C) > 0`; the complement here is `(flags & C) <= 0`, not `== 0`.
+GCC 3.4.2 rewrites the equality form into a shift-and-complement
+(`movsbw`/`not`/`movzwl`/`shr $0xf`), while the ordering form keeps the
+object's `testb $0x80`/`sete` at 0xa2487/0xa248b (`V21RX_status`),
+0xa0947-ish (`V17RX_status`) and 0xa4627-ish (`V29RX_status`).
+
+| symbol | before | after | LCS | run |
+|---|---|---|---|---|
+| `V21RX_status` | 41 insns | **40** | 34 -> **37** | 12 -> **18** |
+| `V17RX_status` | 65 insns | **64** | 47 -> **49** | 13 -> **19** |
+| `V29RX_status` | 64 insns | **63** | 46 -> **49** | 13 -> **19** |
+
+The cell family measured for `V21RX_status`: `== 0` (34), `!(...)` (34),
+`<= 0` (**37**), `< 1` (**37**), `== 0U` (34), `(unsigned)` cast (34),
+`(short)` cast (34), `(signed char)` cast with `==`/`!` (34). The two
+ordering cells are equal; `<= 0` is adopted as the smaller-distance form
+(the `< 1` spelling is not the author's natural one). The remaining
+`V21RX_status` difference is the strength reduction `2 * f22`: the object
+does `add %ecx,%ecx` in place, ours `lea (%edx,%edx,1),%ecx`, one byte;
+declaration-order and load-order cells (`short` order, `bit_samples` first)
+did not move f22 into `%ecx`.
+
+**Other rows read at operand level and left blocked (addresses are the
+forcing sites):**
+
+- `TxNextStateV21`: nine further cells beyond F12048 -- default printf
+  argument `hdx->state`, `state`, `(short)hdx->state`,
+  `(short)tx->hdx->state`; switch on `hdx->state` or `tx->hdx->state`; `int
+  state`; and three declaration/assignment orders. The object's default arm
+  at 0xa2676 reloads only the field (`movswl 0xc(%edx)`, edx from 0xa25b8);
+  every cell either keeps our `mov 0x20(%ebx)` (65/66, LCS 65) or triggers a
+  `movzwl`/`movswl`/`cwtl` re-materialisation (LCS 63). Still a CSE
+  boundary, not a source fact.
+- `porcessFirstStudy`: the object stores `byte_280c[phase]` in each arm --
+  `mov %bl,0x280c(%ebp,%esi,1)` at 0x413fe after `xor %ebx,%ebx`, and
+  `mov %cl,...` at 0x4140f after `incb 0xa96a(%esi)`; ours if-converts to a
+  selected value and one shared store at 0x11b8. The source already has both
+  stores. Preventing GCC's if-conversion needs a volatile or an artificial
+  read, both fits; declined.
+- `setTimingStateParameters`: the case-7 first-switch tail keeps its own
+  `mov $0x5dc`/`mov $0xfa0` and jumps to 0x60843 where ours falls into the
+  case-8 tail (0x1286c); the per-arm `0x234`/`0x236` stores are present in
+  both. Tail-merge/block-order, no source lever in the tested arms.
+- `K56FLEX_Delete` and `_iir_filter_delete`: the object builds a call frame
+  and calls `sysdep_free` (0x102c0, 0x7ca30) where ours sibling-jumps. Six
+  spellings (braces, early return, a temp local, a trailing `return`, an
+  `else return`, `int` return) all leave the `jmp`; an unprototyped callee
+  or a per-function flag would be apparatus. Left blocked.
+- `V17TX_status`/`V29TX_status`: the object's first `+0x14` clear is
+  `movzbl 0x14(%edx); and $0xfc,%al; mov %al,0x14(%edx)` at 0xa1c18-0xa1c1e
+  while ours emits `andb $0xfc,0x14`; spelling the access through an
+  `unsigned char *` local changes nothing. The sibling `+0x15` clear is an
+  `andb` in the same object, so the two clears differ in source shape and
+  the discriminator is not the pointer type.
+- `FloatFIR::setCoefficients`: 23/24, LCS 21; the object's `mov 0x10(%ebx)`
+  reload and `mov %ecx,%eax` copy are register allocation around
+  `index > room ? room : index`.
+
+**Verified (merged `f5b859357`).** `make period J=3` **394 passed, 0
+failed**. Default-view census **1,150 EXACT / 1 UNRESOLVED / 36 REGALLOC /
+89 BYTES / 576 SIZE** over 1,852; grade 0-or-1 **1,187** (master's default
+view before this branch: 1,149/1/36/89/577, grade 0-or-1 1,186). The
+`_delete_data_rx_modem` EXACT is this change's; `v22_local_loop` is the
+#388-merge resolution noted above. No EXACT or grade-0/1 symbol was lost.
+`make byteident-ratchet` OK: faithful view **1,150 EXACT / 1 UNRESOLVED**
+(1,146 -> 1,150 over the stale #353 baseline), link-selected **1,153**
+(1,149 -> 1,153), regalloc unchanged, and the one reviewed `dp_vpcm_exit`
+displacement is still the only one. No flags, attributes, padding, test
+edits or apparatus changes.
+
+## F12051. SIZE band at delta 1-3, wave 20 (cluster A): both delete wrappers close EXACT, and three ordering facts land
+
+*2026-10-25, worktree `w20-sizeA`, base `64c87d44e`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+Five cluster-A rows of F12048/F12050's band, measured with `structsim` before
+and after and every operand traced with `dis.py`.
+
+| symbol | insns blob/ours | LCS | run | verdict |
+|---|---|---|---|---|
+| `K56FLEX_Delete` | 8/5 -> **8/8** | 3 -> **8** | 2 -> **8** | **EXACT (grade 0)** |
+| `_iir_filter_delete` | 8/5 -> **8/8** | 3 -> **8** | 2 -> **8** | **EXACT (grade 0)** |
+| `setTimingStateParameters` | 94/93 | 88 -> **91** | 46 | SIZE |
+| `V17TX_status` | 28/26 | 24 -> **25** | 15 | SIZE |
+| `V29TX_status` | 26/24 | 22 -> **23** | 15 | SIZE |
+
+**THE TWO DELETE WRAPPERS CLOSE ON A DEAD HANDLE CLEAR.** The object builds a
+call frame at 0x102c0 (`sub $0xc` / `mov 0x10(%esp),%eax` / `test` / `mov
+%eax,(%esp)` / `call sysdep_free` / `add $0xc` / ret) and at 0x7ca30
+identically, where the pristine source's `if (p) sysdep_free(p);` is a
+conditional sibling call (`mov 0x4(%esp),%eax` / `test` / `je` / `jmp
+sysdep_free`). The same source shape **does** tail-jump in
+`RingDetector_Delete` (0x2368) and `dcr_delete` (0xc8), so the frame is NOT a
+property of the wrapper idiom or of the compiler; a statement must follow the
+call. Sixteen spellings were compiled: every form that maps onto the eight
+instructions ends in a dead assignment after the free (`p = 0;`, with or
+without braces, and the same through a local copy); every ordinary form keeps
+the `jmp`. The by-value clear is folded away and changes no behaviour, and the
+object's call frame is the evidence that the author's body continued past the
+free. `p = 0;` is adopted; both symbols are grade 0 EXACT (8/8, LCS 8, run 8).
+
+**`setTimingStateParameters`: the non-role switch's case 7 stores `i_gain`
+before `p_gain`.** The object stores +0x236 (`0x2`) at 0x608d3 and +0x234
+(`0x5dc`) at 0x608df; ours emitted them in the other order from the source
+text. Reordering that arm to `timing_i_gain` then `timing_p_gain` gives LCS
+88 -> **91** (93.6% -> 96.8%), blob-only 6 -> 3, ours-only 5 -> 2, with the
+total instruction count unchanged at 93/94. The residual one instruction is
+cross-jump/allocation: the object gives role case 5 its own +0x236 store
+(0x60922) and shares only the dwell/call tail at 0x607f5, where ours shares
+the store at 0x127ce with non-role state 8; and the object has two +0x232
+sites (0x60801, 0x60843) where ours has three (0x127e1, 0x12823, 0x1285c,
+state 2 keeping its own `0x190`). The role-case-5 `i_gain` first cell was
+measured and is **worse** (blob-only 6, ours-only 7); reverted. No statement
+is missing.
+
+**The two TX status functions: the config load belongs between the two flags
+clears in the source.** `V17TX_status`'s object order is +0x14 clear at
+0xa1c18, `p[0x10]` load at 0xa1c21, +0x15 clear at 0xa1c25;
+`V29TX_status` is the same at 0xa507e/0xa5085. Hoisting the load into a
+`unsigned char t` between the clear statements reproduces that order: LCS
+24 -> **25** and 22 -> **23**, blob-only 4 -> 3 and 4 -> 3, ours-only 2 -> 1
+and 2 -> 1, instruction counts 26/28 and 24/26 unchanged. The remaining
+difference is the +0x14 clear's form.
+
+**BLOCKED: the +0x14 clear's register RMW.** The object does `movzbl
+0x14(%edx)` / `and $0xfc,%al` / `mov %al,0x14(%edx)` (0xa1c18-0xa1c1e);
+ours emits `andb $0xfc,0x14(%edx)`. The asymmetry is field-specific and
+tree-wide: the object has **0** `andb ...,0x14` and **7** `andb ...,0x15`
+(the seven status writers). But eight C spellings in scratch TUs -- compound
+vs assignment form, with and without the `unsigned char` cast, a receiving
+local, an `unsigned char *` lvalue, 8-bit signed/unsigned bitfields -- all
+compile to `andb`; only `volatile` produces the load/and/store, and
+`V17RX_status` proves +0x14 is **not** volatile: it reuses a loaded `%al`
+across a store to +0x14 (load 0xa096e, store 0xa0977, `and $0xfc,%al`
+0xa097a), which a volatile access would forbid. So the form is instruction
+selection/scheduling, not yet a source fact; no volatile or artificial read
+was adopted.
+
+**BLOCKED: `porcessFirstStudy`'s per-arm store.** The object stores
+`byte_280c[phase]` in each arm (0x413fe after `xor %ebx,%ebx`, 0x4140f after
+`incb 0xa96a(%esi)`); ours if-converts to one conditional-value store at
+0x11b8. The nested form where the count-and-store body is written in both the
+inner `else` and the outer `else` -- the object's shared count block at
+0x41407 is reached from both the `altRbsFlag` test and the `n > 9` test --
+compiles to **the same code** as the `continue` form (204/203, LCS 200, run
+131, unchanged). No spelling without volatile/artificial reads split the
+stores.
+
+**BLOCKED (confirmed): `TxNextStateV21`'s default-arm CSE.** Spelling the
+debug argument `hdx->state` instead of `tx->hdx->state` is **worse**: LCS
+65 -> 63, two blob-only `movswl 0xc` and ours-only
+`movzwl`/`movswl`/`cwtl`. Reverted; F12050's diagnosis stands.
+
+**Verified (final tree).** `make period J=3` **394 passed, 0 failed**.
+Default-view census **1,151 EXACT / 2 UNRESOLVED / 36 REGALLOC / 89 BYTES /
+574 SIZE** over 1,852; grade 0-or-1 **1,189** (1,187 before, +2, no loss).
+Ratchet view: per-TU EXACT **1,152**, link-selected EXACT **1,155**;
+`byteident --ratchet` OK (1146 -> 1152, 1182 -> 1189, 1149 -> 1155, regalloc
+36 -> 36; the one reviewed `dp_vpcm_exit` displacement is still the only
+one). `compare.py --ratchet` OK (identical 629 -> 1,199 against its stored
+baseline; the two new EXACT rows are this change's). Phase 3 positioned
+reference bytes **77,336/943,398 (8.2%)**, up from 77,325; candidate `.text`
+**711,527** and candidate delta -15,696 unchanged; first divergence still
+`RD_create`. No flags, attributes, padding or test edits; blob sha256
+unchanged (`1f3e56d0...cf0b379`).
+
+## F12052. SIZE band at |instruction delta| 4-8, wave 21: `detectRetrainReq`'s phase test compares the incremented value before a per-arm store
+
+*2026-10-25/26, worktree `w21-band`, branch `recover/w21-band`, base
+`2c43c4a96`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Continued the SIZE screen into the next band. Fresh `make -s tc J=4`:
+300/300 objects, denominator **1,852**. `byteident.py --near 2000` reports
+**57** SIZE rows at |blob - ours instruction count| in **4..8** (23 at +4,
+14 at +5, 7 at +6, 7 at +7, 6 at +8; none at -4..-8). The brief's exclusions
+remove two of them from consideration, leaving **55**:
+
+- `v8_process` (+7) -- another wave owns it;
+- `v23FP_rx_progress` (+4) -- the v23 emission-order domain.
+
+`--comdat` names only the three `Scrambler` bodies, so no band row is a
+COMDAT/link-selected duplicate; `V90DemodulatorD1Ev/D2Ev` are real symbols.
+The several `+0` SIZE rows in the near list (`V90Phase4Modulator::
+generateV92Symbol`, `FAX_process`, ...) are below this band and were not
+screened. Rows were ranked by LCS (`structsim`) and the top ones read at
+operand level with `structsim`, `contentgap`, `bbalign --anchors`,
+`tools/dis.py` and a register-canonicalised sequence diff.
+
+| symbol | insns blob/ours | LCS | run | verdict |
+|---|---|---|---|---|
+| `detectRetrainReq` | 92/96 -> **92/93** | 87 (90.6%) -> **89 (95.7%)** | 30 -> 28 | SIZE (+1) |
+| `V34XF_IndicateTrn2dReceived` | 29/33 -> **29/29** | 21 (63.6%) -> **23 (79.3%)** | 7 -> 8 | not landed (see below) |
+
+**`detectRetrainReq`: the phase counter's increment is compared as a
+computed value and stored only on the unequal arm.** The object at
+0x5e92b-0x5e93b is
+
+```
+0x5e92b  mov 0xa24c(%edi),%eax     ; retrain_phase
+0x5e931  add $0x4,%eax
+0x5e934  cmp $0x80,%eax
+0x5e939  je  0x5e955               ; the ==0x80 arm
+0x5e93b  mov %eax,0xa24c(%edi)     ; the !=0x80 arm stores
+```
+
+and the equal arm stores zero at 0x5e95c. The recovered source is a local
+carrying `obj->retrain_phase + 4` into both arms:
+
+```c
+int phase = obj->retrain_phase + 4;
+
+if (phase != 0x80) {
+        obj->retrain_phase = phase;
+        return 0;
+}
+obj->retrain_phase = 0;
+```
+
+Five spellings were compiled; only this one maps onto the object's
+add-then-compare-then-per-arm-store shape:
+
+| spelling | insns | LCS | notes |
+|---|---:|---:|---|
+| `+= 4;` then `!= 0x80` early return | 96 | 87 (90.6%) | store before test, `add $-0x80` compare |
+| `+= 4;` then `== 0x80`/`else` | 96 | 80 (83.3%) | worse layout |
+| `+= 4;` then `if (==0x80) x=0; else return 0;` | 96 | 87 (90.6%) | store still before test |
+| `if ((x += 4) != 0x80) return 0;` | 96 | 87 (90.6%) | GCC does not sink the store |
+| `if (x + 4 != 0x80) { x += 4; return 0; }` | 93 | 87 (93.5%) | GCC folds to `cmp $0x7c` on the old value |
+| **local `phase` + per-arm store** | **93** | **89 (95.7%)** | add/cmp/je, store only on the unequal arm |
+
+The residual +1 is allocation: the object places the default arm's zero in
+the shared return-0 block (`xor %edx,%edx` at 0x5e941, copied to `%eax` at
+0x5e947), while this build hoists a `xor %eax,%eax` for the `default:
+return 0;` ahead of `cmp $2` at 0x1118. The phase region itself is now
+instruction-for-instruction.
+
+**Other band rows read at operand level and left blocked:**
+
+- `V90MP::calcCRC` / `V90CP::calcCRC` (+4 each, LCS 87.5%/87.2%): the
+  object narrows the two `crc[4]+a` / `crc[11]+a` additions to 8-bit
+  (`add %al,%bl; and $1,%bl` at 0x1f2ae and `add %al,%cl` at 0x1f2e7),
+  while ours zero-extends `a` (`movzbl %al,%ebp`) and adds 32-bit
+  (`add %ebp,%ecx`). Removing the four `(unsigned char)` casts, and
+  spelling `a` as `int`, compile identically; the trigger is register
+  pressure and the byte of `a` being copied to a second register, not the
+  casts. No source lever among the tested forms.
+- `dftenergy` (+5): the object keeps the loop index in `(%esp)` and tests
+  `cmp %ax,(%esp)`; ours uses 0x4/0x8(%esp) and a separate scale slot. Stack
+  slot assignment, no statement difference.
+- `RxHdxWaitV21` (+4): the `!CarrierDetectV21` early-return spelling puts the
+  error arm inline and the carrier arm out of line; flipping to the positive
+  `if (CarrierDetectV21(...))` form moves neither count nor LCS (89 -> 88)
+  and was reverted. The four-instruction difference is the four `movswl
+  0x8` state loads against our `movzwl`/`movswl` pair plus debug-site
+  placement.
+- `V90DemodulatorD1Ev/D2Ev` (+8, LCS 91.4%): a 143/151-instruction inlined
+  destructor; `bbalign` matches all 27 anchors and every difference is
+  register choice or `if (p) free(p)` block placement.
+- `FloatARMA::process` (+4), `_ZN24V90ConstellationDesigner19calcMto
+  MatchKtargetEff` (+4), `SetRxModeV32` (+6): x87 stack/loop allocation, a
+  missing `flds` of the second `log10l` operand (constant-folded), and a
+  `VTBv32_init` call-edge difference (blob 1 shared call at 0x81930 from
+  four trellis arms; ours 3 sites). Reordering `shift = N;` before the call
+  merges two of ours but lowers LCS 74.0 -> 71.7; making all four calls
+  `&DEC(fp)->vtb` leaves 3 sites at LCS 74.2. Not landed.
+
+**`V34XF_IndicateTrn2dReceived` was recovered but NOT landed, because it
+costs a neighbour EXACT.** The object forms a base at `obj+4`
+(`add $0x4,%edx; mov 0x248(%edx)` at 0xa397/0xa39a, object +0x24c) and has
+ONE debug test at 0xa3aa and ONE print call at 0xa3f1 reached by the first
+arm's fallthrough and the third arm's jump from 0xa40d; only the stores are
+per arm (0xa3b1, 0xa3d1, 0xa3f4). Reconstructing that -- engine view base
+plus per-arm store and a shared print tail -- takes it 33 -> 29 instructions
+(the object's count), LCS 21 -> 23 (63.6% -> 79.3%), run 7 -> 8. But the
+same TU's `V34XF_IndicateK56FlexRateDetermined` leaves grade 0 (EXACT ->
+BYTES, 4 bytes, `mov $5` in `%eax` becomes `%edx`) as a
+neighbour-codegen effect of the preceding function's changed body; it stays
+grade 1 but the ordered EXACT set must not shrink, so the variant was
+measured, recorded here, and reverted. Three spellings of the same fact
+(engine `struct v34_engine *`, flat `struct v34_object *`, and an `unsigned
+char *m + OB4_V90_RECEIVER` pointer) all perturbed the neighbour; the
+recovery waits for a later structural change to settle the cursor.
+
+**Verified (landed tree).** `make period J=3` **394 passed, 0 failed**.
+Ratchet view (`make byteident-ratchet`, exit 0): **1,152 EXACT / 1
+UNRESOLVED / 36 REGALLOC / 89 BYTES / 574 SIZE** over 1,852; grade 0-or-1
+**1,189**; link-selected EXACT **1,155**; ratchet OK (1146 -> 1152,
+1182 -> 1189, 1149 -> 1155, regalloc 36 -> 36; only the pre-existing
+`dp_vpcm_exit` displacement). No EXACT or grade-0/1 symbol was lost. Blob
+sha256 unchanged (`1f3e56d0...cf0b379`). No flags, attributes, padding,
+volatile or test edits.
+## F12053. `v8_process`'s `arg >= 0` guard was never in the source: the change block lives in each arm, and the object's two argument stores prove it
+
+*2026-10-26, worktree `w21-v8`, base `2c43c4a96`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+#385 and #391 left `v8_process` at **620 B / 152 instructions** against the
+object's **590 / 145**, `structsim` LCS 144, longest run 63. The residual was
+one cause with two symptoms: a post-switch `if (arg >= 0)` the object does not
+contain, and the `st->cm` stack home (`mov %edx,0x18(%esp)` plus three
+reloads) that the test forced, because `arg` had to survive into the join as
+a live value while `cm` was still needed. F12046 had already measured an
+arm-duplicated tail (593 B, LCS 144, run 135) and declined it as a fit: the
+label-set question did not require it. Two facts in the object do, and a third
+-- the `last_status` store -- was found beside them. Together they give
+**590 B / 145 instructions, LCS 145 (100%), longest run 145**: the function is
+one contiguous identical instruction run, and only 23 register bytes differ.
+
+**Fact 1 -- the change block is arm-local, not post-switch.** The object
+writes `modem_set_param`'s third argument into the outgoing slot **twice**:
+at 0x388f, at the end of the V8_OK arm after the two `qc_` stores and just
+before `jmp 0x38c6`, and at 0x38c2, in the QCA1d arm after `andl
+$0x1,0x8(%ecx)`. Only then does 0x38c6 begin the shared body (`mov $0x9,%eax`
+/ `mov %eax,0x4(%esp)` / `mov 0x4(%ebp),%edi` / ...) which the OK arm reaches
+by that jump and the QCA1d arm by fallthrough. A single post-switch statement
+cannot produce two stores: the store is part of that statement's own argument
+setup, so one copy puts it *inside* the shared block. Two copies do not merge,
+which is the same cross-jump boundary F12048 recorded for
+`_delete_data_rx_modem`'s per-arm `free` -- the identical tail merges, the
+per-arm argument stores stay where they were written.
+
+There is also no test of any value between either arm's tail and the call.
+The QCA1d arm's `mov 0x18(%ebx),%eax` (0x3895) is followed by `cmp $0x5c` /
+`setne %dl` / `cmp $0x5a` / `setne %cl` / a `test` of the two predicates
+(0x38a9 `jne` to the error arm at 0x382b), then `mov 0x20(%ebx),%edx` /
+`test` / `jne 0x37c2`, and the surviving path writes its argument at 0x38c2
+and falls into the shared body. The OK arm's four arg-producing leaves all
+`jne 0x3879` (0x3994, 0x39a1, 0x39ae; the QC leaf falls through from 0x3876),
+where the two `qc_` stores run and 0x388f writes the argument before
+`jmp 0x38c6`. **Neither join tests the value it is about to pass.** Removing
+our guard also removes `cm`'s home: the object keeps `st->cm` in `%ecx` from
+0x385c (`mov 0x28(%ebx),%ecx`) all the way to the `qc_index` store at 0x388c,
+reloading it only through the "QC." printf tail (`mov 0x28(%ebx),%ecx` at
+0x3971), where ours spilled it to `0x18(%esp)` and reloaded it three times.
+
+**Fact 2 -- `last_status` is stored unconditionally.** `cmp %esi,0x2c(%ebx)`
+at 0x37c2 is followed by `je 0x37d0`, and **0x37d0 is the store itself**
+(`mov %esi,0x2c(%ebx)`); the debug-report block at 0x3801 jumps back to it as
+well. Our source had the store inside the test, so our `je` skipped it (`je`
+lands one byte past the `mov`, on the following `mov 0x20(%ebx),%eax`) and the
+object's `je` lands on it. Moving the store out of the `if` changes that one
+byte and nothing else: measured alone it takes the pristine build from 355 to
+354 differing bytes with size, instruction count and LCS unchanged.
+
+**Measured domain** (Gentoo GCC 3.4.2-r2, exact flags; bytes from
+`objcopy`/`nm` with relocation fields masked, `structsim` for the shape):
+
+| spelling | bytes | insns | LCS | run |
+|---|---:|---:|---:|---:|
+| post-switch `if (arg >= 0)` (pristine) | 620 | 152 | 144 | 63 |
+| pristine + unconditional `last_status` store | 620 | 152 | 144 | 63 |
+| change block in each arm, store still under the guard | 590 | 145 | 145 | 145 |
+| **change block in each arm + store moved out** | **590** | **145** | **145** | **145** |
+| ... with the QCA1d arm's `qc_lapm &= 1;` before `arg = 92;` | 590 | 145 | 145 | 145 |
+| ... with `ret = DPSTAT_CHANGEDP` before the call | 615 | 153 | 135 | 68 |
+| one `change:` label, `goto` from the QCA1d arm | 586 | 146 | 142 | 75 |
+| `static int v8_change(...)` called from both arms | 596 | 150 | 141 | 96 |
+
+Only the arm-duplicated family maps. The `goto` form is **smaller** than the
+object (586 against 590) and still wrong, which is the other half of the
+point: size is not the target. The helper form refuses too, and settling it
+refutes the assumption that an inlined helper is codegen-identical to the
+duplication -- it is not, the inliner produced a different 150-instruction
+shape. The two statement orders inside the QCA1d arm are indistinguishable
+(the object's `mov $0x5c,%edi` at 0x38b9 preceding `andl` at 0x38be is
+scheduling, not source order), so what the object determines is "the change
+block is written in each arm"; the order of those three statements inside the
+arm is not determined by it and was not claimed.
+
+**The residual is allocation, and grade 1 is unreachable for this symbol.**
+The 23 differing bytes in 23 rows are every one a register encoding, in six
+groups: the status-name load `mov 0x0(,%esi,4),%ecx` (0x3805, `%ecx` against
+our `%edx`); the `V8UpdateModemParameters(st->v8, st->cm)` argument temps
+(0x384a-0x3854, `%edi`/`%edx` swapped); the QCA1d predicate 0x3895-0x38a7
+(`%eax`/`%edx`/`%ecx` rotated); its `idle_timer` test and `qc_lapm &= 1`
+(0x38ab-0x38be); the shared body's `modem_get_param(dp->modem, 5)` temps
+(0x38df-0x38eb); and the idle-expiry `modem_set_param(dp->modem, 9, 0)` temps
+(0x3926/0x393b). They are the allocator's choice of scratch for argument
+setup, which no statement in this function selects and which AGENTS.md puts
+outside a per-function hunt; nothing in the object evidences a different
+spelling for any of them.
+
+Grade 1 cannot be awarded on either side regardless of source.
+`byteident` proves an anonymous jump table through `jumptable.prove`, and the
+proof refuses **on the blob itself** here -- `missing adjacent guard`, because
+the object has `mov %eax,%esi` at 0x37b2 between `cmp $0x11,%eax` (0x37af)
+and `ja 0x37c0` (0x37b4). Both sides therefore keep the raw
+`('section','.rodata',addend)` target (0x11c against 0x0) and `alpha_equal`
+rejects that row. The addend is a per-TU section offset inside a relocated
+field, so it is masked out of the grade-0 byte count: the row reads BYTES on
+the register bytes alone, and had they all matched it would read UNRESOLVED,
+not EXACT. Ten EXACT symbols in the tree do carry a jump table (e.g.
+`RxNextStateV17`, 0xc2d0 against 0x0), so the proof, not the addend, is what
+decides whether such a row can be graded.
+
+**Collateral, and one bystander gain.** The change is switch text in
+`src/v8/v8.c` only; `int arg;` loses its `-1` initialiser because the object
+has no sentinel store and every path that reads it writes it first. The
+last function in the same TU, `dp_v8_exit` (28 B), goes REGALLOC -> EXACT as
+a bystander, the emission-order/peephole-cursor carrier of findings
+F7796/F7800 -- measured by reverting: the per-TU EXACT set is
+`after - {dp_v8_exit}` and nothing else moves (`before - after` is empty).
+`v8_create` is SIZE before and after and was not touched.
+
+**Verified on the merged base (`ab38d0abf`, PR #395).** `make period J=3`
+**394 passed, 0 failed**. Default-view census over 1,852: **1,153 EXACT / 1
+UNRESOLVED / 36 REGALLOC / 88 BYTES / 574 SIZE -> 1,154 EXACT / 1 UNRESOLVED
+/ 35 REGALLOC / 89 BYTES / 573 SIZE**. Grade 0-or-1 **1,190 -> 1,190**
+(`dp_v8_exit` moves REGALLOC -> EXACT inside it; `v8_process` moves SIZE ->
+BYTES, which is in neither set). `byteident --ratchet` OK (exact 1146 ->
+**1154**, grade 0-or-1 1182 -> **1190**, link-selected exact 1149 -> **1157**,
+regalloc 36 -> 35; the reviewed `dp_vpcm_exit` displacement is still the only
+one). Phase 3: positioned reference bytes **77,348 -> 77,226 of 943,398**, and
+that DIP is the layout moving, not a regression -- the candidate `.text` is 30
+bytes shorter (711,495 -> **711,463**), so the 30 bytes of reference content
+after `v8_process` lose their alignment and stop being "positioned". What
+improves is the substantive measure: candidate delta -15,728 -> **-15,760**,
+exact relocations 1,165 -> **1,168**, exact symbols 466 -> **470** (a
+value-relative count: the shrink moves every following symbol). No flags,
+attributes, padding or test edits; blob sha256 unchanged
+(`1f3e56d0...cf0b379`).
+
+## F12054. Byte-immediate mask sweep, wave 22: memory carriers, two unswitched loops, and the sites that do not qualify
+
+*2026-10-26, worktree `w22-mask`, branch `recover/w22-mask`, base
+`cf0a652ec`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Wave 21 screened only the register forms (`a8 ib`, `f6 c0..c3 ib`). A fresh
+per-function screen over the same **1,852** symbols, counting the memory form
+(`f6 /0`, mod != 3) as well, found **25** functions with at least one mask
+under-represented in ours; after this wave the screen reports **20** over
+**31** rows. Five functions took the byte/byte/int helper and three of the
+five are structural findings rather than operand substitutions.
+
+**Direct memory carriers.** `v22_data` and `setfinalrate` already wrote
+`field & 0x80`, but the direct expression folded to a signed byte compare
+(`cmpb $0x0,mem; jns`). The helper on the unsigned-byte field restores the
+object's `testb $0x80,disp`: `0x88af3` (`0x34(%esp)`) in `v22_data`, and
+`0x5efd3` (`0xa9b6`) in `setfinalrate`. `v22_data` gains one LCS (160 -> 161,
+run 43) with the SIZE 10 gap unchanged; `setfinalrate` gains eight
+(143 -> 151, run 22) and its gap falls 18 -> 16 bytes. Both keep the same
+grade (SIZE).
+
+**`V34descrambler` and its inlined copy in `decoderv34`: loop unswitching.**
+The object has **two copies** of the descrambler loop, with `shr $0x5` and
+`shr $0x12`, selected by `testb $0x4,0x122(%eax)` at `0x5bb03`; the copy
+inlined into `decoderv34` selects the same way at `0x5bc9e`
+(`testb $0x4,0x20(%esp)`). Our source had hoisted
+`int tap = (s->flags & V34_SCR_ANSWERER) ? 18 : 5;` above the loop, which GCC
+if-converted to `sbb` arithmetic and therefore could not unswitch. Writing the
+conditional tap **inside the loop body**, as
+`v34rx_flag_test((unsigned char)s->flags, V34_SCR_ANSWERER) ? 18 : 5`, lets
+the compiler restore the two constant-shift loops. `decoderv34`'s four-point
+slice counter is also `short`, not `int` (the object emits `movswl; cmp
+$0x4`). Results: `V34descrambler` 67 -> 81 instructions, LCS 29 -> 60
+(36.7% -> 74.1%), run 5 -> 9, bytes 232 against 236 (SIZE 24 -> SIZE 4);
+`decoderv34` 185 -> 201 instructions, LCS 122 -> 182 (59.8% -> 89.2%), run
+12 -> 68, bytes 713 against 714 (**SIZE 28 -> SIZE 1**). Neither becomes
+EXACT; both recover the native byte test and most of the body.
+
+**`probeselect`: five `m[...] & 0x80` conditions.** The two at `0xa9e8`
+(`0x616be`) and `0xa9e6` (`0x61831`) reproduce the object's memory `testb`.
+The three at `0xa97e` (`0x60eaf`, `0x60eca`, `0x60ede`) come out
+register-carried (`test $0x80,%al`) because the value is live in a register
+there; the mask and branch are recovered, the operand carrier is not. LCS
+599 -> 640 (42.3% -> 45.2%), run 54, ours 1417 -> 1415 instructions, bytes
+6678 against 6173 (SIZE 517 -> SIZE 505). An LCS acceptance, not an exact
+claim.
+
+**Rejected, and why.** `V22FP_control` (mask 0x8, object `0x8c407
+test $0x8,%dl`): baseline SIZE 6, LCS/run 31/10, 45 instructions. Direct
+helper -> SIZE 2, LCS 32, but the test is memory (`testb $0x8,0xc(%reg)`);
+byte-local -> LCS 32, 44 instructions but 128 differing bytes (BYTES);
+local plus mask constant -> LCS 30 and no test. Left unchanged.
+`evaluateRxJMSequence` reproduced `testb $0x80,0x1(%rbx)` but LCS/run stayed
+127/11; reverted. `V8UpdateModemParameters`'s helper came out
+register-carried where the object tests memory, and LCS fell 174 -> 171;
+reverted. Inlining `rebuildJMSequence`'s `all_flags` expression grew the body
+by 34 instructions for one LCS point (298 -> 299; 787 against 752);
+reverted. `B103FP_modem` is the only B.103 difference and it carries extra
+tests in ours, so the **B.103** TU has no under-represented mask; the **V.22**
+TU has only `V22FP_control` left.
+
+Still excluded after inspection: `DataCarrierDetectV17/V27/V29`,
+`V34demodulate`, `V92ModulusEncoder::reset` and the two `V92Jd` constructors
+test shifted values; `initTxSequence` (0x80008), `modulatevector` and the
+`v34handshak` rows are 32-bit; `initdigital`'s 0x20 is the high byte of a
+16-bit `0x2000`; `VPcmV34Create`'s 0x1 is a boolean stack local;
+`modem_serrint`, `receiver`, `rebuildJMSequence` (0x8/0x1) and
+`v8handshakinit` need a structural recovery beyond the operand change.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Census over 1,852
+unchanged: **1,154 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89 BYTES / 573 SIZE**;
+grade 0-or-1 **1,190**, link-selected EXACT **1,157**. The ordered EXACT and
+grade-0/1 sets are identical before and after (no symbol gained or lost).
+`byteident --ratchet` OK at the same floor, with the reviewed `dp_vpcm_exit`
+displacement still the only one. No flags, attributes, padding or test edits;
+blob sha256 unchanged (`1f3e56d0...cf0b379`).
+
+## F12055. SIZE band at |instruction delta| 4-8, wave 22: four boolean/statement-order facts close EXACT, and `GetSNRV21`'s conditional is the `abs` expansion
+
+*2026-10-26, worktree `w22-band`, branch `recover/w22-band`, base
+`cf0a652ec`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Finished the band F12052 opened. Fresh `make -s tc J=12`: 300/300 objects.
+`byteident.py --near 2000` gives **55** SIZE rows at |blob - ours| in 4..8;
+`v23FP_rx_progress` (+4) is the v23 emission-order domain, so **54 in scope**.
+(`v8_process` is EXACT now and no longer in the band.) Every row was screened
+with `structsim` and `contentgap`; **15** were read at operand level with
+`dis.py` and a register-canonicalised sequence diff. Five moved:
+
+| symbol | before | after | cause |
+|---|---|---|---|
+| `_ZNK12V90PreFilter13isV90WithEia6Ev` | SIZE 6, 24/28, LCS 19, run 15 | **EXACT**, 24/24, LCS 24, run 24 | bitwise `\|` normalised by `? 1 : 0`, not `\|\|` |
+| `_cHDLCrx_init_from_idle` | SIZE 16, 53/60, LCS 32, run 8 | **EXACT**, 53/53, LCS 53, run 53 | declaration/copy/field order; no source-level return |
+| `cHDLCtx_off` | SIZE 8, 55/59, LCS 52, run 44 | **EXACT**, 55/55, LCS 55, run 55 | `(!(bit) && n>2) \|\| n>15`, not a ternary |
+| `cHDLCtx_off_init` | BYTES 54, 35/35, LCS 21, run 7 | **EXACT**, 35/35, LCS 35, run 35 | same order facts as `_cHDLCrx_init_from_idle` |
+| `GetSNRV21` | SIZE 20, 31/39, LCS 24, run 13 | **BYTES 4**, 31/31, LCS 30, run 21 | `__builtin_abs`, not `v < 0 ? -v : v` |
+
+**`isV90WithEia6`: both comparisons are evaluated and the byte is
+zero-extended.** The object at 0x451fd-0x45214 is `dec %eax` / `sete %dl` for
+`cap == 1`, then `sete %cl` for `+0x500 == 6`, `or %dl,%cl`, and
+`movzbl %cl,%eax`. `||` emits a branch (`test`/`xor`/`je`, 28 instructions);
+`|` alone emits `and $1,%eax` (24 instructions but BYTES 7); only
+`((cap == 1) | (params->LOOP_TYPE == 6)) ? 1 : 0` gives `movzbl` and maps.
+Twelve spellings were compiled (`||`, `|`, `|=`, reversed operands, `!= 0`,
+`& 1`, `||` inside the ternary, if/return, a local with `|`, `!!` on each
+side); this one is the unique preimage.
+
+**`_cHDLCrx_init_from_idle`: the stack slots, the store order, and the absent
+return are one fact.** The object (0x9d790) puts `req` at +0x10 and `ctl` at
++0x20 and copies `req` first; ours had `ctl` at +0x10 and `req` at +0x30.
+Declaring `ctl` before `req`, copying `req` first, and writing the four `ctl`
+fields `control_req`, `ptr_0000`, `int_000c`, `short_0010` reproduces the
+slots and the store sequence. All 24 field orders were compiled and only
+`control_req`-first maps. **There is no source-level return:** the object's
+`%eax` is the last call's value -- `FAXVMI_control`'s result on the ordinary
+path, 4 on the `arg2 == 3` path, and the printf's result on the debug path --
+and `return ret;` keeps `ret` live across the printf and emits a `mov` the
+object does not have. A `void` definition and an `int` fall-off compile
+identically here; the header stays `int` because `t_class1txcplinit` compares
+the return value. The differential test exercises the non-debug and `arg2 ==
+3` paths, where our fall-off returns exactly the object's `%eax`.
+
+**`cHDLCtx_off`: the bit test does not short-circuit the 15 test.** The object
+runs `test $0x20,%ah` / `jne` to the 15 test, and the bit-clear, count<=2 path
+lands on `cmp $0xf` too (0x9ea7d `jbe` -> 0x9eaf0). `(!(bit) && n > 2) || n >
+15` produces that; the ternary on the bit branches straight past it. Same
+result for every value.
+
+**`cHDLCtx_off_init` is the same order fact with `req.flags` before the `ctl`
+copy.** Declaring `ctl` then `req`, copying `req`, OR-ing the REINIT bit, then
+copying `ctl`, and writing the fields `control_req` first gives 35/35; the
+`req.flags` position is what moves the one remaining `orb` from after the
+first `ctl` store to before it.
+
+**`GetSNRV21`: `cltd / xor / sub` is the i386 `abs` expansion.** Ours wrote
+`v < 0 ? -v : v`, which compiled to `test`/`jns`/`neg` and duplicated the
+store tail (39 instructions). `__builtin_abs(v)` gives the object's 31 and
+LCS 30. The residual 4 bytes are the loop entry: the object tests `test
+%bx,%bx` / `jle`, ours `cmp %bx,%cx` / `jge`; four loop spellings (`i--`,
+`n > i`, `while`, a guarded `for`) all leave that one encoding difference, so
+it is recorded as BYTES, not hill-climbed. `v` is a promoted short, so no
+INT_MIN case exists; -32768 truncates back through the `(short)` store as the
+object does.
+
+**Read at operand level and left blocked** (all measured, none landed):
+
+- `V8Control` (+5): `int rc = -1;` and the positive-test arms each change
+  21 and 16 bytes respectively and lower LCS; the pristine 5-byte residual is
+  closer than either.
+- `V8SetMessage` (+4): the object folds `if (seq == 0)` into
+  `selected_sequence`'s switch default; the helper form keeps a `test`/`je`
+  (98 instructions), and inlining the default spills all four callee-saved
+  registers (102).
+- `_ZN20V90Phase4Demodulator15trn2dKnownDemodEs` (+8): the object shares the
+  table-read tail between the A-law and mu-law arms; four spellings (if/else,
+  ternary assignment, direct ternary, level-per-arm) all tail-duplicate to
+  67-68, so this is a block-duplication decision, not a statement.
+- `SGD_symbol_gen` (+4): the object rotates the loop to `inc %ax`/`jne`; five
+  loop spellings (`i != -1`, `i >= 0`, `i + 1 != 0`, `while`) all stay at 62.
+- `RxHdxPhsReversal` (+4): block order (the object lays the `int_90 == 0`
+  detector arm as the first test's fallthrough) plus a `movswl`/`movzwl`
+  choice on `symbol_len` that is signed in the header already.
+- `V29RX_epoch_det` (+5), `_rx_look_carrier_state` (+5), `TxNoCarrierV32`
+  (+4), `V21RX_create` (+6), `v22_retrain` (+5): spills, block order and
+  register allocation; the last is 96.5% LCS but every difference is a
+  scratch-register choice.
+- The F12052 rows (`V90MP/CP::calcCRC`, `dftenergy`, `RxHdxWaitV21`,
+  `V90DemodulatorD1/D2`, `FloatARMA::process`, `calcMtoMatchKtargetEff`,
+  `SetRxModeV32`) were not re-opened.
+
+**Ordered-set delta.** The per-TU grade maps of the four affected objects
+(`V90PreFilter.cpp`, `cHDLCrx.c`, `cHDLCtx.c`, `V21r_int.c`) were diffed
+before and after; the ONLY rows that moved are the five above. No neighbour
+lost EXACT or REGALLOC (the #394 lesson). `V90Demodulator.cpp`'s comment
+changed text only.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Ratchet (`make
+byteident-ratchet`, exit 0): **1,158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89
+BYTES / 569 SIZE** over 1,852 (master 1,154 / 1 / 35 / 89 / 573); grade 0-or-1
+**1,194** (master 1,190); link-selected EXACT **1,161** (master 1,157);
+ratchet OK (stored floor 1,146 -> 1,158, 1,182 -> 1,194, 1,149 -> 1,161,
+regalloc 36 -> 35; the only reviewed displacement is still `dp_vpcm_exit`).
+Blob sha256 unchanged (`1f3e56d0...cf0b379`). No flags, attributes, padding or
+test edits.
+
+## F12056. The fallthrough guard corridor admits a flag-preserving index copy, and makes v8_process prove -- but grade 1 still cannot be awarded, for a reason F12053 named wrongly
+
+`v8_process` has the object's 145-instruction stream but reads BYTES (23
+register-encoding bytes) and `jumptable.prove` refused **on the blob itself**
+with `missing adjacent guard`. F12053 recorded that refusal and concluded that
+the table proof was why grade 1 could not be awarded. This measurement extends
+the prover and then shows the second half of that conclusion is not what the
+tool actually does.
+
+**Why it refused.** The prover required the two rows before the single
+indirect jump to be `CMP; Jcc`, or the pushed-ABI `CMP; MOV disp(%esp),reg;
+Jcc`. The object has four rows:
+
+    37af: 83 f8 11   cmp  $0x11,%eax
+    37b2: 89 c6      mov  %eax,%esi     ; flag-preserving copy of the index
+    37b4: 77 0a      ja   37c0          ; taken out of range
+    37b6: ff 24 85   jmp  *0x11c(,%eax,4)
+
+The parser took `rows[index-2:index+1]`, so `cmp_row` was the MOV, not the CMP,
+and with a fixed frame (not `push`) there was no corridor arm to fall into.
+
+**The rule added.** A single unprefixed `MOV r32,r32` may sit between the
+comparison and the unsigned fallthrough guard when it decodes exactly as
+`0x89 /r` with `mod=11`, its source is the register the CMP compared, and its
+destination is not that register. The dispatch may use the compared register
+or the copied destination (both hold the same untested index there). The
+existing protected-corridor set, extent, relocation-form and
+single-indirect-jump checks are unchanged, and the copy is inside the
+protected range, so no entry may bypass it. Separately, the ABI
+data-relocation whitelist gained the exact 32-bit SIB/disp32 load
+(`8b /r`, base disp32, index not `%esp`, relocation at `len-4`), because the
+object's `mov 0x0(,%esi,4),%ecx` against `v8StatusName` is a relocated field
+that the whitelist only decoded in its 16-bit `movzwl`/`movswl` forms. That is
+a new exact decode, not a relaxed check.
+
+**Measured effect.** Both objects prove, with the same 18 ordered
+destinations, and `body` resolves the dispatch to the shared `jump-table`
+identity. `v8_process` nevertheless stays **BYTES (23)**. Grade 0 is expected:
+the 23 unmasked bytes are register allocations, unrelated to the table. But
+grade 1 does not follow either. `alpha_equal` stops at the status predicate,
+not at the dispatch row:
+
+    row 79 USE CONFLICT  edx wants ecx, already bound to ecx
+            blob %dl
+            ours %cl
+
+`setne %dl` is a *use* under the deliberate partial-write rule (F7762): an
+8-bit definition does not end the 32-bit live range, and the object later
+tests full `%edx`. Treating it as a definition would licence exactly the false
+accept that rule prevents, so the prover fix cannot promote the symbol. F12053's
+attribution -- "the proof ... is what decides whether such a row can be
+graded", extended to "grade 1 cannot be awarded ... because the proof refuses"
+-- is therefore corrected: after the proof succeeds, the remaining blocker is
+the partial-width/use rule on an allocation the object does not evidence a
+source spelling for. Grade 1 remains unreachable for `v8_process`, but the
+reason is now measured rather than inherited.
+
+**Controls.** `tools/toolchain/jumptable_copy_corridor_controls.py` passes
+**8 positives** (EAX->ESI, EAX->EDX, ECX->EDX, dispatch on the copy, the
+adjacent no-copy form, the pushed stack-load corridor, rebased table and
+swapped targets) and **14 adversarial refusals** (copy from a different
+register, a copy that clobbers the compared register, a flags-writing corridor,
+an index-writing corridor, a dispatch on the wrong register or scale, an extra
+or second corridor instruction, opposite and signed guards, a truncated
+extent, a second indirect jump, and named corridor/guard bypass entries). The
+prover from base `cf0a652ec` refuses the four new positives with
+`missing adjacent guard` and still proves the two existing forms. Blob and
+candidate prove `v8_process` with equal identity; the pair grade stays BYTES.
+
+**Census.** 1,852 symbols: **1,154 EXACT / 1 UNRESOLVED / 35 REGALLOC /
+89 BYTES / 573 SIZE**, unchanged from the merged base. `byteident --ratchet`
+OK (exact 1146 -> 1154, grade 0-or-1 1182 -> 1190, link-selected exact
+1149 -> 1157, regalloc 36 -> 35). `make period J=3` **394 passed, 0 failed**;
+`--self-test` and `--ratchet-self-test` clean. Apparatus only; no `src/`
+change, and the blob is still
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+
+## F12057. Byte-immediate mask sweep, wave 23: the register carrier for `V22FP_control`'s freeze bit, and `V8UpdateModemParameters`' shifted two-bit test
+
+*2026-10-26, worktree `w23-mask`, branch `recover/w23-mask`, base
+`09493bc13`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Finished the native-form sweep F12054 opened. A fresh per-function census over
+the same **1,852** symbols counted `a8 ib`, `f6 c0..c3 ib` and the memory form
+`f6 /0` (mod != 3), comparing the `(form, mask)` count rather than the mask
+total. **The mask-total view F12054 used under-counts**: `initTxSequence`'s
+`mem 0x04` row is invisible when register and memory `0x04` tests are summed,
+and the form-sensitive screen is what reproduces F12054's own **20 functions /
+31 rows** denominator. On the pre-change tree it reports **21 functions / 33
+rows**; after this wave, **20 / 31**.
+
+Two rows moved, both register-form sites:
+
+| Function | mask, native form | LCS/run before | LCS/run after | ours insns (blob) before -> after | bytes differing before -> after | grade |
+| --- | --- | ---: | ---: | --- | ---: | --- |
+| `V8UpdateModemParameters` | 0x02, `test $0x2,%dl` | 174/14 | 174/14 | 293 (292) -> 291 (292) | 49 -> 33 | SIZE |
+| `V22FP_control` | 0x08, `test $0x8,%dl` | 31/10 | 37/10 | 45 (46) -> 47 (46) | 6 -> 5 | SIZE |
+
+**`V8UpdateModemParameters`: the object tests the shifted value.** At
+`0x74b77` the object has `f6 c2 02` on `%dl`, where `%dl` already holds
+`f = (w & 0xf) >> 1`. Our source wrote `(f & 2) == 0`, which GCC folded back
+to `test $0x4,%al` on the unshifted low nibble (one extra mask row in ours,
+`0x04:1`). `v8if_flag_test((unsigned char)f, 0x02) == 0` restores the shifted
+byte test; the function loses two instructions and sixteen differing bytes and
+keeps the same LCS. Its remaining `mem 0x08` row is the `out->b0 & 8` value
+fold, left alone: the helper reproduces the native `testb $0x8,(%edi)` but
+costs three LCS points (174 -> 171), exactly the F12054 rejection.
+
+**`V22FP_control`: the freeze bit needs a live byte local, not a helper on the
+field.** The object's second `flags_0c` load at `0x8c3f3` feeds three uses:
+`r20` (bit 2), `agc.f18` (`test $0x8,%dl; sete`) and `params.flags` bit 9
+(bit 7). Our source read the field three times and wrote `f18` as
+`(flags & 8) == 0`, which GCC expanded to `shr $3; xor $1; and $1`. A helper
+on the field alone still leaves `testb $0x8,0xc(%reg)`; a local used only by
+the helper is folded back to the same memory test. The cell that works keeps
+the byte local live across `r20` and the helper:
+
+    {
+        unsigned char f0c = ctl->flags_0c;
+
+        fp->dsp->r20 = (f0c >> 2) & 1;
+        fp->dsp->agc.f18 =
+            v22_flag_test_ctl(f0c, V22_CTL_FREEZE_ADAPT) == 0;
+    }
+
+It reproduces `f6 c2 08` and raises LCS 31 -> 37; it adds one instruction over
+the old source (the object shares that one load with bit 7, which our 32-bit
+`params.flags` read-modify-write cannot). **Rejected cells:** helper on the
+field (`SIZE 2`, LCS 32, memory `testb $0x8,0xc(%reg)`); helper on a local
+used only for `f18` (same memory test); the same local extended through the
+bit-9 RMW (`BYTES 128`, the F12054 rejection shape). Keeping the local to
+`r20` + `f18` is the only one of the four that recovers the register carrier
+without a 100-byte move.
+
+**Not taken, and why.** The remaining 20 functions / 31 rows are the F12054
+residual. The register rows are the shifted/bool sites (`DataCarrierDetect
+V17/V27/V29`, `V34demodulate`, `V92ModulusEncoder::reset`, both `V92Jd`
+constructors, `DILdescriptorPacker`'s `%ebp` allocation), the high-byte or
+structural sites (`modem_serrint`'s `%ah`, `receiver`'s `%dl` 0x08/0x10,
+`rebuildJMSequence`'s repeated `cm->b0`/`b2` tests) and the `v34handshak`
+inlining artefact. The memory rows are wave-22's carrier route, out of this
+register-form sweep: `evaluateRxJMSequence` (`mem 0x80`) was retried and again
+gained the native test with LCS unchanged at 127/11; `initTxSequence`
+(`mem 0x04`), `V8UpdateModemParameters` (`mem 0x08`), `txmitquadbit`,
+`VPcmV34Create`, `initdigital`, `v8handshakinit` and `probeselect`'s three
+register-carried bins are unchanged.
+
+**Ordered-set delta: none.** The per-TU `--list-exact` set and the full
+grade-0/1 map over all 1,852 symbols are identical before and after; no
+same-TU neighbour moved. `V22FP_control` and `V8UpdateModemParameters` both
+stay SIZE.
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Census unchanged:
+**1,158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 89 BYTES / 569 SIZE**;
+grade 0-or-1 **1,194**, link-selected EXACT **1,161**. `byteident
+--ratchet` OK at the same floor (exact 1146 -> 1158, grade 0-or-1 1182 ->
+1194, link-selected 1149 -> 1161, regalloc 36 -> 35), with the reviewed
+`dp_vpcm_exit` displacement still the only one. No flags, attributes, padding
+or test edits; blob sha256 unchanged
+(`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+
+## F12058. SIZE band at |instruction delta| >= 9, wave 23: `V92Phase3Modulator::reset`'s floor is a store in each arm, and the band screens 143 rows
+
+*Renumbered from F12057 when the wave-23 byte-mask sweep took that number; that finding is F12057 above.*
+
+*2026-10-26, worktree `w23-delta9`, branch `recover/w23-delta9`, base
+`origin/master = 09493bc13`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args`,
+`-DDSPLIB_REPRODUCE_BUGS` for the ratchet view.*
+
+Opened the SIZE band the delta-1-3 and delta-4-8 waves left. A fresh
+`make -s tc J=12` builds 300/300 objects. `byteident.py --near 2000` lists
+**693** non-exact symbols, of which **143 are SIZE at |instruction delta| >= 9**
+(115 negative, 28 positive) and **139** remain after the brief's exclusions.
+Every row was scored with `structsim`; the top fifteen were read at operand
+level with `dis.py` and a register-canonicalised sequence diff.
+
+**Ranking (LCS, then change blocks).** Only three rows are at LCS >= 85%:
+`V92setParamsInfoFromCPUnPck` 94.1% (24 blocks, -14), the landed
+`V92Phase3Modulator::reset` 85.6% (5 blocks, -9), and
+`VPcmV34GetVisualDiagnostics` 85.1% (22 blocks, -14). Below them the band is
+dominated by argument-setup and block-layout differences:
+`V34GiveINFO0dBits` 80.9%, `V92Phase4Modulator::generateSymbol` 80.3%,
+`VPcmV34InitiateRetrain` 79.9%, `B103FP_modem` 75.8% (and ours is *larger*),
+`VPcmFloModem::setPhaseIIinfo` 73.8%, `V90ConnectionEvaluator::
+evaluateConnection` 73.7%, `TxNextStateV17`/`TxNextStateV29` 73.5%/73.2%
+(different frame sizes), `_tx_data_state` 73.3%, `Detect_v22` 73.2%,
+`initdigital` 72.6%. `V92setParamsInfoFromCPUnPck`'s residues are x87
+comparison scheduling (`fxch`/`fcompp`/`fnstsw`/`sahf` placement) plus
+`fmulp %st` versus `fmuls`; no single statement explains them.
+
+**The landed row: `V92Phase3Modulator::reset` (351 B).** Before: SIZE,
+blob 90 / ours 81 instructions, LCS 77 (85.6%), run 33. After: **90/90,
+LCS 90 (100%), run 90**, grade **BYTES (4 bytes)** over 351 reference bytes.
+The four remaining bytes are one register swap in the `jaArg` copy
+(`mov (%ebx),%eax`/`lea 0x4(%ebx),%edx` at 0x16c41/0x16c43 in the blob versus
+`%edx`/`%eax` in ours); grade 1 stops on the consequent USE CONFLICT, so this
+is allocation and is not chased.
+
+**The object writes the 8160 floor through the field, in each arm.** The
+comparison at 0x16c07 (`cmp $0x1fdf,%eax` after `lea 0x0(,%edx,4),%eax`) sends
+the unclamped value to a cold arm at 0x16ca2. Both arms contain the whole
+remainder -- `edprintf`, `eventCode = 0` (`0x16c2c` / `0x16cb8`),
+`movw $0xfa0,0x4(%esi)` (`codeLevel = 4000`), and the `jaArg` test -- and each
+stores its own value to `trn1uLength` and reloads it for the print:
+
+    16c12  movl $0x1fe0,0x10(%esi)   ; clamp arm: constant straight to the field
+    16c19  mov 0x10(%esi),%ecx       ; reload for edprintf
+    16ca2  mov %eax,0x10(%esi)       ; other arm: the computed value
+    16ca5  mov 0x10(%esi),%ecx       ; reload for the second edprintf
+
+So the source stores `trn1uLength` inside each arm and the print reads the
+member, not a local. **The enumeration:** the ternary
+`trn1uLength = length < 8160u ? 8160u : length;` gives 81 instructions,
+LCS 77 (85.6%), run 33 -- identical to the old local clamp; the join guard
+(`if (length < 8160u) length = 8160u; trn1uLength = length;`) gives 81/78
+(86.7%), run 33; only the per-arm store maps, with or without braces
+(90/90, 100%, run 90). Separately, `rtd = roundTripDelay` must precede
+`symbolCount = 0`: 0x16bc3 loads the argument (`mov 0x38(%esp),%ecx`) before
+0x16bc7 clears the counter (`movl $0x0,0xc(%esi)`). All six orders of
+`symbolCount = 0; rtd = roundTripDelay; state = stateArg;` were compiled:
+the two with `rtd` first give 90/90 (100%, run 90), the others 87-89
+(96.7-98.9%). The relative order of the other two is not distinguished
+(the object's stores are symbolCount, rtd, state), so the original relative
+order is kept.
+
+**Ordered-set delta.** The per-TU grade maps of the whole tree were captured
+before and after (`byteident --json-out`): the exact set and the grade-0/1
+set are **identical** (no gains, no losses), and the only census movement is
+SIZE 569 -> 568 / BYTES 89 -> 90. No same-TU neighbour moved.
+
+**Verified.** `make period J=3` **394 passed, 0 failed** (also on the merged
+head `76a743f13`). `make byteident-ratchet J=3` exit 0: **1,158 EXACT /
+1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 568 SIZE** over 1,852 (the stored
+floor, 1,158 / 1,194 / 1,161, is unchanged), grade 0-or-1 **1,194**,
+link-selected EXACT **1,161**; the symbol now appears in the BYTES list at
+`4 of 351`. Blob sha256 unchanged
+(`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+No flags, attributes, padding or test edits.
+
+**What remains in the band.** 138 of the 139 in-scope rows are still SIZE;
+the shape classes are x87/FPM arithmetic association, stack-frame size and
+argument-setup differences (`TxNextStateV17`/`V29`, `VPcmFloModem::
+setPhaseIIinfo`), block-duplication/tail-placement decisions
+(`V92Phase4Modulator::generateSymbol`, `V34GiveINFO0dBits`'s debug gates),
+and deep FPM bit-manipulation bodies where no single statement was found.
+
+## F12059. The two wave-23 signedness leads: `TxHdxDataV27`'s shared value and `ScrambleDataV27`'s count are `unsigned short`, and `cid_modem`'s `abs` is the tree's `iabs`
+
+*2026-10-26, worktree `w24-sign`, branch `recover/w24-sign`, base
+`origin/master = a8ea916ca`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args`.*
+
+### `TxHdxDataV27`: the width is `unsigned short` at the read *and* in the callee's declaration
+
+Before: SIZE, blob 83 / ours 89 instructions, LCS 56 (62.9%), run 8. After:
+**83/83, LCS 83 (100%), run 83**, grade **BYTES (8 bytes)** over 314
+reference bytes. The 8 bytes are one temp-register choice in the
+underrun-with-`int_0008` budget subtraction (blob `mov %edx,%ecx; sub
+%ebx,%ecx`, ours `%eax`); `byteident --why` reports it as the consequent
+grade-1 USE CONFLICT, so it is allocation and was not chased.
+
+**The forcing instructions.** Blob `0x0a39e8` `movzwl %ax,%ebx` (the FIFO
+read result), `0x0a39e5` `movzwl (%edi),%edx` (`*budget`), and
+`0x0a39eb` `cmp %bx,%dx; jbe` -- a 16-bit *unsigned* compare -- are the
+width and signedness facts. Both operands are zero-extended and the
+condition is unsigned, so the shared value is an `unsigned short`, not the
+old `short got`.
+
+**The callee declaration was the missing half.** `ScrambleDataV27` was
+declared `short count`, the only scrambler in the tree that was: V17, V22,
+V29 and V32 all take `unsigned short count`. Its blob body begins
+`movswl 0xc(%esp),%ecx` (`0x0a5e70`), which reads as signed but is the
+*widening of its own `short`-parameter tail call* to `SDMv27_scrambler`
+(also `short`), not evidence about the declaration. The callers decide it:
+every blob call site loads the count zero-extended and passes it without a
+conversion -- `TxHdxDataV27` `0xa39e8` into `0xa3a10`/`0xa3a72`,
+`GenEQTrnSequenceV27` `0xa33fc` (`movzwl 0x28(%esp),%ebx`) into
+`0xa3413`, `TxHdxSCR1V27` `0xa3af6` into `0xa3b1f`, and
+`TxHdxEQCondV27` `0xa3bba` into `0xa3be4`. With `unsigned short` the body
+of `ScrambleDataV27` is unchanged (its own `movswl` remains the tail-call
+widening) and stays EXACT.
+
+**The control shape is a `switch`, and the source re-reads `->source`.**
+The rate chain is `test; je` (`0x0a39b7/0x0a39b9`), `dec; je`
+(`0x0a39bf/0x0a39c0`), then the `default` store (`0x0a39c6`) -- the shape
+`TxHdxDataV17` and `TxHdxDataV29` already use, not an `else if` chain
+(which the compiler if-converts to `setne`/`dec`/`and`/`add`). The underrun
+path reloads the source pointer at `0x0a39f0` (`mov 0x24(%esi),%eax`)
+instead of reusing a cached local. Restoring both, plus the single shared
+`taken` and the `> taken` underrun test of `TxHdxDataV29`'s own body,
+leaves only the allocation row.
+
+**Rejected enumerations:** `short got` with casts at the compare (88
+instructions, LCS 56); `unsigned short got` alone with an `else if` chain
+(107, LCS 56; tail-duplicates the FIFO block); `unsigned short taken` with
+a cached `prm` local (87, LCS 68); `iabs`-style double casts with a `short`
+`taken` (87, LCS 66, and `movswl` returns at the read). Only the V29 shape
+with `unsigned short taken` and `unsigned short` `ScrambleDataV27` maps.
+
+### `cid_modem`: the `+0x15c` hit is a base-name collision; the real delta was the abs idiom
+
+`widthaudit --strong` reports `cid_modem` `load disp 0x15c blob s16 ours
+z16`, because it keys a load by `(displacement, base register)`. The
+logical field is `struct cid::pack_len` (`short`, `+0x15c`), and **both
+sites already match**: blob `0x091f42 movzwl 0x15c(%ebp),%edx` is ours
+`0x4bb movzwl 0x15c(%ebx),%edx` (the `> 2` message-length test), and blob
+`0x092163 movswl 0x15c(%ebx),%eax` is ours `0x701 movswl 0x15c(%edx),%edx`
+(the `idx = pack_len; pack_len = idx + 1` arm). Blob's `%ebx` at the
+signed site and ours' `%ebx` at the unsigned site are two different
+objects, exactly the limitation `widthaudit.py`'s own header records. No
+retype is warranted; the field is loaded with both extensions at two
+genuinely different uses in both builds.
+
+The `cwtl` delta it also printed (`6/7`) was real. The gain-adaptation
+loop's magnitude in the blob (`0x091e72`-`0x091e89`) is `movswl; lea;
+movswl; cltd; xor; sub; add` -- the inlined `static int iabs(int v) {
+return v < 0 ? -v : v; }` that `fpm_sre.c`, `toneiir.c` and `v22prc.c`
+already carry. Our spelling `buf[i] < 0 ? -(int)buf[i] : (int)buf[i]`
+emits `movzwl; test %ax,%ax; jns; cwtl; add` / `cwtl; sub`, a branch.
+Writing `sum += iabs((int)buf[i])` makes the loop instruction-identical;
+`cid_modem` goes 368 -> **365** instructions, LCS 236 -> **241**, `cwtl`
+6/7 -> **6/6**, still SIZE (blob 360). The local `int a` and
+`__builtin_abs` spellings were measured: 366/LCS 235 and 365/LCS 241
+respectively -- `__builtin_abs` is the same code, the `int a` spelling
+does not reproduce the loop.
+
+### Gate and ordered set
+
+`make period J=3` -> **394 passed, 0 failed**. `make byteident-ratchet` ->
+**1,158 EXACT / 1 UNRESOLVED / 35 REGALLOC**, grade 0-or-1 **1,194**,
+link-selected **1,161**, ratchet OK (floor 1,146). The ordered `--list-exact`
+diff against the base is the count lines only: **BYTES 90 -> 91, SIZE 568 ->
+567**; no EXACT symbol was traded, and no grade-0/1 function regressed.
+
+## F12060. Byte-immediate mask sweep, wave 24: `V92Jd`'s rate-mask loops and phase word go EXACT
+
+*2026-10-26, worktree `w24-mask`, branch `recover/w24-mask`, base
+`a8ea916ca`, Gentoo GCC 3.4.2-r2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`, `-DDSPLIB_REPRODUCE_BUGS`.*
+
+Third pass over the byte-immediate mask residual. A fresh `make tc` built
+all 300 objects (0 failed) and the form-sensitive census over the same
+**1,852** symbols counted register `a8 ib` / register `f6 /0` and memory
+`f6 /0`, comparing `(register, mask)` and `(memory, mask)` counts. It
+reproduces the wave-23 denominator exactly: **20 functions / 31 rows**
+before this change, **18 / 29** after it. The two removed rows and the two
+new EXACT symbols are the `V92Jd` constructors.
+
+| Function | site (blob) | before insns / LCS / run / grade | after |
+| --- | --- | --- | --- |
+| `_ZN5V92JdC1EP13V90Parameters` | 0x11df4, 0x11e17, 0x11dc6 | 63 / 50 (75.8%) / 11 / SIZE (2 B) | 66 / **66 (100%)** / 66 / **EXACT** |
+| `_ZN5V92JdC2EP13V90Parameters` | 0x11d14, 0x11d37, 0x11ce6 | 63 / 50 (75.8%) / 11 / SIZE (2 B) | 66 / **66 (100%)** / 66 / **EXACT** |
+
+LCS/run are mnemonic longest-common-subsequence and longest contiguous run
+with alignment padding stripped.
+
+**The two rate-mask loops are helper cells.** The object computes each bit
+with `sar %cl,%eax; test $0x1,%al; setne disp` (`a8 01`, 0x11df4 and
+0x11e17), while our `(unsigned char)((mask >> i) & 1)` compiled to
+`sar; and $1`. Adding a `!= 0` comparison alone does not change that; the
+byte/byte/int helper from `docs/method/byte-bit-tests.md` on the shifted
+byte does:
+
+    bits[V90JD_GROUP1 + 1 + i] =
+        (unsigned char)(v92jd_flag_test((unsigned char)(mask >> i), 1) != 0);
+
+Only this cell emits the object's byte TEST followed by `setne`; the helper
+is TU-local and inlines (no symbol added).
+
+**The phase loop is a signedness fact, not a mask cell.** The object computes
+`(phase & (1 << u)) != 0` as `mov $1; shl %cl; test %eax,%edx; setne`
+(0x11dc0-0x11dc6). Our `int phase` compiled the same comparison as
+`sar %cl; and $1`, a different value carrier. Declaring `phase` **unsigned**
+(and casting `scaled` the same way) restores the object's shift-and-test
+form. `phase` is the Q16 phase word and every value is non-negative, so the
+declaration is the object's own reading.
+
+**The lookahead pair needs the byte local, and its source order is the
+object's.** The object loads `0x40(%edi)` once with `movzbl`, copies the low
+byte to a second register, shifts one and masks both. A `unsigned char
+lookahead` local used by both stores reproduces the single byte load; with
+`bits[49]` written before `bits[50]` in the source, GCC 3.4.2 emits the
+object's register assignment and store order (0x34 then 0x33) exactly. The
+other three statement orders tested are byte-identical to this one in value
+but place the shifted value in the other register and fail grade 1; the
+two-store order recovered above is the unique map.
+
+**Rejected or left alone, by class.** (a) the object's byte test is in a hot
+path we already match and a duplicated cold tail: `DataCarrierDetectV17`
+(`0xa54e0`), and the same `(cd & 1)` shape in V27 (`0xa5ca8`) and V29
+(`0xa6388`); the byte/byte/int helper on `(unsigned char)r` measurably
+changes nothing (hot path remains `and $1`), so this is block duplication,
+not an operand form. (c) genuinely 32-bit: `DILdescriptorPacker`'s
+`crcAt & 1` (`0x4dda9`, helper on the byte cast: no change),
+`V92ModulusEncoder::reset`'s sign bit (`0x555d9`), `initdigital`'s
+`0xaa0d` byte is the high half of a `0x2000` word (`0x59b2e`), and
+`modem_serrint`'s `%ah` tests are `& 0x800` (`0x5d08a`). (d) inlined,
+duplicated or boolean-stack values: `VPcmV34Create` (`0xb069`, a `sete`
+bool), `txmitquadbit` (`0x5e511`, inlined scrambler bit on a stack
+argument), `v34handshak` (inlining boundary), `receiver` and
+`V34demodulate` (inlined bodies). The previously measured negatives stand:
+`V8UpdateModemParameters`' memory `0x08` (LCS 174 -> 171),
+`evaluateRxJMSequence` (native test, LCS unchanged), `DILdescriptorPacker`
+(helper folds back), `V22FP_control` (128-byte move). `probeselect`'s three
+`0xa97e` bins stay register-carried; `rebuildJMSequence`'s repeated
+`cm->b0`/`b2` tests and `initTxSequence`'s `mem 0x04` remain structural.
+
+**Ordered-set delta: gains only.** `byteident --json-out` over all 1,852
+symbols: exact set +2 (`V92Jd` C1/C2) and grade-0/1 set +2, with **no
+losses** and no same-TU neighbour movement. (`v22_local_loop` resolves to
+EXACT once `make partial-link` artifacts exist; that is the phase-2 artifact,
+not this change.)
+
+**Verified.** `make period J=3` **394 passed, 0 failed**. Census **1,160
+EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 566 SIZE** over 1,852;
+grade 0-or-1 **1,196**; link-selected EXACT **1,163**. `byteident
+--ratchet` (with `make partial-link` artifacts) exit 0: `ratchet OK
+(exact 1146 -> 1160, grade 0-or-1 1182 -> 1196, link-selected exact 1149
+-> 1163, regalloc 36 -> 35)`, with the reviewed `dp_vpcm_exit` displacement
+still the only one. No flags, attributes, padding or test edits; blob sha256
+unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+
+## F12061. SIZE band at |instruction delta| >= 9, wave 24: `V90SdDetector::process`'s shift walks two pointers, and the return value is live across it
+
+*2026-10-26, worktree `w24-band9`, branch `recover/w24-band9`, base
+`origin/master = a8ea916ca`, Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args`.*
+
+Continued the delta-9+ band wave 23 opened (`F12058`). A fresh `make -s tc
+J=12` builds 300/300 objects; `byteident.py --near 2000` lists **693**
+non-exact symbols, **143** at |instruction delta| >= 9, **139** after the
+brief's exclusions. Every in-scope row was scored with `structsim`, and the
+highest-LCS unread rows with `contentgap`. This wave read **seven new rows at
+operand level** -- `V90SdDetector::process`,
+`V90AutoDigitalImpDetector::reset`, `SetTxModeV32`,
+`_hdlc_emulate_receive_state`, `Detect_Retrain`,
+`V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset` and `TxHdxEQCondV27` --
+and did not re-sweep wave 23's fifteen. Every unread residue is block
+reordering, stack-frame/argument setup, or x87 scheduling; no second row
+produced a unique source mapping.
+
+**The landed row is `V90SdDetector::process` (232 B), and it is a
+source-fidelity recovery, not a grade closure.** Before: 66 instructions
+against the blob's 81, LCS 70 (86.4% of the longer), longest run 29, SIZE.
+After: **82/81, LCS 80 (97.6%), run 52**, still SIZE with 2 bytes differing.
+The remaining difference is a `cmp` operand reversal and one coalescing copy
+(see below); both are allocation/if-conversion, not source.
+
+**THE SHIFT WALKS TWO POINTERS.** The object computes the one-past-end address
+(`lea (%esi,%edx,4),%eax` at 0x3bd80 using the length before it decrements),
+then the source and destination addresses (`lea -0x8(%eax),%ebx` and
+`lea -0x4(%eax),%ecx` at 0x3bd83/0x3bd86) and decrements BOTH in the body
+(`mov (%ebx),%eax; sub $0x4,%ebx; mov %eax,(%ecx); sub $0x4,%ecx` at
+0x3bd90). The current source wrote an indexed `history[i] = history[i - 1]`;
+GCC kept one base and an index. Declaring
+
+    float *src = &history[historyLength - 2];
+    float *dst = &history[historyLength - 1];
+
+in that order, assigning `i = historyLength - 1` after both, and looping
+`*dst-- = *src--` maps onto the object exactly. The enumeration: the indexed
+do-while gives 66/LCS 70; computing `dst` from `i` gives 82/LCS 68 (run 28);
+`dst` declared first gives 77/LCS 69; `src` first with `i` assigned first
+gives 77/LCS 70; only `src` first *and* `i` assigned after the pointers gives
+the object's two-pointer loop (LCS 80, run 52).
+
+**THE ACCUMULATORS ARE DECLARED AFTER THE SHIFT.** The object's `fldz` and
+`fld %st(0)` are at 0x3bda1/0x3bda5, AFTER the shift loop ends at 0x3bd9b.
+With `correlation` and `energy` declared before the shift block, the same two
+instructions are hoisted in front of the prologue; declared after it they sit
+where the object has them. Their order is unchanged and still
+`correlation` before `energy` (F2301).
+
+**THE RETURN VALUE IS ONE VARIABLE LIVE ACROSS THE SHIFT.** The object clears
+it in the prologue (`xor %ebp,%ebp` at 0x3bd71) and every exit moves it to
+`%eax` (`mov %ebp,%eax` at 0x3bdf7, 0x3be09 and 0x3be20), including the -1
+arm. A local `int result = 0` initialised BEFORE the shift block keeps the
+value in callee-saved `%ebp`; declared after the loop it lands in `%edx` and
+the counting arm grows a copy.
+
+**THE EMISSION ORDER MATCHED TOO.** The blob's `V90SdDetector` symbols run
+reset 0x3bc30, C2 0x3bc70, C1 0x3bcd0, D2 0x3bd30, D1 0x3bd50, process
+0x3bd70. The file defined the constructor and destructor first and `reset`
+after them; moving `reset` ahead of the constructor reproduces the blob's
+order. All six symbols keep their grades (five EXACT, `process` non-exact).
+
+**The residual.** In the counting arm the object tests `cmp 0x4(%edi),%ecx`
+(run minus limit) and branches `jb` at 0x3bdea/0x3bdef; ours emits
+`cmp %ecx,0x4(%edi)`, `ja` -- the same unsigned decision with the operands
+reversed and the predicate inverted -- and the counting arm's result is
+copied through `%edx` instead of returned directly from `%ebp`. The
+enumerated spellings that would remove the copy all change the block layout
+or lose the prologue's `xor %ebp,%ebp` (`result` declared after the loop:
+78 instructions, LCS 74; all returns through `result` with the -1 arm folded
+into it: 80, LCS 78; `result = -1` before the test with a negated guard: 82,
+LCS 64). Those were declined: the object's block order is the one the landed
+form emits, and the last two are fits to the register rather than recovered
+statements.
+
+**Ordered-set delta.** Whole-tree grade maps were captured before and after
+(`byteident --json-out`): the EXACT set and the grade-0-or-1 set are
+**identical** (1158 / 1194, no gains or losses); the census is unchanged
+(1158 EXACT / 1 UNRESOLVED / 35 REGALLOC / 90 BYTES / 568 SIZE). No same-TU
+neighbour moved. `make period J=3`: **394 passed, 0 failed**. Blob sha256
+unchanged (`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`).
+No flags, attributes, padding or test edits. The merged head also carries
+the parallel signedness and mask waves (F12059, F12060); the before/after
+figures above are this change's own delta, not the merged head's census.
+
+## F12100. Native transmit lifetimes and a shared GCSE control
+
+At `8500ad8e5466f29383b09224607acfe02349c06b`, the V.17/V.29 processor
+recovery closes eight functions as EXACT: `TxHdxABV17`, `TxHdxABV29`,
+`TxHdxBridgeV17`, `TxHdxDataV17`, `TxHdxEQCondV17`, `TxHdxSCR1V17`,
+`TxHdxSCR1V29` and `TxHdxTEP_V17`. The Gentoo GCC 3.4.2-r2 census moves from
+1,173 EXACT / 39 REGALLOC / 640 NONMATCH to **1,181 / 39 / 632**, across
+1,852 symbols, with zero unresolved symbols or protected losses. Selected-link
+EXACT likewise gains those eight names, from 1,176 to 1,184.
+
+The common source graph reads the WORD countdown directly and starts minimum
+selection from the budget. Under the general profile, the remaining native
+countdown reload survives `.06.cse` but is removed by `.08.gcse` PRE. Disabling
+GCSE restores a complete native function, initially at the cost of an existing
+exact wrapper. That loss did not establish that the alternative profile was
+wrong: the wrapper's source relied on PRE to compensate for different pointer
+capture ages.
+
+Native source constraints restore the private owner after `FIFO_write` and on
+loop continuation, retain the budget pointer, capture the data-state owner
+before the FIFO call, and refresh state-machine owners after debug callbacks.
+V.17's state machine uses shared generator/request objects with the native
+template-read ages. These changes preserve all eight pre-existing EXACT anchors
+across both TUs under the shared `-fno-gcse` profile. The two original TUs are
+confirmed by the ELF's `V17t_prc.c` and `V29t_prc.c` FILE records. The profile is
+a supported source/compiler explanation, **not a uniquely recovered original
+command line**, and is selected only for those two processor TUs in both
+`period.mk` and `period_inner.sh`, with stamp invalidation and logged flags.
+
+The final V.17 template capture also closes `TxHdxDataV17` as a bystander of
+preceding source context. It is retained for its native read-age evidence and
+the complete function match. `TxNextStateV17` remains NONMATCH: its frame is
+0x4c against the native 0x48, despite recovering shared request lifetimes and
+callback boundaries. A smaller frame/size gap in another tested source is not
+sufficient reason to discard the better-supported capture or its exact gain.
+
+Validation: 24 full-TU experiment cells, 19 distinct object emissions, four
+raw-identical unchanged-TU controls and three standalone loop models. The
+focused period fixtures pass 2/2 with 61,369 checks; `make phase J=8` passes
+396/396 period binaries and all structural checks. All 300 actual period source
+objects equal their faithful comparison objects byte for byte; only the two
+intended TUs differ from the starting snapshot. All 21 functions preserve
+native direct-call multiplicities, exports and bindings. Jump-table review
+preserves 12/12 V.17 and 7/7 V.29 case identities; shifted-entry negative controls
+fire for all 19. Independent parent rescoring confirms the eight exact gains
+without changing classification rules.
+
+A scratch census initially omitted the selected partial-link proof context and
+reported an unchanged `v22_local_loop` as unresolved. The same unchanged object
+returns EXACT with the proper context; the final census uses the actual build
+and recovered-order link. This is an apparatus-context correction, not a waived
+loss. Whole-object partial comparison still reports semantic and raw DIFFERENT.
+Portability and unique-source/command-line claims are outside this result.
+
+Reproduce with `make phase J=8`, `make byteident` and `make partial-compare`.
+The reproducible investigation packet is in `scratch/closure-trial/LEDGER.json`;
+scratch is not a maintained build dependency. The Phase-II and modulus-decoder
+pilots produced no closures and no retained changes.
+
+## F12101. Transfer native epochs without transplanting field types or proof claims
+
+The follow-up to F12100 closes seven more functions as EXACT:
+`TxHdxSilenceV17`, `TxHdxQuietV29`, `TxHdxAltV27`, `TxHdxQuietV27`,
+`TxHdxSCR1V27`, `V27TX_modem` and `RxHdxTone`. Source/profile commit
+`bacb242d9` passes the Gentoo period gate. The actual census is **1,188 EXACT /
+39 REGALLOC / 624 NONMATCH / 1 UNRESOLVED**, across 1,852 symbols. All 30
+previously exact functions in the four affected TUs remain exact.
+
+The V.17/V.29 countdown transfer works under the already retained profile.
+V.27 requires a crossed source/profile explanation: profile-only and source-only
+controls remain nonmatching; their combination restores three complete handlers.
+Its wrapper additionally needs the native first-owner, FIFO-refresh and loop-back
+budget-pointer lifetimes. V.27's field remains unsigned: the signed countdown
+interpretation is explicit at the native uses, rather than imposed on the shared
+field declaration. GCSE PRE removes the native Alt/Quiet reloads, while SCR1's
+cached source variable is a different input discrepancy. Similar output does
+not establish the same first compiler cause.
+
+The data-mode analogue is narrower. `RxHdxTone` reloads its owner immediately
+after `FPM_TONE_detect` and captures the short result before its condition.
+That source change alone closes the 60-instruction function and preserves the
+other twelve EXACT functions in its TU. It supplies no evidence for copying
+the fax compiler profile into data modes. The retained profile now covers the
+three original transmitter-processing TUs, consistently in both build paths.
+
+The V.29 next-state source recovery is retained but **not graded EXACT**.
+Its 698-byte body agrees outside relocated fields; the other canonical
+relocations agree. Native and candidate have the same ordered table targets,
+function-relative `[106, 153, 263, 310, 441, 486, 527]`, all on the same 156
+decoded instruction boundaries (153 nonpadding display instructions).
+The official proof intentionally refuses `movswl` and does not cover this
+CMP/JA-default/fallthrough-dispatch pattern. Fresh partial-link context does
+not remove that limitation. The anonymous table relocation therefore remains
+UNRESOLVED; independent target evidence supports source retention, not a waiver
+or a classifier promotion. No grading code changed.
+
+The retained V.27 data-owner capture is still NONMATCH: eight register bytes
+differ and the existing consistent-renaming proof refuses them. Shared-request
+V.27 controls were excluded; a smaller frame alone did not close that function.
+Its next inquiry must map early index captures and initial countdown stores
+together, rather than retry independent statement spellings.
+
+Validation: 12 candidate cells and four raw-identical baseline controls; all
+12 candidate emissions distinct. Focused period fixtures pass 4/4 with 72,560
+checks. `make phase J=8` passes 396/396 period binaries and structural checks.
+All 300 actual period objects equal faithful comparison objects; 296 are
+unchanged from the starting snapshot. The full-TU audit covers 45 functions,
+with no missing exports or binding/type/visibility changes. Thirty jump-table
+case identities retain their original meanings, with firing rotated-entry
+negative controls. Independent parent scoring confirms the seven exact gains
+and the V.29 ordered-target evidence. Partial-object comparison remains semantic
+and raw DIFFERENT; portability is not claimed.
+
+The bounded evidence packet is `scratch/transfer-followup/LEDGER.json` and
+`FINAL-METRICS.json`; scratch is not a maintained dependency. Reproduce the
+configured reconstruction with `make phase J=8`, `make byteident` and
+`make partial-compare`. This result concerns source/profile fidelity and the
+stated component boundaries, not whole-modem runtime reachability.
+
+## F12102. Certify the existing V29 source through a bounded fallthrough-switch proof
+
+The proof extension in `ddfc41578` admits the actual `TxNextStateV29`
+CMP/EAX, unsigned-JA-to-default, fallthrough indexed dispatch. The existing
+rebased SUB/CMP/JBE grammar remains separate. Both protect every byte of the
+guard and dispatch, require the sole guarded predecessor, and reject observed
+named, direct and relocated bypass entries. Read-only table extent, complete
+entry relocations, unique owner, ordered instruction-boundary targets and
+exclusive observed reference checks are unchanged.
+
+The native and reconstructed bodies were already equal outside relocated
+fields after F12101. Their anonymous tables occupy different section offsets
+but have identical ordered function-relative targets
+`[106, 153, 263, 310, 441, 486, 527]`. They now produce the same exact-only
+identity descriptor. The source census moves from 1,188 EXACT / 39 REGALLOC /
+624 NONMATCH / 1 UNRESOLVED to **1,189 / 39 / 624 / 0**, across 1,852 symbols,
+with no protected loss. This is **certification of existing source**, not an
+additional source-code recovery. All 300 source objects and all source/header
+inputs are unchanged.
+
+The bounded owner vocabulary adds byte-validated MOVSX-word and MOVZX-byte
+forms. ModRM/SIB extent and full-width destination are checked. Native
+word-immediate stores admit only `66 C7 /0 imm16`. Independent review found
+that an initial first-prefix check accepted nested operand-size plus segment
+or address prefixes on MOVW. Those two cases were reproduced before tightening
+the decoder; they now refuse, together with repeat-prefix and C7 nonzero-group
+controls. This records an admission-domain defect in the uncommitted draft,
+not a claimed runtime exploit or a relaxed proof.
+
+Validation includes 147 legacy and 100 new two-sided geometry negative cases,
+16 new synthetic positive ELF pairs (short/near JA and extension address modes),
+actual RD/V29 positives, and eight actual reordered/interior-target controls.
+A smaller bound is explicitly valid geometry but cannot match the larger
+machine; a larger bound without its entry refuses. Parent independently ran
+the maintained suite with the actual V29 pair. Fidelity/linked-copy checks and
+`make phase J=8` pass; period differential is 396/396 plus structural checks.
+The final all-symbol census was refreshed after review fixes. All 300 actual
+period and faithful source objects remain byte-identical. Whole-object partial
+comparison remains DIFFERENT.
+
+Reproduce the proof controls with
+`python3 tools/toolchain/test_guarded_switch.py --actual-v29 build/tc_repro/src_fax_V29t_prc.c.o --blob ref/slmodemd/dsplibs.o`,
+then `make byteident`. Detailed draft/review controls are in
+`scratch/switch-v27-completion/`; they are not maintained dependencies. No
+register-renaming rule, tolerance or reconstruction compiler profile changed.
+
+
+## F12103. V27 transition epochs improve source fidelity without closing the dispatcher
+
+The V27 transition recovery in `1a7db0a74` shares the four request/generator
+objects, captures the detector request before generator writes, refreshes the
+private owner after debug callbacks, and snapshots signed rate/training indices
+before state and handler stores. Native START, CARR, DATA and TURNOFF first store
+countdown one; QUIET first stores ten. Their unsigned compound products preserve
+that store order and QUIET's widened table value and multiply. The out-of-range
+default returns directly. Field definitions and the reconstruction compiler
+profile are unchanged.
+
+The unchanged neighbouring `TxHdxDataV27` becomes EXACT (314 bytes) through
+translation-unit context. All six previously exact neighbours remain exact;
+the ten-function TU now has seven EXACT and three NONMATCH. These are distinct
+results: the transition source is better supported by native operands and store
+epochs, but **`TxNextStateV27` remains NONMATCH**, at 1,105 bytes against native
+1,148. Its previous 1,139-byte size was closer without reproducing those source
+facts. No size-based promotion is claimed.
+
+GCC's flow2 crossjumping merges two table-load/store tails, leaving three
+frame-size reads against the native five. Disabling crossjumping diagnostically
+restores all 189 selected arithmetic/call instruction operands, but the selection
+excludes branches, padding, epilogues and flag clears. Later block reordering
+still duplicates clears and exit code; the resulting 1,191-byte function is not
+an identity result. A countdown-one-to-two native mutation fires the operand
+detector. Neither this diagnostic flag nor the projection is a retained profile
+or a replacement for whole-function grading. Independent review found four
+source-expression differences in the earlier diagnostic cell. A fresh unchanged
+retained-source control reproduces the baseline object, and changing only the
+crossjumping flag reproduces the earlier diagnostic object byte for byte. The
+causal claim rests on that corrected identical-input pair.
+
+The complete TU review records the reordered, otherwise identical 226-byte
+NUL-string multiset and two fewer frame-size relocations from the measured tail
+merges. No symbols, bindings or field types change. Focused period validation
+passes 14 groups and 27,869 checks (including 20,364 in the new lifecycle); `make phase J=8` passes all 396 period binaries
+and structural checks. All 300 actual-period and faithful objects agree byte for
+byte, with only the processor and constructor TUs changed from F12102. The refreshed census is **1,190 EXACT /
+39 REGALLOC / 623 NONMATCH / 0 UNRESOLVED**, over 1,852 symbols, with no protected
+loss. The whole-object partial comparison remains DIFFERENT.
+
+The fixture audit found that existing driven cycles covered QUIET through DATA
+but not the shutdown tail, and ran with debugging disabled. The real
+`V27TX_control` force bit sets the underrun gate; it need not be planted by an
+internal write. A new constructor/control/FIFO/installed-handler history covers
+both rates, both training selectors and debug levels zero/two, including
+TURNOFF, NOENG, IDLE and restart. This is component reachability, not an end-to-end
+modem claim.
+
+Its first run detected eight transcript failures among 19,968 checks: four debug
+rows disagreed both in text and callback boundaries. Native `V27TX_create`
+emits a standalone newline after both fresh allocation and reuse; the source
+incorrectly limited it to reuse. The correction moves the common debug call
+after that choice. No tolerance, transcript filtering or callback replacement
+is used. The constructor logs are included in the comparison. The constructor
+remains NONMATCH (native 1,165 bytes, previous 1,137, corrected 1,135); its exact
+delete neighbour is preserved. No whole-function gain is claimed for this fix.
+
+Evidence and rejected controls are under `scratch/switch-v27-completion/`,
+including `whole-TU-B-review.json`, `validation-B.json`, `parity-B.json` and
+`census-B.json`. Recovering the dispatcher's remaining original CFG/compiler
+input is an open priority, separate from this validated source checkpoint.
+
+
+## F12104. Direct component counts preserve the receive loop's two value views
+
+`V21RX_modem` and `V27RX_modem` now read the handler-updated component count
+at its uses, retaining the signed old-count snapshot and unsigned new-count
+subtraction. Their loop conditions test `*count` directly. The previous
+unsigned-short carry local was promoted to SI in the reconstructed compiler's
+initial expansion; its subtraction and loop comparison then shared one widened
+carrier. Native code instead keeps the WORD control view and a separate zero
+extension for pointer arithmetic. This identifies a measured current lowering
+event, not the original compilation's first divergent pass.
+
+The V21 source hypothesis predicted the complete V27 graph before either
+candidate was compiled. One direct-count form in each full TU recovers both
+complete 127-byte, 42-instruction bodies as EXACT; both were previously
+123 bytes. Unchanged full-TU dump controls reproduce the baseline objects
+byte for byte. Independent parent comparison confirms the two promotions and
+unchanged verdicts for all thirteen neighbours, including all seven previously
+EXACT bodies. No pointer types, field types, API, helper boundary or compiler
+profile changes.
+
+Whole-TU review finds only the two target bodies changed. Each target's symbol
+size grows from 123 to 127 at the same start; other symbol starts, extents,
+bindings and visibility are unchanged. Data, strings and the V27 table are
+unchanged. The focused period fixtures `t_v21fax` and `t_v27fax` both pass.
+Their scripted component callbacks exercise zero-count dispatch, count updates,
+mixed signed/unsigned pointer arithmetic and wrapped output totals. Hostile
+scripted histories remain component fidelity probes, not modem reachability
+evidence. Shared final validation follows in F12105.
+
+Source checkpoint `b375012a4`; evidence and written withheld prediction:
+`scratch/trial623/stage1-plan.md`, `rx-collateral.json` and
+`parent-rx-review.json`. Direct uses recover the native dependency graph without
+an artificial temporary, forced register or barrier. The same source need not
+be uniquely identifiable as the author's spelling to satisfy that evidence.
+
+
+## F12105. Formatter producer lifetimes improve without closing the whole body
+
+`displaySpectralParams` has four repeated float-formatting groups. Native code
+prepares the magnitude, retains the original value through fractional conversion,
+and computes the sign last. The previous reconstruction computed sign, whole
+and fraction sequentially with an artificial long-double fraction expression.
+Current GCC's `output_fix_trunc` selects FIST or FISTP from the ST0 death note;
+its popping-compare choice likewise depends on live stack operands. These are
+measured current compiler decisions, not recovered original RTL.
+
+A complete-TU training study compared three supported producer graphs after a
+raw-identical baseline control. Direct variadic arguments restore all four
+retained FIST conversions and DF scale materialisations but leave magnitude
+ordering different. A common-double producer contradicts the native graph.
+Explicit magnitude/fraction/sign sequencing recovers the native producer order,
+retained FIST, final popping compare, twelve conversion/control-word boundaries,
+and the final DF stack-scale materialisation across all four groups. The sign
+result stays int and the fractional arithmetic drops the forced XF casts.
+This last graph is retained as a qualified source recovery, not a closure.
+
+The function remains **NONMATCH**: 635 bytes against native 619, previously
+628; 190 ordinary instructions against native 186, unchanged from the previous
+count. Its remaining four MOV/SAR absolute-value implementations differ from
+native CLTD, with register, stack-order and scheduling obligations still open.
+The ten neighbouring bodies, including all four EXACT peers, are unchanged.
+Six print calls, their field-capture ages, format strings and exports are
+preserved. The unused XF scale pool becomes the native DF representation.
+Size or instruction-count proximity did not select this source; the complete
+producer constraints did.
+
+The withheld V92 producer change is a **negative control**: all five function
+bodies and canonical relocations are unchanged from their current baseline.
+That baseline already has retained conversions and the SF scale mode; it still
+uses memory FMULS where native separately loads the scale and multiplies on the
+stack. Therefore no new V92 recovery or successful materialisation transfer is
+claimed. It excludes that tested source change as a discriminator there, not
+all shared formatting mechanisms. No population campaign follows.
+
+F5822 and F5823 remain historical experiment provenance. Native constant-pool
+mode and an isolated comparison spelling do not uniquely determine original C
+types in a complete producer graph; source comments now state that limitation.
+Evidence, controls and the withheld prediction are under `scratch/trial623/`,
+including `stage2-plan.md`, `training-summary.json`,
+`parent-sequenced-review.json` and `withheld-v92-audit.json`.
+
+
+The shared F12104/F12105 integration checkpoint passes `make phase J=8`:
+396 period binaries pass, zero fail, with structural checks green. Focused
+`t_v21fax`, `t_v27fax` and `t_v90cmask` all pass; the formatter alone has
+646 transcript/state checks at finite in-range inputs and four debug levels.
+All 300 actual-period objects match the faithful build byte for byte; exactly
+the three reviewed source objects change and 297 remain unchanged. Fresh
+selected-partial context gives **1,192 EXACT / 39 REGALLOC / 621 NONMATCH /
+0 UNRESOLVED** over 1,852 symbols. Only the two receive wrappers are promoted;
+no previously EXACT or matched name is lost. Whole-object partial comparison
+remains DIFFERENT. No compiler-portability result is claimed.
+
+
+## F12106. Complete EQ handlers need coupled count, recurrence and capture graphs
+
+`TxHdxEQCondV29` and `TxHdxEQCondV27` reach EXACT together with their retained
+Gentoo reproduction profiles. The V29 body is 237 bytes and 82 ordinary
+instructions; V27 is 264 bytes and 88. Both ten-body TUs preserve every other
+body and canonical relocation: eighteen neighbours, including sixteen already
+EXACT functions. All ten compared V29 processor functions are now EXACT.
+No field type, compiler option, API or new helper is introduced.
+
+V29 requires three coupled source graphs: direct countdown observations with
+budget-default minimum selection, an unsigned postdecrement pointer loop, and
+a full-width LFSR working carrier with final WORD publication. Its same-TU
+EXACT `GenEQTrnSequenceV29` supplies an independent recurrence/input control.
+The first two manual candidates recover these graphs but leave owner/count
+spill topology different. Capturing the owner after the status store restores
+the native topology; using the generator's feedback expression followed by
+bit-zero capture restores the remaining accumulator encoding. Native machine
+instruction order had not uniquely specified that source producer structure.
+All hypotheses and the crossed controls are recorded before their comparisons.
+
+A separate existing-helper-call control automatically inlines and keeps the
+two native calls, but refreshes the owner after countdown publication where
+native retains it. A typed-owner control preserves pointer32/WORD16 accesses
+at root+0x20 and owner+0x18 and leaves that emission unchanged. Neither is
+retained. The former source comment's inference that an absent CALL proved
+independent source duplication is removed: global out-of-line emission is
+compatible with automatic inlining. These controls exclude their tested inputs,
+not every possible original helper relationship.
+
+V27 transfers only the supported regional explanation. Its fill remains signed
+ascending with CWTL and a DWORD comparison against the unsigned selected count;
+its selection uses an unsigned WORD postdecrement loop. Capture the selection
+pointer at the native post-minimum/pre-fill epoch. Copy the current output slot
+and advance the pointer before selection, preserving the following-element
+bit test and last sentinel. The single loop guard admits the compiler's native
+post-Scramble owner hoist, while branch-local signed rate observations remain.
+The direct count graph, loop input and pointer lifetime jointly recover the
+complete body. V29's earlier spill mismatch did not falsify this distinct V27
+whole-function hypothesis.
+
+Focused period validation passes three executables and 125,658 checks across
+25 sections: `t_v29txcreate`, `t_v29data` and `t_v27txcreate`. These include the
+constructor-driven V29 training history, exact generator controls and V27 real
+control/shutdown/restart histories; synthetic probes retain their stated scope.
+Independent parent comparison confirms both exact bodies and all eighteen
+unchanged peers. Source comments are checked against fresh canonical objects.
+Detailed controls, actual commands, local TU audits and the written predictions
+are under `scratch/eq90/`, including `ADMISSION.md`, `TU-audit.json`,
+`TU-audit-v27.json`, `parent-EQ-review.json` and the focused validation records.
+Experimental compiles ran without full gates, global censuses or CI; final
+integration validation follows after the complete retained set is frozen.
+
+
+Final integration passes `make phase J=8`: 396 period binaries, zero failures,
+plus structural checks. All 300 actual-period objects match the faithful build
+byte for byte; only the V27/V29 processor objects change and 298 are unchanged.
+Fresh selected-partial context gives **1,194 EXACT / 39 REGALLOC / 619 NONMATCH /
+0 UNRESOLVED**, over 1,852 symbols. Exactly the two EQ handlers are promoted;
+no previously EXACT or matched name is lost. Whole-object partial comparison
+remains DIFFERENT.
+
+The optional V32 unchanged-source no-GCSE diagnostic is discarded. It restores
+a mode reread but does not restore the native detector publication/comparison
+sequence and loses the protected `RxHdxTone` and `RxHdxNoSignal` matches.
+The observed PRE/store-motion transformations therefore do not justify that
+profile adoption or a whole-source/profile transfer. No V32 source or profile
+change is retained. Its changed diagnostic-string ordering and unchanged string
+multiset are recorded explicitly, not called data equality.
+
+## F12107. V27 generator guard recovery leaves a reload-allocation residual
+
+`GenEQTrnSequenceV27` has one unsigned WORD postdecrement entry guard before
+loading the transmitter's source owner. The previous reconstruction tested
+count twice and captured that owner between the tests. The now-EXACT EQ handler
+provides a same-TU source control: body-local owner acquisition is hoisted
+behind the single loop guard. Applying that coupled graph to the generator
+recovers its guard and owner epoch. Preserve the signed ascending fill, the
+Scramble boundary, following-word selection including its final sentinel,
+branch-local signed rate reads and WORD stores.
+
+This is a qualified partial, **not an EXACT or REGALLOC promotion**: native is
+134 bytes/47 ordinary instructions, previous source 152/53, retained source
+142/51. The old guard-only control also produced 142/51 but captured the owner
+before the remaining guard; equal size and instruction counts hid that distinct
+structural defect. Independent full-TU comparison preserves nine other bodies,
+including eight EXACT functions, with no symbol/binding or allocated-data loss.
+Switch-table addends rebase with the preceding function's length; their
+`TxNextStateV27`-relative targets remain unchanged.
+
+Matching GCC dumps show both the generator and exact handler hoist table
+constants during loop optimisation and retain them as pseudos through local
+allocation. Only during global allocation/reload does the handler rematerialise
+them as direct address operands; the generator keeps table bases in registers
+and retains a fourth saved register. GCC's `reload1.c` substitutes a constant
+for an unallocated equivalent pseudo in an address. This explains the current
+mechanism, not the original source input. Owner placement alone does not explain
+the residual; no register-forcing, flag change or further spelling palette is
+retained. One raw-identical baseline and one coupled source candidate were
+compiled; a formatting-only recompilation was raw-identical to the candidate.
+
+The direct component fixture now crosses both constructor-created rates, seven
+counts including zero, and two following-word bit values: 28 trials. It compares
+the complete 66-WORD buffers and all fourteen scrambler-state bytes, rather than
+only output prefixes. The generator section passes 85 checks; its period binary
+passes 27,928 checks across fourteen sections. The original reconstruction also
+passes the stronger fixture. Separate apparatus controls corrupt an untouched
+following word or `pending`; each fails 28 of the generator's 85 checks. These
+are detector controls, not valid modem histories or a mutation campaign.
+Artifacts and command/compiler identities are under `scratch/v27gen60/`.
+
+## F12108. A bounded automatic-inline profile satisfies both V90 phase-4 contracts
+
+The historical automatic-inline-off control recovered six EXACT bodies in
+`V90Phase4Modulator.cpp`, but its zero EXACT losses concealed a replacement
+defect: it introduced seven and thirteen same-class calls into the two symbol
+pumps, where the native bodies contain none. A fresh unchanged-source replay
+confirms that collateral. It is not an admissible retained profile.
+
+Current Gentoo callgraph evidence separates the required outcomes. The largest
+ordinary helper expanded in a native pump has frontend cost 65
+(`enterRepeatedCPd`); `recivedSUVtag`, which the native five-byte
+`recivedPartTwoSilenceRrnSUVtag` wrapper calls, costs 82. GCC 3.4.2's
+`cgraph_default_inline_p` uses the strict inequality
+`global.insns < MAX_INLINE_INSNS_AUTO`. Under unchanged O3 source, a budget of
+80 restores the wrapper's tail jump while preserving both complete pump bodies
+byte for byte. The adjacent budget 83 reproduces the baseline bodies. These
+controls test a specific call/inline discriminator, rather than a flag palette.
+The inferred cost-separating interval is 66..82 for these observed helpers;
+80 is a supported interior choice, not uniquely recovered original flags.
+Original frontend trees and exact original TU boundaries are not established
+by this experiment. Scope the qualified profile to the reconstructed V90
+phase-4 translation unit, not the entire object.
+
+Independent review compares all 53 emitted functions, symbol records, bindings,
+allocated noncode bytes, NOBITS, named data and noncode relocations. Six bodies
+become EXACT: `recivedPartTwoSilenceRrnSUVtag` and `setRfSymbols` from NONMATCH;
+`recivedE2u`, `recivedCPtag`, `recivedFirstRrnE2u` and `setRdRtSymbols` from
+REGALLOC. All 39 previously EXACT bodies survive. Two other changed bodies,
+the C1/C2 constructors, remain NONMATCH: their call targets, field offsets and
+constants agree, with changed scratch registers/argument scheduling and an
+existing member-publication-order residual. Both large pumps are unchanged.
+The historical V92 convolution-encoder gain is already retained through its
+source recovery and must not be counted again.
+
+Apply `--param max-inline-insns-auto=80` only to this source in both period build
+paths. The faithful build stamp records the source and flags; the runtime
+compiler script invalidates its cache on script changes. A recording-compiler
+self-test checks that the budget reaches the selected C++ source and reaches
+neither fixtures nor neighbouring sources. Removing that dispatch in a scratch
+script makes the new check fail. No reconstruction source or grader changes.
+
+Focused Gentoo validation passes four executables, 66 sections and 658,844
+checks: `t_v90p4mgen`, `t_v90p4mtab`, `t_v90leaves`, `t_v90modchain`. The actual
+period object is raw-identical to the experimental candidate. Planted internal
+states retain their fixture scope; these counts are not end-to-end modem
+reachability. Independent review and actual commands are under
+`scratch/unblock-review/`.
+
+The alternate V92 narrowing inquiry is negative. Combine folds the ordinary HI
+stack load and sign extension into MOVSWL. A common-return control still folds
+it and changes mapper forwarding; separate lexical locals remove the native
+mapper WORD store. Each complete-TU control covers 44 emitted functions and
+closes none. Neither supports a return-type, volatile or register-forcing edit.
+
+## F12109. V90 demodulator call recovery does not close its progress body
+
+The native `V90Demodulator::progress` calls `enterRRN` and `enterDataPhase`;
+retained O3 source expanded both. A fresh raw-identical complete-TU control
+measures grown frontend costs 58 and 90, while native-required expansions of
+`enterPhase4`, `enterFPE`, `getBitRate` and `getRbsPattern` cost 32, 31, 7 and 10.
+With GCC's strict automatic-inline admission inequality, the consistent budget
+interval is 33..58. Both endpoints and interiors 50/57 emit the same raw object;
+32 introduces unwanted Phase4 calls and 59 wrongly expands RRN. The additional
+31 control also loses the required FPE expansion. These eight successful
+compilations are scoped controls, not an exhaustive profile search.
+
+Retain the supported interior budget 50 for this reconstructed TU only, in both
+period build paths. This restores two native ABI cutpoints: the `this` argument
+and subsequent fresh `this+0x3c` observation after RRN, and fresh `this+0x25c` /
+`this+0x1e4` observations after data entry. No field store is moved over those
+calls. The complete direct-call/tail target multiset now agrees with native;
+required expansions remain. Original flags, frontend source trees and TU
+boundaries are not uniquely identified by this source/profile hypothesis.
+
+**There is no whole-function promotion.** All 31 compared bodies retain their
+22 EXACT / 9 NONMATCH grades; only `progress` changes. Its ordinary instruction
+count moves from 1,815 to 1,714 against native 1,698, and byte extent from 7,840
+to 7,366 against native 7,276. The maintained longest contiguous run falls from
+46 to 42. Those diagnostics do not establish general convergence. Retention is
+for the independently witnessed calls, arguments and observation epochs.
+
+All 143 symbol identities, bindings, visibility and section ownership survive.
+Allocated noncode is not raw-identical: the same 71-string multiset is reordered,
+and 62 jump-table entries move within `progress`. The four selectors, ranges,
+table extents and relocation records are unchanged. Fifty-nine table entry
+blocks agree under operand normalization; the three inspected exceptions are
+independent argument-store scheduling, the restored data-entry call, and a
+zero-displacement spelling. This is an entry-path/table correspondence audit,
+not a formal proof of whole-CFG equality. Other allocated data is unchanged.
+
+Focused Gentoo differentials pass four executables, 21 sections and 382,419
+checks: `t_v90demprog`, `t_v90dataph`, `t_v90demctor`, `t_v90modemctor`. The actual
+period object is raw-identical to the experimental candidate. Existing planted
+states retain their component/synthetic scope, not modem reachability. The
+recording-compiler test now checks both V90 budgets and their isolation from
+fixtures/neighbouring sources; deleting the demodulator dispatch makes it fail.
+
+The remaining timing diagnostic has a concrete x87 storage discrepancy: native
+narrows the subtraction result through an SF store before scaling, whereas the
+candidate retains it on the x87 stack. Initial RTL already represents both
+operations in SF mode, so another float cast or inline budget is not an admitted
+repair. The call-contract method transfers as structural recovery, not a general
+closure recipe for these remaining source/lifetime graphs. Detailed commands,
+31-body audit, table ledger and independent comparison are under
+`scratch/demod-contract/` and `scratch/demod-contract-parent/`.
+
+## F12110. SDM tap and WORD-feedback boundaries recover the loop, not its allocation
+
+`FPM_SDM_scrambler` and `SDM_scrambler` have identical 146-byte, 53-instruction
+reference bodies. Current source emitted 144 bytes and 51 ordinary instructions,
+keeping the recurrence on the stack and updating it with memory shift/AND/OR.
+Native keeps that recurrence in EBX and spills the second tap result instead.
+Fresh unchanged full-TU Gentoo controls reproduce both retained objects raw.
+
+The initial RTL exposes a source-input distinction: shift one, input load/XOR,
+then shift two. Capturing both unsigned tap contributions before the original
+left-associated WORD expression creates the native producer overlap. Global
+allocation then spills the second tap instead of the recurrence, as predicted.
+This is not the historical feedback-first XOR association control in
+`gcc3_batch100_fax_sdm_feedback.py`, nor the closed wide-output/WORD-use control.
+
+That first candidate still narrows its local output before the store. Native
+publishes AX before zero-extending it for feedback. The single supported
+correction publishes directly through the WORD lvalue and then consumes
+`*data++` in the recurrence. Both native loop operation order and recurrence/tap
+placement follow. Output narrowing, count width, XOR association, masks and
+state publication are preserved; no width, declaration-order or flag palette
+is retained. The fax copy receives the same graph without tuning after a fresh
+raw-identical control, providing a withheld transfer result.
+
+Both functions remain **NONMATCH**, not EXACT or REGALLOC. Their extents and
+instruction counts now equal native, but those are diagnostics only. The
+maintained longest run rises from 5 to 17 instructions in each. Remaining byte
+differences comprise 28 prologue positions and five loop displacement bytes;
+the latter follow one consistent permutation of five private ESP slots. The
+last eleven bytes match literally. This is inspected slot/producer evidence,
+not a formal CFG or private-stack equivalence certificate. Do not spend further
+source cells on allocation or capture-order fitting without new input evidence.
+
+Independent review covers all six functions across both TUs. Only the two
+scramblers change; the four init/descrambler peers preserve their canonical
+bodies and relocations. Symbol inventories, bindings, visibility, types, data
+and relocation tables are preserved. Following functions move by sixteen bytes
+through alignment; that is a layout consequence, not a reconstruction target.
+The actual period objects equal the experimental candidates byte for byte.
+
+Focused period validation passes five executables, 65 sections and 514,455
+checks: `t_fpm_sdm`, `t_faxsdm`, `t_v22data`, `t_v17fax`, `t_v29fax`. Direct tests
+compare state and output per word, bulk/chunk operation and zero count, with
+protocol configurations and explicitly synthetic edges. No new fixture or
+mutation campaign is required for this graph recovery.
+
+The history audit found replay tools that literal function-name searches missed
+because names were constructed dynamically. A scratch AST index scans 1,451
+tracked Python tools with no parse failures, finding candidate source-family
+or literal-symbol leads for 581 of 617 residuals (341 have literal-symbol leads).
+Known positive and unrelated-input negative controls exercise the index. These
+are discovery leads, not evidence that an experiment ran or applies now. Verify
+pinned revisions, domains, flags, input hashes and current grades before reusing
+an exclusion or gain. Detailed source/RTL audits and the index are under
+`scratch/sdm-producer/` and `scratch/sdm-producer-parent/`.
+
+
+## F12111. A dead narrow comparison closes the V32 clamp
+
+`RxClampV32` is now EXACT: all 49 bytes and 16 ordinary instructions match
+its native body. Its complete 24-function V32 interface TU changes only that
+body; the other 23 canonical bodies and all ordered call targets are unchanged.
+Allocated data, NOBITS, nontext relocations, symbol records, bindings and
+canonical relocation consumers agree with a fresh raw-identical baseline.
+
+The member was already signed `short`. Historical conversion-before-subtraction
+and postdecrement controls (F11585) did not explain the missing source graph.
+Initial RTL and the matching compiler source instead locate an early split:
+`copy_loop_headers` duplicates the for-loop's common exit test before the jump
+dump, and GCSE reuses the entry value on the zero-trip return. Suppressing that
+one header duplication in an installed-compiler diagnostic still does not close
+the body. A common test alone is insufficient.
+
+The decisive distinction is the lifetime of the value tested against -1.
+The native signed narrow value survives to compute the next decrement, while
+the tested producer can die at the comparison. Recovering those two values
+and the shared test gives the old compiler that liveness fact. This is a real
+counter producer and consumer, not an added scratch use or register constraint.
+The word-sized narrowing still wraps negative lengths through the sentinel;
+zero writes nothing, output alias effects reach the final length reload, and
+D482 is reproduced without a new repair or compatibility arm.
+
+The observed `INC AX` does not establish a source increment. In the matching
+GCC 3.4.2 i386 machine description, the HI comparison peephole requires the
+input's `REG_DEAD` note and accepts the comparison's condition-code mode. The
+successful dump retains the HI comparison against -1 through combine and
+flow2; peephole2 replaces it with compare/clobber, and the `*addhi_4` emitter
+produces the destructive increment. An earlier explicit SI addition followed
+by a HI zero test needed a separate TEST: the two widths' zero flags are not
+interchangeable. Trace the predicate and its lifetime before inferring an
+arithmetic source operator from this instruction.
+
+Independent review checks all 24 bodies, calls, data and bindings. Focused
+Gentoo period validation passes `t_v32fpctl` and `t_v32rxhdx`: 2 executables,
+97 sections and 10,232 checks, including the documented zero/positive counts,
+negative-count compatibility probe and receive lifecycle histories. The planted
+component states retain their fixture scope; no modem end-to-end claim follows.
+Commands, source/profile hashes, pass extracts and controls are recorded under
+`scratch/closure90-parent/`; `RXCLAMP-REVIEW.json` is the independent audit.
+
+The accompanying FDSP cumulative trial tests 32 source/profile cells without a
+promotion. Keeping intermediate experiments together made their interactions
+measurable, but no partial FDSP source or diagnostic compiler intervention is
+retained. Final register names after renaming do not prove original reload
+choices. Per-function closure, rather than size or matching-run growth, remains
+the outcome reported for this checkpoint.
+
+## F12112. A typed local and real byte captures close V22 control to REGALLOC
+
+`V22FP_control` recovers the complete native instruction graph: REGALLOC,
+145 bytes and 47 decoded instructions including padding. Independent comparison
+finds 11 differing bytes: early DSP/scrambler register assignments and the
+out-of-line ORG_RMLOOP2 HDX temporary. Those temporaries are overwritten before
+the shared late sequence, which is identical. `V22_status` remains EXACT at
+310 bytes. Both functions remain call-free; complete-TU data, bindings,
+nontext relocations and relocation consumers are unchanged.
+
+The owner's opaque-argument suggestion exposed a missing source input.
+`void *modem` immediately cast to a `struct v22fp *fp` local restores two
+DSP-root loads without changing member types or compiler flags. A typed
+argument followed by the same local assignment produces the identical complete
+object on three earlier graphs and the successful candidate. The original
+opaque signature is therefore not uniquely identified. The retained interface
+preserves the existing typed argument and uses a separate typed local. HDX/DSP
+members and the control argument retain their concrete types. There is no
+interchangeable control-callback witness establishing an opaque API here.
+
+Actual Gentoo dumps retain concrete alias sets. Local CSE leaves an early
+load based on the `fp` pseudo and a late one based on `modem`; PRE hashes
+them as distinct expressions. Later copy propagation canonicalises the bases
+after that elimination opportunity. The preceding read-only audit stopped
+too soon by looking for a different type or invalidating store. A missing
+reload need not establish an alias barrier. A concrete cast also need not
+erase a source local's effect on this compiler's intermediate representation.
+
+The pointer local alone does not close the body. Capture the early byte and
+compute the consumed `int scrambler` before the descrambler store, so the byte
+can die before the HDX byte capture. Sample the latter between the two DSP
+stores, refresh it only after the retrain arm's HDX stores, and use the current
+sample for the second predicate. A raw second read cannot be substituted
+freely: the intervening scrambler store may alias that byte. The late byte
+capture feeds both DSP updates and the final parameter bit. Combining these
+real producer/consumer lifetimes closes the graph; without the early int
+producer the capture candidate remained NONMATCH with excess register pressure.
+There is no new helper, dummy use, refactor, layout change, flag or bug repair.
+
+The inquiry compiles 15 complete-TU cells, including two unchanged controls,
+and audits 30 function slots. Only the complete capture and its raw-identical
+opaque counterpart promote the target; every status body remains EXACT.
+Compilation totals about five seconds; integration work is separate. Commands,
+hashes, pass dumps, controls and finite domains are in
+`scratch/v22-opaque-entry/`; independent review is in `scratch/v22-cast-review/`.
+
+Focused Gentoo period checks run `t_v22ctl`, `t_v22status` and `t_v22leaves`:
+three executables, eight sections and 1,083,740 checks. The main control fixture
+uses all 65,536 flag pairs across four constructed configurations with a disjoint
+control object. It does not establish arbitrary overlapping-pointer histories
+or modem end-to-end reachability.
+
+The frozen checkpoint passes `make phase`: 396/396 period tests and structural
+checks. The faithful census is 1,201 EXACT / 36 REGALLOC / 615 NONMATCH /
+0 UNRESOLVED across 1,852 functions, with no protected loss. Actual/faithful
+raw object parity is 300/300; only the reviewed V22 status/control TU changes.
+The complete partial object remains DIFFERENT. Typed and opaque entry/local
+forms have the same reviewed object; the final typed form is revalidated before
+delivery. Ordinary argument/subobject aliases should have been considered
+before the prolonged alias/flag investigation. Opaque callbacks and C-style
+polymorphism require evidence from the surrounding uses, not one matching cast.
+
+## F12113. A sectioned idiom-transfer pass closes two more complete functions
+
+The b91102c9 baseline has 615 NONMATCH functions, 36 REGALLOC and 1,201 EXACT
+across 1,852 compared symbols. All 300 faithful object hashes were checked
+against the validated checkpoint before screening. The pass assigns every
+NONMATCH to an observation queue: 147 potential pointer-owner epoch differences,
+23 narrow-predicate differences, 149 narrow load/value-form differences,
+85 x87 cases, 21 call-count differences and 190 other/mixed cases. These
+fixed-priority queues are navigation, not causal classifications or promises
+of easy promotions. Equal displacements do not prove a shared owner; the
+pointer detector uses a bounded base-register-use window. Two positive and
+two negative pointer controls pass. REGALLOC tuning and alignment are excluded.
+
+The first three-function subsection tests eight valid complete-TU cells:
+
+- `V32FP_GetCleanedSamples`: NONMATCH to EXACT, all 53 bytes/15 instructions.
+  A typed outer argument plus a separately named typed local restores the
+  native owner reload after publishing the count. The native has three static
+  root+0x68 loads after return-tail duplication; the baseline has one. The
+  actual PRE hash table has one shared expression before this change, but
+  distinct local/argument expressions with it. No alias flag is changed.
+  Historical no-strict-aliasing controls recovered the getter but changed two
+  constructors; those constructors remain raw unchanged with this local.
+- `V21TX_control`: NONMATCH to REGALLOC, 94 bytes/34 decoded instructions.
+  The native captures scale and the second input word before the first two
+  stores, and acquires HDX after the optional flag-byte update. The known late
+  HDX control and the new consumed-input/DSP-local captures each remain
+  NONMATCH alone; their combination recovers the complete instruction graph.
+  This is a coupled lifetime recovery, not rediscovery of the old late-child
+  experiment. The existing public API, member types and operations remain.
+- `VPcmV34SetDelays`: no promotion. A typed parameter-owner local with the two
+  native post-diagnostic refreshes recovers owner epochs but does not close the
+  body. It is discarded. Two generator failures are retained as invalid apparatus
+  attempts, one before compilation and one after compiling an unchanged control;
+  no source conclusion is drawn from them.
+
+Independent review checks all eight functions in the two retained TUs, native
+CFG joins and call ABI, data, bindings and relocation consumers. Only the two
+targets change; all protected functions and both constructors are unchanged.
+Thirteen period-compiler layout/width assertions pass, and changed-immediate
+negative controls are rejected. No helper, profile, field type, bug repair or
+state-machine refactor is introduced. Existing component fixture scopes remain
+explicit: V32 includes planted count probes, and V21 controls run on constructed
+instances. These are not new arbitrary-alias or modem end-to-end claims.
+
+Focused Gentoo period validation passes `t_v32fpctl` and `t_v21txcreate`:
+two executables, eleven sections and 7,471 checks. Full phase/codegen checks
+are batched at the retained integration checkpoint rather than run for each
+experimental cell.
+
+The reproducible section queues, all 615 rows, controls, finite source cells
+and compiler dumps are under `scratch/idiom-transfer/`; independent evidence
+is under `scratch/idiom-transfer-review/`. The first subsection ends here:
+two complete promotions and one rejected function. Remaining queues require
+their own source/native review, and previously closed SMC/FIFO/FDSP domains
+are not reopened by a screening hit alone.
+
+## F12114. A reader-local volatile view closes the V34 delay setter
+
+`VPcmV34SetDelays` becomes EXACT: 259 bytes, 66 decoded instructions including
+padding, 62 without padding. The complete 56-function TU changes only this
+body; all protected peers, 115 symbol records, allocated noncode, bindings
+and other relocation consumers remain unchanged. Four relocation offsets move
+inside the target, with their destinations and kinds preserved.
+
+The first owner-local candidate restored the parameter-pointer epochs but
+allowed the compiler to reuse a DMA value the reference rereads. Restoring a
+direct final owner expression alone also failed. The owner's volatile-access
+suggestion supplies the missing type hypothesis. A volatile `dmaDelay` field
+alone leaves the original source NONMATCH; coupling it with the parameter
+local and post-diagnostic refreshes closes the body. A local
+`volatile struct _tagModemParameters *params` gives the same complete object,
+without changing the shared member declaration. This narrower reader view is
+the retained source. The pointer variable itself is not volatile.
+
+The native has three parameter-root loads: entry and after either diagnostic
+callback. It has four static DMA-field loads across the quiet and debug paths.
+Keep the parameter local across the ordinary output stores, refresh it after
+each diagnostic call, and read the volatile pointee again for the echo delay.
+No value is replaced with a cached earlier `ext`, and no public type, helper,
+compiler profile, arithmetic width or bug-reproduction arm changes.
+
+The writer is an independent scope constraint. Native `vpcm_create` stores
+EAX at parameter+0x68 at 0x3c09, updates EAX at 0x3c15, then stores it again
+at 0x3c1e without a reload. Two unchanged-writer Gentoo controls verify the
+consequence: a globally volatile member adds DMA loads absent from that native
+sequence. A reader-local qualified view preserves the writer's existing code.
+This does not uniquely recover the original declaration or establish DMA,
+interrupt or thread activity. Volatile qualification of `hwDelay` within the
+view is observationally ambiguous here because this reader accesses it once.
+
+The reader inquiry ends at twelve valid full-TU cells, with two separate
+unchanged-writer controls used to test qualifier scope. The globally qualified
+and reader-local winning objects are raw-identical. Independent review checks
+the complete TU, original call contracts, field addresses/widths and the writer
+counterexample. Focused Gentoo validation runs `t_v34pcmapi`, including delay
+range and diagnostic cases; its component-fixture scope is retained rather
+than described as modem end-to-end reachability. Artifacts are under
+`scratch/idiom-transfer/delays/`, `scratch/dma-volatile-parent/` and
+`scratch/idiom-transfer-review/VOLATILE-REVIEW.md`.
+
+The focused period gate passes one executable, nine sections and 30,536 checks,
+including 168 direct delay calls per implementation in seeded component frames.
+Eleven independent period layout/width assertions pass. No callback mutation
+or asynchronous writer history is established by those fixtures.
+
+## F12115. Coupled owner and status observations close the V34 hang-up request
+
+`VPcmV34InitiateHangUp` becomes EXACT: 258 bytes and 64 decoded instructions.
+The session pointer is observed before the optional diagnostic call in the
+reference; the old source acquired it later inside the PCM status arm. Moving
+that consumed local restores its native observation age but leaves the complete
+function NONMATCH. The reference also reads status after clearing `rate_want`
+and before clearing `rate_min` and `rate_max`. Capturing that value at the native
+boundary, together with the session lifetime, closes the function. The
+owner-order-only control remains NONMATCH. Types, public API, compiler flags,
+function structure and bug-reproduction behaviour are unchanged.
+
+The bounded wave covers two targets with six candidate full-TU compiles and
+two raw-identical controls. No protected EXACT/REGALLOC function is lost.
+`TxNextStateV21` remains NONMATCH: its default diagnostic uses a retained HDX
+owner in the reference, whereas the source reacquires that owner. Reusing the
+local lets CSE eliminate a state reread the reference retains. A qualified
+diagnostic view and a qualified local owner do not close it, and are not retained.
+
+The positive TU has 56 compared functions. `VPcmV34InitMOH` also changes machine
+scheduling despite unchanged source; it remains NONMATCH and is part of the
+collateral review. The remaining 54 bodies are unchanged. Full-TU bindings,
+calls, noncode data and relocated destinations are reviewed independently;
+anonymous table destinations must be compared with their moved function offsets.
+
+Focused Gentoo validation passes three executables: `t_v34pcmif` has 37 sections
+and 61,492 checks, `t_v34conn` has four sections and 186 checks, and
+`t_v34pcmapi` has nine sections and 30,536 checks. The interface fixture compares
+seeded objects, session chains and diagnostic transcripts; the API fixture
+directly tests the MOH collateral body. These results do not establish a
+diagnostic callback mutating the session owner or whole-modem hang-up reachability.
+The reviewed sources, controls, compiler dumps and final integration records
+are under `scratch/propagation-plan/`.
+
+The selection review contrasts the successful call/owner-boundary transfers with
+the following 37 narrow-predicate/capture compiles, which produced no complete
+promotions. Short bodies and screen tags are navigation, not causal admissions.
+Astra's independent preflight found no fresh short-capture admission; the wave
+kept two demonstrated owner-boundary targets rather than filling a four-target
+ceiling. Compile counts and wall time do not measure model usage or invoice cost.
+
+## F12116. Separate owner identities from rate-value captures in the V34 setter
+
+`VPcmV34SetMinMaxBitRates` becomes EXACT: 348 bytes, 91 decoded instructions,
+89 after padding removal. Retain the engine owner, capture the K56 object before
+the receiver branches, then capture the low and high unsigned rates in the V90
+arm. Types, field definitions, arithmetic, flags and bug reproduction are unchanged.
+
+Owner recovery alone agrees with 85 of 89 literal nonpadding instruction tuples,
+including all eight relative branch destinations. Four rate-load/argument-store
+instructions remain different. The first scalar experiment also adds a parameter
+pointer; both that candidate and its combination with the engine owners remain
+NONMATCH. Capturing only the two values through the existing owner closes the
+function. Separate value captures from added pointer identities experimentally.
+
+The wave also retains a `SetAdaptEcV32` ownership partial. Direct FP-relative ECC
+accesses recover all 81 native operations and all seven branch destinations.
+Fifteen instruction tuples still use different GP registers. Independent review
+checks the zero, one, delay and constant carriers, but the strict consistent-
+renaming proof still refuses the complete mapping: the grade remains NONMATCH.
+The RESET arm refreshes FP after init; `&fp->ecc.cfg` explicitly names the
+configuration at ECC offset zero.
+
+The separate delay-owner source change is rejected: native post-publication
+reads survive through `.05.null` but disappear in `.06.cse`. No qualifier or
+type palette follows. The retained AdaptEc source changes that unchanged
+function's discarded stack-slot pop immediately before restoring the register;
+independent review accepts this allocation collateral.
+
+Review covers 80 functions and 593 resolved relocation consumers. Only the two
+targets and that stack-pop bystander change; all 55 V34 bystander bodies, data,
+bindings and relocated destinations are unchanged. Thirty-one period layout/
+width assertions pass. Focused period validation passes six executables with
+158,698 checks: `t_v32fpsub`, `t_v32fpctl`, `t_v32fpdisp`, `t_v32nsorg`,
+`t_v32nsans` and `t_v34pcmapi`. These component and handshake fixtures do not
+establish every public modem lifecycle history.
+
+The wave uses eight candidate full-TU compiles and two raw-identical controls,
+plus layout apparatus. Only the V34 setter is a whole-function promotion.
+Sources, compiler traces, reviews and integration records are under
+`scratch/owner-wave2/`. Diagnostic `operand-run-v1` runs abstract GP identities,
+local branch offsets and section addends; even 100% does not prove register
+relationships or branch destinations. Earlier scratch descriptions calling
+these runs operand-exact are corrected. No classifier is relaxed.
+
+## F12117. Recover the V90 reset's value observations without claiming closure
+
+`V90Demodulator::reset` retains a reviewed source-fidelity partial. Its sign
+argument now reads `params->INITIAL_BAUD_OFFSET` directly, restoring the native
+float-field comparison instead of comparing the retained x87 value. The parameter
+pointer itself remains cached: the reference reacquires that owner before the
+comparison. Timer publications and other allocation/scheduling still differ.
+The method remains NONMATCH, at 501 bytes and 126 nonpadding instructions versus
+509 bytes and 129 in the reference.
+
+The source shares the embedded AGC address across descrambler/reset calls and
+parameter publications. A floating absolute-value local is produced before the
+whole/fraction calculation and converted to the integer diagnostic argument later.
+An integer-magnitude control finalises that conversion too early. The unsuffixed
+`1000.0` product restores the separate constant load and multiplication; no spill,
+qualifier, helper or precision-forcing mechanism is introduced. The native
+producer/consumer sequence supports these choices without uniquely identifying
+the original names or literal spelling.
+
+The wave stops at twelve source candidates plus two raw controls. Two additional
+GCSE diagnostics test the saved-pass observation that a parameter memory operand
+disappears between `.07.addressof` and `.09.loop`. The source control with GCSE
+disabled restores the owner read but remains NONMATCH as a complete function.
+The original interpretation confused these two verdicts; F12118 corrects it and
+identifies the PRE transformation. Neither flag control is retained. The existing
+`max-inline-insns-auto=50` TU profile remains unchanged.
+
+The V32 wrapper experiment is parked. Moving FP acquisition to its first use
+recovers branch-local placement, but no mutating call/store separates the old
+and new observation, and its post-copy source refresh emits no additional root
+read on that path. This source-shape result is not retained as an owner recovery.
+
+Independent review checks 31 V90 bodies: only reset changes. Symbol metadata,
+named objects and allocated nontext are unchanged. All nine ordered calls and
+thirteen target relocation destinations agree with the reference, with none
+unresolved. Eight period layout/width assertions verify the owners and fields.
+
+The reset fixture adds six adjacent float values around positive and negative
+0.001. Both unchanged and retained source pass the expanded period fixture.
+Reset trials increase from 576 to 1,728; checks increase from 14,979 to 44,931
+(26 per trial plus three fixed coverage checks). Existing NaN and cursor coverage
+remains. The complete focused executable passes 252,470 checks in eleven sections.
+These are seeded component histories, not every public modem lifecycle.
+
+Sources, compiler traces, review and integration records are retained under
+`scratch/owner-wave3/`. There is no whole-function promotion or relaxed classifier.
+
+## F12118. GCSE PRE removes the owner; NONMATCH did not falsify the reload test
+
+The actual Gentoo `.08.gcse` dump identifies the missing late owner load in
+`V90Demodulator::reset`. UID121 loads `this+44` into pseudo75 for offset
+arithmetic. UID167 independently loads that owner into pseudo87 for the sign
+comparison; UID168 reads the float at owner+132. Both owner instructions survive
+through `.07.addressof`. PRE then reports:
+
+```
+PRE: redundant insn 167 (expression 5) in bb 4, reaching reg is 112
+PRE: bb 2, insn 347, copy expression 5 in insn 121 to reg 112
+LOCAL COPY-PROP: Replacing reg 87 in insn 168 with reg 112
+```
+
+The earlier CSE deletion is a different operation: UID102 shares UID96's owner
+for the second AGC parameter use. Do not identify a lost read by counting every
+textual memory annotation, which can include equivalence notes and other sites.
+
+The saved `no-gcse-source` control retains UID167 through final code generation:
+`mov 0x2c(%esi),%ebx` at 0x1e63, immediately followed by the field comparison
+`fcomps 0x84(%ebx)` at 0x1e66. Its whole-function grade is still NONMATCH.
+F12117's original claim that this control did not restore the reload was wrong:
+the whole grade had been used as the named-feature verdict. This finding and
+the corrected paragraph supersede that interpretation. Source hashes agree and
+the fresh unchanged full-TU control reproduces the production object byte for
+byte. Upstream pipeline source explains the wrapper ordering; the actual Gentoo
+diagnostics establish this transformation without a patched-source identity claim.
+
+Whole-TU review prevents retaining the flag solely for this positive result.
+No-GCSE also restores a late owner reload in `exitPhase3`, but changes five
+bodies without any grade promotion. `sessionTermination` loses a shared prefilter
+address; `progress` loses the AGC owner retained through its later freeze.
+Two native-backed local-owner changes are tested under both profiles, four
+candidate compiles in total. Both named features are restored under no-GCSE,
+with all 31 grades unchanged. These successes are reported independently of the
+grades; neither source change nor profile is retained by this inquiry.
+
+An unresolved `progress` obligation remains. Native and default-profile code have
+126 static calls, including two constellation-data updates; no-GCSE has 125 and
+one update site. The latter joins multiple branches into shared argument/call
+code, rather than dropping an execution path. It reloads the evaluator where
+native carries an earlier owner. Both source endpoints also reload the designer
+four times where native captures one owner for the argument group. A bounded
+follow-up must map those two argument regions, intervening error callbacks and
+the evaluator/designer snapshot lifetimes before changing their expressions.
+
+No production source, test or compiler flag changes. No new differential gate or
+global census is required for discarded diagnostics. Evidence, controls and
+full limitations are under `scratch/owner-pass/`, including
+`astra-review/review.json`, `profile-review.json`, `termination-results.json`
+and `progress-results.json`. Existing EXACT/REGALLOC totals are unchanged.
+
+## F12119. V90 progress recovers branch-specific evaluator and designer captures
+
+The two constellation-update regions have different evaluator lifetimes.
+Native address order is not source order: the call at 0x1d8a4 belongs to case
+0x2a, and 0x1e3aa to case 0x19. Case 0x2a captures `this+0x20c` after the
+constellation designer returns, uses it for `enableRrnDown`/`enableRrnUp`
+stores at evaluator+0x28/+0x2c, and carries it into the successful update.
+Its retrain branch reloads the evaluator after the callback and state selection.
+Case 0x19 performs diagnostics and phase-change callbacks before the update;
+its evaluator must be read again after those calls.
+
+Both updates capture one designer at `this+0x208` immediately before their
+arguments: signed short `dMin` at +0x0a and float thresholds at +0x18/+0x1c/+0x20.
+The reconstruction read the designer pointer four times. Consumed local pointers
+recover these observations. The evaluator local is refreshed after the retrain
+branch, and case 0x19 retains its direct member read after callbacks. Existing
+prefilter and AGC captures from F12118 are included. No function extraction,
+qualifier, compiler-profile or interface changes are involved.
+
+Seven full-TU diagnostic compiles comprise a raw-identical unchanged control,
+two paired prefilter/AGC controls, and designer-only/paired-capture sources each
+crossed with default/no-GCSE profiles. All compile successfully, with all 31
+grades unchanged. The paired no-GCSE source restores two static update sites
+and 126 calls; the earlier 125-call result shared call code, rather than omitting
+a runtime path. No-GCSE remains diagnostic: its no-debug error paths still
+reload an evaluator native carries, and AGC/pool obligations remain unresolved.
+
+The default-profile source partial is retained. Independent Astra review finds
+only `progress` changed among 31 bodies, with all 126 call targets (44 distinct)
+and 529 relocation target/type entries preserving their contracts. Symbol
+binding/type/visibility/section contracts and non-jump-table data are unchanged.
+Jump-table addresses move with code; all 62 entries retain measured destination
+correspondence, without a full CFG-equivalence claim. The body changes from
+7366 to 7350 bytes versus native 7276; normalized longest run remains 42/1698.
+These diagnostics confer no classification gain.
+
+Validation: the four focused period binaries pass; `make phase J=8` passes
+396/396 period tests and structural checks. Actual/faithful raw objects agree
+300/300, with only the V90 TU changed. Fresh selected-link census remains
+1205 EXACT / 37 REGALLOC / 610 NONMATCH / 0 unresolved, out of 1852. The complete
+partial object remains DIFFERENT. Existing `t_v90demprog` excludes states 0x19
+and 0x2a: its 229622 checks across three sections do not establish execution of
+the changed argument regions. Constructor-based coverage of those states is
+still needed; this partial claims native snapshot recovery and no new-arm or
+modem lifecycle coverage. No differential failure is waived.
+
+Controls, source diffs, compiler dumps, independent review and integration
+records are under `scratch/progress-owner/`. A bounded AGC RTL/native review is
+the next discriminator for the no-GCSE hypothesis; further reset spellings are
+not justified by this result.
+
+## F12120. AGC type boundaries and a shared loop exit recover native x87 structure
+
+`Agc<float>::process` now uses T-typed arithmetic and floor, a float-returning
+square root, and one shared remaining-sample test. Under the existing compiler
+profile it retains the floor, unity and zero before the loop, avoids the extra
+floor-comparison copy and unused conversion slot, and uses the native-style
+four pushes/pops. The normalized longest instruction run improves from 4/82
+to 19/82. The function remains NONMATCH; no size or complete-equivalence claim
+follows from these structural recoveries.
+
+The type distinctions are observable in actual Gentoo RTL. A double helper
+result assigned to T introduces a real DF-to-SF narrowing, whereas `sqrtf`
+produces SF-mode sqrt directly. In the preceding control, that extra rounding
+fails 7380 of 1848336 period checks. Keeping a double temporary passes the
+oracle but leaves a final gain-conversion scratch allocation. The SF operation
+removes both narrowing nodes; matching the floor to T removes the SF-to-XF
+comparison value that survived allocation as a duplicate x87 stack entry.
+These are source hypotheses for the measured float instantiation, not proof
+of unique original spelling or arbitrary T specialisations.
+
+The first source/profile cross initially passed only with no-GCSE: the default
+profile failed four seeded denormal accumulator/count checks. Those are synthetic
+component fidelity probes, not evidence that a modem lifecycle reaches them.
+The default pipeline declines loop optimisation for multiple entry points.
+Its block-local unity then lets combine replace reciprocal-then-multiply with
+direct division: UID107 first changes in `.20.combine`, after `.19.life` still
+preserves UID105 reciprocal and UID107 multiply. Under no-GCSE, loop optimisation
+hoists unity out of the loop and combine retains the two operations. Apparent
+extra divides in REG_EQUAL notes are annotations, not executed instructions.
+
+A single shared loop exit resolves that compiler precondition without a flag
+change. The unsigned countdown still decrements once; the block update still
+runs iff it reaches zero, including on the final sample; the reload occurs
+before the accumulator clear; input/gain reads remain after the alias-sensitive
+accumulator store. Both profiles now recognise the loop, hoist unity and emit
+identical AGC bodies. Both pass all seven existing component differential
+sections, 1848336 checks, without a tolerance. The unused double helper and stale
+comments about long-double temporaries and loop order are removed.
+
+Independent Astra review checks all 31 TU functions and all 310 call sites.
+Reset and progress retain identical canonical instructions, calls and relocation
+target values; their raw collateral is constant-pool relocation addends only.
+One redundant unity word/reference disappears, leaving 466 function relocations
+and unchanged remaining allocated non-executable sections. Symbol order, names,
+binding, types, visibility and section contracts are preserved. The selected AGC
+body is 192 bytes/81 decoded instructions versus native 206/86, with remaining
+count/value lifetimes, operand order and x87 scheduling differences recorded.
+
+The default-profile source partial passes `make phase J=8`: 396/396 period
+tests and structural checks. Actual/faithful raw parity is 300/300 with only the
+V90 TU changed; fresh census remains 1205 EXACT / 37 REGALLOC / 610 NONMATCH /
+0 unresolved out of 1852, with identical matched membership. The complete partial
+object remains DIFFERENT. No no-GCSE profile is approved by this finding. Eight diagnostic full-TU compiles
+and one cleaned retention compile establish the controls; nine selected-body
+period runs include the two known failing controls. Whole-tree gate, parity and
+census results are recorded at the integration checkpoint under
+`scratch/agc-sf/`, alongside inputs, actual pass dumps, link maps and independent
+reviews. These component oracles do not observe x87 exception timing or establish
+public modem end-to-end equivalence.
+
+## F12121. AGC's countdown cache is compiler promotion, not a necessary source local
+
+Direct updates of the unsigned `count` member reproduce the reference's distinct
+countdown carriers and sole exit store. The reconstruction's manually cached
+local was an assumption: final-store placement alone did not establish it.
+Actual `.08.gcse` PRE forwards expression 11 through a reaching register and
+store motion deletes the two loop stores, inserting one store on the exit edge.
+The promotion occurs there, not in the later loop pass. Pre/post-decrement
+spellings produce identical initial RTL and bodies, closing that discriminator.
+
+The first direct-member candidate spills the output pointer. Actual `.24.lreg`
+and `.25.greg` identify the cause: both promoted countdown values become live
+before the unsigned-to-float conversion consumes its two GP registers. The
+reference consumes the conversion words before capturing the replacement count.
+Moving `count = blockLen` after the block mean calculation, before clearing `acc`,
+removes that unsupported overlap and the spill. Counter/member accesses retain
+owner `this`, offset +0x1c and unsigned 32-bit width; block length remains +0x18.
+The zero-length guard, wrapping decrement and last-sample update are preserved.
+
+A direct gain expression recovers the reference's x87 evaluation order; an
+explicit temporary had placed the square root first. For the sample product,
+`in[0] * gain` matches the reference's gain load followed by input-memory
+multiplication: expansion order affects which load combine folds into memory.
+All arithmetic modes and the shared loop exit from F12120 remain fixed. No
+compiler flags, qualifiers, helper extraction or register directives are added.
+
+The selected body has 82 nonpadding instructions, like the reference. Independent
+Astra review and a saved pair-specific checker find correspondence under the
+fixed interior permutation EBX→EBP, EBP→EDI, EDI→ESI, ESI→EBX, with EAX/EDX/ECX/ESP
+pinned, literal saves/restores, seven corresponding branch destinations and
+identical relocation identity. Omitted and explicit zero memory displacement are
+equivalent for this pair. Eight negative controls reject changed operations,
+widths, constants, fields, x87 operands, saved order and branch destination.
+This is not a tested generic recognizer: the maintained comparator still pins
+EBP and compares local branch byte offsets literally. Official grade remains
+NONMATCH; its normalized longest run improves from 19/82 to 44/82. No grader or
+fidelity definition changes are included. Further source fitting to force that
+register choice is not justified by this result.
+
+The fixture audit found that the old "writing over the object" arm writes at
+object+32, after the live AGC fields. Its section/comment now describe trailing
+slot writes. A new component probe uses 28 single-sample calls over two input
+locations, seven output locations and two countdown boundaries. Each alias stays
+within one named float subobject; the unsigned fields are excluded. Accumulator
+input distinguishes the actual reread result 0.625 from a cached-input 0.5.
+The 4718 new checks comprise 28×168 state/buffer checks, 12 coverage checks and
+two analytical checks. Unchanged and selected sources both pass all 1853054
+checks across eight sections. A cached-input negative passes all old sections
+and fails 17 checks in the new section. These are explicitly configured component
+fidelity inputs, without a public modem lifecycle claim.
+
+Independent retained-TU review finds 30/31 bodies unchanged. Only AGC process
+changes, from 192 to 205 bytes; all 90 undefined names, seven allocated data
+sections, eight relocation tables and the other functions' 310 calls remain
+unchanged. Detailed controls, actual dumps, allocation evidence, the fixed-pair
+checker, reviews and integration records are under `scratch/agc-count/`.
+Integration passes `make phase J=8`: 396/396 period tests and structural checks.
+Actual/faithful raw parity is 300/300, with only the V90 TU changed; fresh census
+remains 1205 EXACT / 37 REGALLOC / 610 NONMATCH / 0 unresolved out of 1852, with
+identical matched membership. The complete partial object remains DIFFERENT.
+A separate comparator task needs guarded frame-free eligibility, CFG dominance
+and branch-address evidence before this pair may receive a maintained REGALLOC
+proof; it must not relax the current model merely to report a hit.
+
+
+## F12122. The IIR block owns and resets its parameter cursors
+
+At baseline `7b29d4ea3` the period scalar `FPM_iir_filt` is REGALLOC with
+59 ordinary instructions, but `FPM_iir_filt_block` is NONMATCH with 80 against
+86 reference instructions. The reference block at `.text+0xa8b10` loads a
+sample, advances its pointer before the section loop, and writes through that
+advanced pointer minus two bytes. It also captures the initial coefficient
+and history pointers before the outer guard, stores private snapshots and
+restores them for each sample. An indexed call to the scalar helper shares
+its arithmetic but does not recover that pointer ownership. Arithmetic
+identity alone had been overread as evidence of an original helper call.
+
+One sample-cursor control restores the named sample epoch but remains NONMATCH
+at 82 instructions. The complete source graph saves the two initial roots,
+resets and consumes the block's parameter cursors, and expresses the scalar
+section arithmetic explicitly inside the block. The maintained matcher proves
+REGALLOC for all 86 instructions; both bodies are 287 bytes. Fifteen bytes
+still differ, so this is not EXACT. The scalar function is raw unchanged.
+At that block-only checkpoint, the unchanged source of `FPM_iir_filt_II` has
+a one-byte size reduction from emission collateral and stays NONMATCH; multiple instructions differ. Non-code sections, symbols and bindings agree with control.
+No compiler option, type, field offset or classifier changes are involved.
+
+The explicit block keeps D393's nonpositive-section repair under the existing
+`#ifndef DSPLIB_REPRODUCE_BUGS` guard. Reproduction mode retains the unassigned
+zero-section output and wrapping negative-section countdown. It does not
+claim a defined zero-section differential oracle. Existing component tests
+cover sample/state histories, fragmentation, saturation and zero count. A new
+bounded alias section compares complete short-array objects in 144 trials
+(three section counts, four history offsets, four sample offsets and three
+positive block lengths), plus a denominator check. All pointers stay within
+one declared 64-word array; these are component inputs, not modem lifecycle
+evidence. The expanded period fixture passes 263,198 checks across 32 sections, first
+on unchanged source and then on the retained candidate. A coefficient-value
+cache negative passes all 31 older sections but fails 72 of the new section's
+145 checks. The normal-build section-guard contract passes 123 checks.
+
+The same root-saving hypothesis has a separate native witness in
+`FPM_iir_filt_II`, where sample access remains indexed. One ownership transfer
+and a coupled short-postdecrement control recover its native prologue and
+73-instruction count, but the whole operand/order comparison still fails.
+Neither transfer alone establishes a closure. F12123's independently measured
+coefficient-observation correction subsequently justifies retaining the graph
+as a partial. This bounds the new lever: inspect real cursor ownership first,
+then require the complete function proof; do not infer a closure from the
+recovered region or equal counts.
+
+Astra independently checked the complete source arithmetic, sample addresses,
+normal-mode guard, three-function objects and metadata. Experimental commands,
+paired sources/dumps, controls and review are under
+`scratch/residual-exploration/`; final validation and delivery are recorded
+there separately. Historical IIR cursor/count/width controls changed the scalar
+inner loops, not this block's outer sample cursor and saved-root ownership.
+
+
+## F12123. A coefficient read before history publication is observable
+
+The remaining ordering difference in `FPM_iir_filt_II` contains a real memory
+observation boundary. At reference `.text+0xa8c30`, the section body stores
+`state[0]`, loads signed `coeff[2]`, then stores `state[1]`. The earlier
+reconstruction loads that coefficient after both history stores. This is not
+merely a different choice of registers or independent instruction scheduling.
+
+One declared short array supplies a valid component discriminator: coefficients
+start at word 0, history at word 1 and the input sample at word 16. All words
+are zero except coefficient 0 = 16384, coefficient 2 = 8192 and input = 1000;
+sections and count are both one. The third coefficient and second history
+word are the same object. The reference numerator is
+`16384*1000 + 8192*8192 = 83492864`, yielding 5096 after the 14-bit shift.
+The earlier source first replaces the coefficient with 1000, yielding 1500.
+The denominator is zero. All addresses are inside the array and all signed-int
+intermediates are in range. A Gentoo-period probe confirms those exact values.
+This is component fidelity evidence, not a claimed modem lifecycle.
+
+A consumed `coeff2` local loaded between those history stores restores the
+observation. It is retained with the independently witnessed saved initial
+coefficient/history roots and short postdecrement. The complete function still
+fails REGALLOC: both streams have 73 ordinary instructions, but load/multiply
+ordering differs. Independent review finds the remaining reordered loads
+within the same memory intervals. No classifier, option, tolerance, API or
+object layout changes are made; this corrects reconstruction source rather
+than repairing an original DSP bug.
+
+The regression section uses six inputs including both short extremes. It
+checks the complete array and the reference's analytic result
+`(short)(input + 4096)`, plus the six-trial denominator: 13 checks. Earlier
+source fails six of those checks while the analytic reference controls pass.
+The existing 32 sections remain green. Experimental sources, commands,
+disassemblies, analytic probe and independent review are in
+`scratch/residual-exploration/`; final candidate validation is recorded there.
+
+
+## F12124. MRF's partial-input countdown consumes a negative narrowed word
+
+At `c91c90a88`, `FPM_MRF_filter` narrows its public int input slot to a signed
+word but tests `remaining-- > 0` in its partial-input arm. The reference tests
+the old word for nonzero instead: `.text+0xa90bd` sign-extends the current
+word, `0xa90c0` increments the negative countdown and `0xa90c2` branches while
+nonzero. Historical F11669 already identified this instruction shape, but its
+source variants were not retained because none closed the complete function.
+The two predicates have different observable effects at a bounded component
+boundary; a failed whole-function comparison does not settle that question.
+
+A fresh constructor with branches=decimate=1 and eight zero coefficients gives
+need=1, phase=widx=0 and an allocated eight-word zero history. Pass a positive
+int count of 65535 and an initialized 65535-word input buffer, plus an allocated
+one-word output sentinel. Its narrowed count is -1. The reference consumes
+65535 inputs through its wrapping word countdown, produces zero outputs and
+leaves need=2, phase=0, widx=7. History words 0..7 contain input words
+65527..65534. Every read and write is in bounds; no convolution or output store
+occurs. The current API documents narrowing but no positive-input upper bound.
+This establishes initialized component fidelity, without a public modem
+lifecycle claim or a uniquely recovered original formal type.
+
+The new `t_fpm_mrf_input_slot` fixture checks the normalized complete state,
+all eight history words, seven scalar/output controls and the reference's
+independent tail-history prediction: 24 checks. The unchanged source fails
+9/24, including the write index and all eight history comparisons; the native
+analytical controls pass. The minimal correction changes only the BUG-mode
+predicate to `!= 0`. It passes 24/24 and all four focused MRF period binaries.
+An explicit nonreproduction control compiles the old and corrected full TUs
+without the BUG define and proves their objects raw identical.
+
+The corrected filter remains NONMATCH: 168 ordinary instructions against 167,
+with a longest contiguous run of 25/167. Its two EXACT init/free siblings stay
+unchanged. Separate input-loop and full-width wrap-bridge controls recover
+specific native regions but remain NONMATCH at 173 and 171 instructions;
+neither is retained. No inline policy, flag, classifier or object layout is
+changed. Astra independently reviewed the input domain, source guard, native
+countdown and all 24 checks. Controls, commands, dumps and reviews are under
+`scratch/mrf-wave/`; integration evidence is recorded there separately.
+
+
+## F12125. A byte capture crossing a branch can retain a second extension
+
+The complete native `FPM_PPS_filter` reads a symbol byte at `.text+0xa96a3`
+before the mapped/direct branch and uses the full zero-extended register as
+both map indices. The current source reads the symbol inside the mapped arm.
+An eager unsigned-char capture alone retains the native read boundary but
+remains NONMATCH. Its composition with the independently witnessed entry
+pointer captures, narrowed ring increments, int MAC counters and shared
+history-wrap cursor has 231 ordinary instructions against 229. The known
+composition without that new capture has 230 and loses the EXACT initializer;
+the eager-capture composition preserves both EXACT sibling functions.
+
+The actual Gentoo initial RTL explains one extra instruction: the eager local
+is defined as QI before the branch, then zero-extended to SI in the mapped
+block. Combine retains that cross-block split. One evidence-led control uses
+`int k = (unsigned char)sym[ridx]` at the same point. It emits one full-width
+byte extraction before the branch and removes the later register extension,
+as predicted. This distinguishes extraction width from local carrier width;
+it does not uniquely recover the author's declaration.
+
+The function still has 230 instructions and fails REGALLOC. Its remaining
+extra instruction is an entry reload of the state argument: eleven loads
+instead of ten. The relevant scalar/heap reads agree, and initial RTL uses
+one state-owner pseudo for all four state fields. Global allocation emits
+physical argument reloads. This supplies no independent type, alias or
+observation difference to justify further declaration/order variants. None
+of the PPS controls is retained. Existing output/state fixtures do not detect
+a discarded ordinary read, so their green result must not be described as
+proof of the eager read's footprint. The direct V.29 producer allocates the
+symbol ring but does not initialize it; no initialized producer history is
+claimed for that mode.
+
+Six unchanged full-TU controls and seven candidate compiles across MRF/PPS
+produce zero EXACT/REGALLOC promotions. Each unchanged control reproduces its
+current raw object; all candidate siblings and grade losses are recorded.
+A small source transfer screen finds V.22 PPS's byte and both map uses already
+in one block, so the cross-branch extension witness does not transfer there.
+The two V.22 status-byte locals found by the same screen are flag uses, not
+full-width map indices. No transfer compile is admitted merely because a
+local has byte type. Paired dumps, per-TU comparisons and independent compiler
+stage review are under `scratch/mrf-wave/`.
+
+
+## F12126. FDSP shift cursors do not settle its complete loop graph
+
+A post-MRF exploration compares the six-symbol `Fdspkrnl.c` TU under the same
+Gentoo period profile. The unchanged control reproduces the current raw object.
+`FDSP_Kernel_Loop` has 119 ordinary instructions against 126. At native
+`.text+0xaed29` and `0xaed4c`, each initial delay shift consumes a destination
+cursor from delay word 1279, reads 160 floats behind it, writes through it and
+decrements it alongside a separate unsigned counter. Current source uses
+indexed addresses. The eight historical `gcc3_batch50_fdsp_loop_reproduce.py`
+cells change final reverse-input loops, not these initial shift cursors.
+
+One consumed-shift-cursor control recovers that address graph and emits 123
+instructions. One composition with the historical final-loop endpoint emits
+120: it restores signed countdowns, destination cursors and pre-loop copy-target
+snapshots, but still indexes each source by the counter. Native final loops
+independently consume a private source cursor derived from the incoming input
+slot plus 636 bytes. One final control derives a one-past pointer and consumes
+it with predecrement, keeping pointer formation inside the array's permitted
+range. It has 126 instructions, equal to native, but remains NONMATCH.
+
+The compiler does not fold that initial predecrement into the endpoint. Initial
+RTL already sets source pseudos to input+640 and decrements before loading;
+the loop pass recognizes three independent induction variables and preserves
+that graph, rejecting the address GIVs as -144 versus 7. Final code retains
+ADD640/SUB4/LOAD where native has ADD636/LOAD/SUB4. Initial shift exits also
+already compare the updated counter with 159 in initial RTL, producing JA159
+instead of native JAE160. These equivalent comparisons do not recover a unique
+source predicate. Call-argument scheduling still differs elsewhere in the
+body; this is not a function differing only in two branch encodings.
+
+All three candidates remain NONMATCH, with zero gains or losses. Five
+neighbouring bodies, non-text data, bindings and resolved relocation consumers
+remain unchanged. No production FDSP source is retained. The existing loop
+fixture uses hand-built state; a future retained change needs constructor-to-loop
+component histories rather than presenting that synthetic probe as lifecycle
+evidence. Actual commands, compiler identity, hashes, full bodies, dumps and
+independent metadata checks are under `scratch/mrf-wave/fdsp-shift/`.
+Stop this source domain: investigate an independently witnessed call/alias
+boundary or actual expansion rule before admitting another source cell.
+
+The next call-boundary audit rules out splitting InitObj into another original
+TU. Native STT_FILE `Fdspkrnl.c` owns the local EchoCanceler and validator
+anchors; the global InitObj body lies inside that local-anchor envelope. The
+fresh control's cgraph dump shows four small memset-helper inlines reducing
+InitObj's estimated cost from 78 to 70, followed by InitObj inlining into the
+validator, whose cost grows from 115 to 175. Native has one InitObj relocation
+there; current code has none. This establishes the immediate compiler action,
+not why the original avoided it. Recover the source/profile and inlining-budget
+constraint before changing the call boundary. Neither a separate file nor a
+noinline attribute follows from the evidence.
+
+
+## F12127. A stale linear map is not an independent void-return contract
+
+The six historical proof-refusal routes at `4465a83e3` are screening labels,
+not six established register permutations. Complete paired bodies show five
+matching direct CFGs, while `V34XF_IndicateJdReceived` has an actual tail-sharing
+difference. Its JNE at ordinary row 23 reaches native row 16 versus current
+row 25. Zeroing EAX versus EBX changes both the store register and the shared
+epilogue selected. A 37/37 normalized instruction run does not prove those
+successors or make a generic branch exemption safe.
+
+`SetAdaptEqV32` has independent returning switch arms: the linear matcher carries
+one arm's register assignment into another. V92 Phase3Modulator reset likewise
+has four allocation-only operand differences whose stale map crosses RET into
+a cold arm reached from an earlier branch. V.22 uses saved EBP as a general
+register; its DEST WIDTH diagnostic does not establish an actual width mismatch.
+Voice has eleven matching table destinations but unsupported local-short frame
+reads, escaping local addresses and several allocation regions. No source defect
+is established by these six rejection diagnostics.
+
+The owner explicitly required independent binary evidence before treating GP
+return residues as unobservable. Reset's ordinary C++ mangling encodes no return
+type. Its native zero-symbol, Ja-present path leaves EAX=bitCount and EDX=Ja+4;
+other paths leave diagnostic or generated-symbol residues. There is no x87
+result. Three direct callers exist: enterPhase3 and constructors C1/C2. All
+physically propagate GP residues through their returns; the known transitive
+phase-reset chain eventually discards them. A scan of 18,317 relocations and
+25,858 direct edges finds no address-taken or interior entry, and fires on a
+V.22 function-pointer positive control. No original typed declaration or debug
+metadata establishes the exact void declaration. This supports bounded known-
+caller reasoning, not an exemption for the whole exported function. Headers
+and naming remain corroborating hypotheses. No source or grader change is made
+for these cases. Full bodies, decoded targets and the return-contract review
+are under `scratch/operand-wave/`.
+
+
+## F12128. Reproduce D302's lookup, and control its test memory environment
+
+`FSE_decision_16pt` previously writes zero in reproduction mode instead of the
+native `DECv32_MAG9600[(n >> 1) - 1]` read. That was a deliberate historical
+portability/layout substitution, not the original operation. The normal shift
+by 13 remains D302's repair. Restoring the original lookup is source recovery;
+the production table remains three shorts and receives no padding.
+
+The original index is 4095, 8191 or 12287. Its machine result depends on the
+linked bytes beyond that table. In the prior period artifact, reconstruction's
+inner-ring address reads 98 while reference's reads zero. Reference mid/outer
+addresses are now mapped in BSS: old fixture comments about an unmapped hole
+are not current evidence. Ordinary independent object placement cannot serve
+as a code-fidelity oracle for this original layout-dependent bug.
+
+The test-only binder changes exactly the owning function's one R_386_32 table
+operand, including its -2 addend, to a shared reference backing. It checks the
+actual ELF32 i386 function/read extent, table definition/context, bytes and
+relocation. The emitted read is MOVZWL with one register as both SIB base and
+index at scale 1, equivalent to twice that register. An earlier assumed MOVSWL
+form was rejected and corrected from the actual bytes. The binder verifies
+that every old symbol, unrelated relocation, data byte and section remains
+unchanged; appended undefined-symbol metadata is recorded. Original source
+table definitions and fixture table-comparison references remain independent.
+Production, faithful and partial-link objects are never transformed.
+
+Default test-host copies bind the reconstructed read to the reference's
+original backing, retaining the genuine inner-ring comparison. A separate
+`t_v32d302` context binds both emitted function reads to an allocated
+12,288-short fixture array. Its three far targets contain 1111, 2222 and 3333;
+other words are poisoned and the first three retain the ordinary magnitudes.
+This is explicitly period-machine fidelity under a supplied memory contract,
+not defined ISO C behavior, historical mid/outer values or modem lifecycle
+reachability. Across 512 paired configured component calls, the reference
+selects 52 inner, 248 middle and 212 outer points. All 4,612 checks pass.
+Flat zero, SAR13 and an off-by-one lookup each reach assertions and fail 512
+checks; reference analytical controls stay green. An initial aligned input
+grid reached only the outer ring and correctly failed two coverage checks;
+its input domain was corrected before interpreting the positive result.
+
+Twelve independent assembler/ELF controls accept four supported forms and reject
+eight bad width, target, addend or context forms. Bound copies publish only
+when bytes change, retaining stable mtimes on repeats and invalidating links
+on a changed binding. Contexts replace exactly one source TU and the reference
+input; aggregate input selection and other fixtures retain their own boundaries.
+The first five existing link-config fields are preserved and context is appended.
+
+The restored full TU changes only `FSE_decision_16pt`; eight siblings, bindings
+and data are unchanged. It remains NONMATCH at 147 ordinary instructions versus
+146: these totals contain 13 excess and 12 missing mnemonics across quality,
+owner reads, ABS and differential-decoder regions. This is not a one-operation
+closure. A nonreproduction full-TU control is raw identical before and after.
+Four focused period binaries pass, including the original and synthetic fixtures.
+Runtime negatives, complete native/source constraints, apparatus and independent
+reviews are under `scratch/operand-wave/`; final integration is recorded there.
+
+## F12129. Recover the V.32 slicers' shared quality graph before allocation
+
+The 2026-11-04 bounded exploration starts at `57778d1e3` with 1,205 EXACT,
+39 REGALLOC and 608 NONMATCH functions of 1,852. An unchanged full-TU control
+is raw identical under the configured Gentoo GCC 3.4.2-r2, with reproduction
+mode enabled. Six supported source cells follow; none promotes a function.
+
+Independent native review of all six quality callers establishes the same
+sequence: capture samples, capture owner, narrow differences, square and share
+SAR16 energy, publish each axis's old/new history together, then smooth error.
+The three retrain predicates are separate signed branches. High-error and
+retrain-2 arms retain the captured owner. The default arm stores the increment,
+reloads `cfg.owner`, tests its memory count and carries that selected owner
+into the slicer. Samples are reread after quality. The existing private helper
+now returns this meaningful selected owner; its original signature is unproved.
+This retains witnessed dataflow without adding a helper or public ABI.
+
+Period RTL explains two useful source constraints. With `int energy`, `.06.cse`
+associates SAR16 with its SAR4/SAR3 consumers into SAR20/SAR19. A short energy
+boundary prevents that association; `.20.combine` removes its redundant
+extension while retaining the shared shift. Nested predicates avoid eager
+boolean folding already present in `.01.rtl`. A full-width increment with
+short casts at comparisons and a word store avoids a shared sign-extension
+producer introduced by a named short increment. These predictions succeed in
+complete translation units; they do not establish whole-function identity.
+
+The 16-point native metric subtracts at full width, multiplies and adds before
+its final signed-short narrowing. Unsigned operands before each multiplication
+express the wrapping arithmetic. Separate absolute-value intermediates recover
+the native sign/XOR/subtract operations. Native spills also establish a late
+nearest-index initializer in both 16-point slicers, and an early consumed zero
+fallback for the differential search. Its short loop counter and short table
+comparisons are retained. The previous-symbol read remains after output stores.
+The unused private differential helper is removed after its body is brought
+into the owning function to preserve those witnessed lifetimes.
+
+The retained graph remains NONMATCH in all nine TU functions. For `16pt`, the
+longest mnemonic run changes from 12/146 to 25/146; for `16Tpt`, 27/126 becomes
+17/126. Some siblings improve and others decline locally. These are diagnostic
+measurements, not promotions or acceptance criteria. The shared graph is retained
+for its native evidence, subject to period validation. Table data and bindings
+remain unchanged. D302's reproduction lookup and normal repair are preserved.
+
+Remaining root reloads originate in `.25.greg`, rather than duplicate frontend
+reads. An integer staging variable briefly preserves the differential bit-pack
+extension in initial RTL, but combine erases it and all nine final bodies are
+unchanged. Do not repeat that spelling. A branch-cost-1 profile is excluded
+before compiling: GCC's ordinary branchless ABS expansion requires cost >= 2,
+whereas both native slicers use it. This is a contradiction for that source
+model, not permission to invent a bit hack. No flag, grader or return-contract
+change is made. Upstream GCC source explains candidate mechanisms; actual
+patched-compiler dumps establish the observed pass transitions.
+
+Raw controls, six cells, complete pass dumps and independent review are saved
+in `scratch/v32-slicer-wave/`. Focused period validation passes all four selected
+binaries, covering every quality caller and the synthetic D302 memory contract.
+
+Final integration passes `make phase J=8`: 398/398 period differential binaries
+and all structural checks. The actual period and faithful object sets are raw
+equal for 300/300 TUs; only `V32dec.c` differs from the baseline. Removing the
+unused helper and correcting its metric comment leaves the reviewed candidate's
+raw object unchanged. The final faithful census remains 1,205 EXACT, 39 REGALLOC,
+608 NONMATCH, zero unresolved out of 1,852. Stop this family pending an independent
+missing dependency, conversion boundary or whole-TU-consistent build witness.
+
+## F12130. Explain the 16Tpt root rejection before proposing another source form
+
+The [allocator-causality audit](v32-16tpt-allocation-audit.md) reconstructs the
+current Gentoo dump's complete root-pointer blocker set. State pseudo 59 is
+last of fourteen global allocations. Its initial hard conflicts leave SI/DI/BP;
+owner 74, energy 87 and received-I 63 take those homes first and each conflicts
+with state. Local homes use only AX/DX/CX/BX. Earlier globals also
+occupy those four registers and clear their local-only markers, so the separate
+local-eviction fallback has no eligible victim in any integer register. The incoming `REG_EQUIV` home then supplies
+state reloads; Q's separately logged spill is a different event.
+
+The reference retains state in BP through quality and subsequent sample reads,
+saves selected owner on both quality paths, and reloads that unadjusted owner
+only after the search. The candidate retains owner across the loop instead.
+This explains a specific allocation decision without claiming original RTL or
+source identities. A proposed early Viterbi-member alias is not compiled: its
+new address lifetime has no independent native witness. No source, test, flag
+or grader change follows. One saved-edge positive control and three independently
+removed-edge negative controls validate the blocker-set analysis, not GCC itself.
+Zero new experimental compiles or integration gates are needed for this audit.
+Reopen on a supported live-range, reference-graph, class or whole-TU build
+constraint; merely logging the already observed priority order is insufficient.
+
+## F12131. Restore V.8 phase detector widths, common action and fresh input
+
+The [boundary-recovery report](v8-prefilter-boundary-recovery.md) records four
+controlled full-TU cells for `v8_phase_rev_detect`. Native code requires an int
+loop index, a short back index before its sign test/address, and a full-width
+promoted half-window threshold. It captures a consumed window-base alias and
+shares the run increment between both failed short-circuit predicates. Most
+significantly, it rereads input after run/reversal publication and the optional
+diagnostic; the previous source stored an earlier captured sample instead.
+
+An initialized component alias history passes input `&pr->run` for 64 one-sample
+calls, covering a window-index wrap. The old source fails 128/193 new checks
+while reference analytical checks and all old sections pass. Fresh-input source
+passes 193/193. Complete objects use `diff_eq_obj`; the fixture claims component
+alias fidelity, not public modem lifecycle reachability. Ordinary disjoint-input
+histories remain covered. This is a reconstruction correction, not a new repair.
+
+All three protected EXACT siblings and table data/bindings remain unchanged.
+The function remains NONMATCH. Shared source actions and typed local aliases are
+admitted from native consumers/edges, not a preference for tidier code. No random
+spelling batch, qualifier, profile, helper or grader change is made.
+
+## F12132. Recover both unsigned prefilter-selection predicates
+
+`V90PreFilter::autoSelection`'s two six-element native loops use JBE, whereas
+`int i` produced JLE. One unsigned-int counter cell restores both predicates;
+initial RTL changes from signed `CCGC/gt` to unsigned `CC/gtu` exits. This
+previously recorded discrepancy had no prior counter cell; the closed
+`selectFilter` domain is a different function. The unchanged experimental
+full-TU control is raw identical to the current faithful object.
+
+The target alone changes among sixteen bodies; eight protected EXACT members,
+data and bindings remain unchanged. Floating precision, SF target stores,
+unordered NaN updates and post-diagnostic database reads are preserved. Fixed
+indices 0..5 make this source/predicate recovery, not a new behavioural defect.
+The target remains NONMATCH. See the [shared report](v8-prefilter-boundary-recovery.md)
+for controls, focused period coverage and bounded conclusions.
+
+## F12133. Name the separate coefficient planes and retain their entry pointers
+
+The [read-age follow-up](read-age-width-wave2.md) identifies V90Equalizer's
+linear coefficient storage as two separately allocated 16-bit planes, joined
+into logical 32-bit values. Native constructor calls at 0x3b7bd/0x3b7d3 each
+request twice the padded coefficient count, store distinct raw pointers and
+align them independently. High/Low names replace the ambiguous linear MMX and
+array_d8 names, including raw pointers and skew fields. Types and offsets are
+unchanged; a naming-only complete-TU object is raw identical to baseline.
+
+`linearEquFadeEdges` captures those two aligned members at entry and reuses the
+captured values after all float stores. Two ordinary local pointer copies now
+express that observation. The native epoch survives initial RTL, global
+allocation and final assembly; no register-use trick, qualifier or helper is
+added. The function remains NONMATCH. Existing component coverage passes;
+production owner-alias reachability is not established or claimed.
+
+## F12134. Recover published counts and a pre-sinc pointer in LowPassFIR
+
+The five-argument design method now reads published `taps` across free,
+allocation and hamming, while preserving incoming-count validation. A per-loop
+coefficient pointer is captured before sinc and reused for the multiply/store,
+as native instructions require. Numerical recurrence, normalization, NaNs,
+window/adoption semantics and call targets remain unchanged. Both experiments
+remain NONMATCH; the cumulative cell extends the longest run to 37/126.
+
+Independent review covers all 60 defining copies across the two retained TUs,
+not merely 53 selected census owners. Only the two intended bodies change;
+37 EXACT copies, actual non-executable data, strings, bindings and resolved
+consumers are preserved. A changed executable linkonce section explains the
+local helper's apparent data inequality; no grading rule changes. Five focused
+period binaries pass. See the [full report](read-age-width-wave2.md) for native
+epochs, numerical obligations and the limits of the component coverage.
+
+## F12135. Park FP_Pow direct-read recovery pending a two-site memory context
+
+Native evidence admits a short counter and unguarded coefficient reads, but
+three full-TU controls do not close the function. The seventh original read
+falls beyond the real twelve-byte table; current source substitutes its value.
+A reproduction-only raw read requires a properly scoped two-site test-memory
+binding before retention. The D302 binder admits a different single-read form
+and cannot be reused by weakening its table/extent/addend checks. All cells
+remain scratch-only, with no runtime or whole-function recovery claim. Details
+and control denominators are in the [wave report](read-age-width-wave2.md).
+
+## F12136. FP_Pow reaches EXACT after removing an inlined helper's index lifetime
+
+At `2bdd7930e5`, a scratch candidate combines the native short post-incremented
+counter with direct reproduction-mode coefficient reads. All 55 instructions
+and normalised operands match; only this function changes in its complete TU.
+Gentoo GCC's CSE redirects a late old-index comparison to the earlier inlined
+helper-parameter copy in the losing control. Removing that copy recovers the
+native allocation. F12135's source-search obstacle is resolved; production
+retention still requires a maintained two-site test-memory context.
+
+The original-backed scratch context passes 109,293 FP comparisons (155,755
+checks in the existing binary). An actual seven-word synthetic backing with
+seventh values -7 and 19 passes 24 checks; the literal-3 control fails 16/24.
+Unbound candidate linkage fails 89,858 FP comparisons because the following
+word differs. No production source, grader or D302 binder changes are made.
+See the [deep dive](fp-pow-deep-dive.md) for constraints, controls and integration.
+
+## F12137. FP_Pow is integrated EXACT with a scoped two-site memory context
+
+F12136's candidate is now retained: its native short post-incremented counter
+and direct BUG-mode coefficient reads compile to the reviewed EXACT object.
+The six-word table and guarded normal fallback remain intact. A separate
+strict FP_Pow test profile binds only its two signed reads to the original
+backing; an isolated seven-word fixture proves sensitivity to the real seventh
+value. The previous literal-3 control fails 16/24 checks, with all eight native
+analytical checks green. D302's four compatibility outputs stay byte-identical.
+
+All 24 binder safety tests pass. Four focused period tests and full phase
+399/399 pass; normal old/new probes each pass 155,755 checks. The fresh census
+is 1,206 EXACT, 39 REGALLOC, 607 NONMATCH, zero unresolved out of 1,852, a
+single promotion with no losses. Period/faithful parity is 300/300. Partial
+link raw/semantic identity remains DIFFERENT. See the
+[integration evidence](fp-pow-deep-dive.md#integrated-recovery-f12137).
+
+## F12138. Separate diagnostic axes; decomp-permuter's i386 score is not an oracle
+
+The reviewed decomp-permuter revision already supports i386 despite its README
+list. Twelve paired controls under two modes produce 24 scoring evaluations.
+Defaults assign zero to five changed-symbol/offset/successor cases; enabling
+relocations loses the destination register of a relocated SIB load. Its finite
+manual enumerator could be useful with unchanged full-TU compilation and this
+project's strict oracle. No port or modem-source permutation was attempted.
+See the [assessment](decomp-permuter-assessment.md) for pinned upstream sources.
+
+A separate tool audit confirms that the whole-object comparator already
+reports a vector, while function tools do not combine independent CFG,
+operand, register and stack axes. Twelve canonicaliser comparisons demonstrate
+which distinctions similarity erases. A proposed diagnostic vector must retain
+strict grades, actual target/operand identities, unmatched sides, ambiguity,
+unknowns and each defining copy. Section extent and placement need separate
+fields. No score or reporting change is implemented. See the
+[metric-vector assessment](metric-vector-assessment.md).
+
+## F12139. Function difference vectors expose separate axes without changing grades
+
+`tools/toolchain/diffvector.py` reports extent/placement/padding, literal
+encoding, operations, immediates, addressing, registers, stack observations,
+relocations and mapped CFG records separately. Every explicit copy has its own
+report, hashes and unchanged existing grade. One stated heuristic map conditions
+the axes; repeated anchors, unsupported effects and unpaired records remain
+visible. Data, runtime and whole-object/link identity are outside this report.
+
+All 19 maintained controls pass. Seventeen independent ELF pairs pass 539
+assertions; sixteen provide vectors and one parser disagreement is unavailable.
+All 41 defining copies of the preceding census's 39 REGALLOC symbols produce
+vectors. Known mapped edges agree, but thirteen copies retain 33 unknown edge
+records. Full phase passes 399/399 period tests and structural checks. No
+source or grader changes and no new whole-tree census are claimed. See the
+[guide and measured examples](method/metric-vector.md).
+
+## F12140. One finite decomp-permuter source trial produces an identical object
+
+Actual upstream manual enumeration emits exactly control `int back` and one
+admitted `short back` form in ApplyBulkDelay. Pinned full-TU Gentoo BUG-mode
+compiles reproduce the production object in both cells: all 29 functions and
+other data/bindings are unchanged. The target remains REGALLOC. Four strict
+oracle controls pass. The domain is closed; no source change or promotion is
+retained. Total compile wall time is 8.85 seconds. See the
+[trial result](decomp-permuter-assessment.md#bounded-trial-result-f12140).
+
+## F12141. A high/low-byte store counterexample exposes a renaming-check gap
+
+The existing checker accepts `mov %al,(%edx)` versus `mov %ah,(%edx)` as
+REGALLOC. A controlled i386 input EAX=0x1234 and EDX pointing to an allocated
+byte produces 0x34 versus 0x12, so that lane change is observable. This is
+machine-contract evidence, not modem reachability. The new vector flags the
+literal and typed operand difference; the grading implementation is unchanged.
+
+A paired token-lane screen covers all 39 current REGALLOC symbols and finds no
+explicit lane mismatch. Its AL/AH negative and low/low, high/high positives
+validate that narrow detector. This does not establish general ABI/dataflow
+correctness. Harden lane identity in the renaming proof before broader search;
+retain independent controls and check affected certificates without weakening
+any floor. See the [known limits](method/metric-vector.md#controls-and-known-limits).
+
+## F12142. Register renaming preserves accessed bit width and bit position
+
+F12141's gap is fixed in `byteident.py`: one complete GP token table supplies
+`(width, bit offset)` to both use and destination comparisons. The former
+name-length test could equate AL, AH and AX, all two-character names. Family
+mapping, full-width-definition/liveness rules, ABI handling and source remain
+unchanged. The existing saved-frame implementation already preserves these
+shapes literally; new controls prove that its fallback cannot rescue mismatches.
+
+All 33 token-shape controls pass (12 accepted, 21 rejected). The old checker
+falsely accepted 18 of those 21 negatives; the hardened checker accepts none.
+Ten frame-control methods exercise 93 certificates (30 accepted, 63 refused).
+Independent real-ELF checks reject five previously accepted width/lane changes
+and preserve four legitimate renamings. Existing 20 alpha and 59 relocation
+self-tests and all 19 vector tests pass. Full phase passes 399/399 period tests
+and structural checks.
+
+The refreshed 1,852-function faithful census has identical classifications and
+EXACT/matched memberships: 1,206 EXACT, 39 REGALLOC, 607 NONMATCH and zero
+unresolved. The existing ratchet passes without a floor edit. No source
+function is promoted or lost. Commands and before/after evidence are under
+`scratch/register-shape-hardening/`; see the [guide](method/metric-vector.md).
+
+## F12143. All residual NONMATCH copies have explicit diagnostic coverage
+
+A frozen batch selects all 607 NONMATCH names and all 611 defining copies from
+the preceding faithful census. All produce vectors in 126.02 seconds, including
+v34handshak; none are unavailable. All maps remain heuristic and ambiguous,
+and every copy has some unknown evidence. This is a diagnostic population,
+not an acceptance census or a proof of semantic differences.
+
+Canonical relocation destinations are observed in 420 copies, absent in 123
+and partial in 68. CFG edges are observed in 118, blocks in 133, and both in
+86; other cases retain unknown records. Typed operations, immediates and
+addressing are partial throughout. Three source inquiry sites are admitted
+across two DATA functions, rather than inventing three function candidates.
+Eleven screens are rejected after context/history review, including closed
+V8 counters and incorrect heuristic pairings. See the
+[full coverage and source plan](nonmatch-vector-triage.md).
+
+## F12144. FSE_decision_4pt recovers its signed-word induction
+
+A single `short k` declaration replaces the reconstructed int search counter.
+The native LEA increment, MOVSWL narrowing, word comparison against 3 and JLE
+latch reappear, with the width boundary present from initial RTL. The counter
+ranges from 0 through 3 with a final increment to 4; table accesses and best
+selection remain unchanged. D301's unequal shifts are preserved.
+
+The complete nine-function TU control is raw-identical to the prior faithful
+object. Only FSE_decision_4pt changes; eight siblings, non-executable data,
+bindings and resolved relocation consumers are unchanged. Control and candidate
+each pass t_v32fse's 35,312 checks, including 4,562 four-point checks, and
+t_fpm_fse's 1,128 checks. The actual period globalisation and D302 test-memory
+binding are preserved in those scratch links.
+
+This is a native-supported type/structure partial, not a promotion: the target
+remains NONMATCH, with 130 ordinary instructions against 133 and longest run
+17 unchanged. No further counter palette is proposed. Evidence is under
+`scratch/register-shape-fse-cell/`; the [residual plan](nonmatch-vector-triage.md)
+prioritises the MOH decoder next.
+
+The integrated object is raw-identical to the reviewed source cell. Three
+focused period binaries pass, including the independent D302 context. Final
+phase passes 399/399, period/faithful parity is 300/300, and the refreshed
+census remains 1,206 EXACT / 39 REGALLOC / 607 NONMATCH / zero unresolved out
+of 1,852. Every classification and protected membership is unchanged. The
+existing ratchet passes with no floor edit.

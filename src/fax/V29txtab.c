@@ -31,8 +31,7 @@ struct v29tx_cfg V29TX_CFG = {
 	1,			/* fifo_size_factor -- V29TX_create's own
 					transmit FIFO size is this * 48,
 					`v17tx_cfg`'s own field, same name    */
-	0,			/* int_0018 -- V29TX_create's own FPM_PPS_CFG
-					aux, across the (void *)(long) idiom */
+	0,			/* aux -> FPM_PPS_CFG.aux */
 };
 
 /* Indexed by V29TXP_RATE.  Fed to FPM_PPS_init's `scale` at 0x9bd25. */

@@ -48,10 +48,10 @@
  * build, and it is the same choice `t_v17fax.c` is free to make in its own
  * fixtures for the same reason.
  *
- * D955/F8587: every `struct faxvmi_link` field OTHER than `int_0014` is
+ * D955/F8587: every `struct faxvmi_link` field OTHER than `modem` is
  * planted with a recognisable non-zero pattern before a TX delete/status/
  * process call and checked UNCHANGED afterward -- the object's own adapter
- * reads only `int_0014`, so a wrong-offset bug reads or writes elsewhere and
+ * reads only `modem`, so a wrong-offset bug reads or writes elsewhere and
  * this catches it even though delete/status never touch `dp` on their own.
  */
 
@@ -192,7 +192,7 @@ put_i(unsigned char *p, int off, int v)
 	memcpy(p + off, &v, sizeof v);
 }
 
-/* Poison every `struct faxvmi_link` field except `int_0014`. */
+/* Poison every `struct faxvmi_link` field except `modem`. */
 static void
 poison_link(struct faxvmi_link *l, unsigned tag)
 {
@@ -286,10 +286,10 @@ run_rx_create(void)
 		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
 		snprintf(buf, sizeof(buf), "v17rx_create %s: handle set (%%ld)",
 			 v17_cases[k].name);
-		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+		diff_eq_int(buf, la.modem != 0, lb.modem != 0, k);
 
-		V17RX_delete((void *)(long)la.int_0014);
-		ref_V17RX_delete((void *)(long)lb.int_0014);
+		V17RX_delete(la.modem);
+		ref_V17RX_delete(lb.modem);
 	}
 
 	for (k = 0; k < (long)(sizeof(v21_cases) / sizeof(v21_cases[0])); k++) {
@@ -314,8 +314,8 @@ run_rx_create(void)
 			 v21_cases[k].name);
 		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
 
-		V21RX_delete((void *)(long)la.int_0014);
-		ref_V21RX_delete((void *)(long)lb.int_0014);
+		V21RX_delete(la.modem);
+		ref_V21RX_delete(lb.modem);
 	}
 
 	for (k = 0; k < (long)(sizeof(v27_cases) / sizeof(v27_cases[0])); k++) {
@@ -350,11 +350,11 @@ run_rx_create(void)
 		snprintf(buf, sizeof(buf), "v27rx_create %s: copied config (%%ld)",
 			 v27_cases[k].name);
 		diff_eq_int(buf,
-			    memcmp((void *)(long)la.int_0014,
-				   (void *)(long)lb.int_0014, sizeof c), 0, k);
+			    memcmp(la.modem,
+				   lb.modem, sizeof c), 0, k);
 
-		V27RX_delete((void *)(long)la.int_0014);
-		ref_V27RX_delete((void *)(long)lb.int_0014);
+		V27RX_delete(la.modem);
+		ref_V27RX_delete(lb.modem);
 	}
 
 	for (k = 0; k < (long)(sizeof(v29_cases) / sizeof(v29_cases[0])); k++) {
@@ -379,8 +379,8 @@ run_rx_create(void)
 			 v29_cases[k].name);
 		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
 
-		V29RX_delete((void *)(long)la.int_0014);
-		ref_V29RX_delete((void *)(long)lb.int_0014);
+		V29RX_delete(la.modem);
+		ref_V29RX_delete(lb.modem);
 	}
 
 	return diff_end();
@@ -439,10 +439,10 @@ run_tx_create_v17(void)
 		diff_eq_int(buf, la.unpack_width, 0, k);
 		snprintf(buf, sizeof(buf), "v17tx_create %s: handle set (%%ld)",
 			 v17tx_cases[k].name);
-		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+		diff_eq_int(buf, la.modem != 0, lb.modem != 0, k);
 
-		V17TX_delete((void *)(long)la.int_0014);
-		ref_V17TX_delete((void *)(long)lb.int_0014);
+		V17TX_delete(la.modem);
+		ref_V17TX_delete(lb.modem);
 	}
 
 	return diff_end();
@@ -510,10 +510,10 @@ run_tx_create_v21(void)
 		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
 		snprintf(buf, sizeof(buf), "v21tx_create %s: handle set (%%ld)",
 			 v21tx_cases[k].name);
-		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+		diff_eq_int(buf, la.modem != 0, lb.modem != 0, k);
 
-		V21TX_delete((void *)(long)la.int_0014);
-		ref_V21TX_delete((void *)(long)lb.int_0014);
+		V21TX_delete(la.modem);
+		ref_V21TX_delete(lb.modem);
 	}
 
 	return diff_end();
@@ -554,10 +554,10 @@ run_tx_create_v27(void)
 		diff_eq_int(buf, la.unpack_width, 0, k);
 		snprintf(buf, sizeof(buf), "v27tx_create %s: handle set (%%ld)",
 			 v27tx_cases[k].name);
-		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+		diff_eq_int(buf, la.modem != 0, lb.modem != 0, k);
 
-		V27TX_delete((void *)(long)la.int_0014);
-		ref_V27TX_delete((void *)(long)lb.int_0014);
+		V27TX_delete(la.modem);
+		ref_V27TX_delete(lb.modem);
 	}
 
 	return diff_end();
@@ -602,7 +602,7 @@ run_tx_create_v29(void)
 		diff_eq_int(buf, la.unpack_width, 0, k);
 		snprintf(buf, sizeof(buf), "v29tx_create %s: handle set (%%ld)",
 			 v29tx_cases[k].name);
-		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+		diff_eq_int(buf, la.modem != 0, lb.modem != 0, k);
 		memset(sa, 0xa5, sizeof sa);
 		memset(sb, 0xa5, sizeof sb);
 		v29tx_status(&la, sa);
@@ -613,11 +613,11 @@ run_tx_create_v29(void)
 		snprintf(buf, sizeof(buf), "v29tx_create %s: copied config (%%ld)",
 			 v29tx_cases[k].name);
 		diff_eq_int(buf,
-			    memcmp((void *)(long)la.int_0014,
-				   (void *)(long)lb.int_0014, sizeof c), 0, k);
+			    memcmp(la.modem,
+				   lb.modem, sizeof c), 0, k);
 
-		V29TX_delete((void *)(long)la.int_0014);
-		ref_V29TX_delete((void *)(long)lb.int_0014);
+		V29TX_delete(la.modem);
+		ref_V29TX_delete(lb.modem);
 	}
 
 	return diff_end();
@@ -643,8 +643,8 @@ run_rx_delete(void)
 		poison_link(&lb, 0x50);				\
 		create_fn(&la, &c);				\
 		ref_create_fn(&lb, &c);				\
-		ha = (void *)(long)la.int_0014;		\
-		hb = (void *)(long)lb.int_0014;		\
+		ha = la.modem;		\
+		hb = lb.modem;		\
 		diff_eq_int(mod " delete: live before, ours (%ld)",	\
 			    harness_alloc_ordinal(ha) != 0, 1, tag);	\
 		diff_eq_int(mod " delete: live before, ref (%ld)",	\
@@ -703,8 +703,8 @@ run_rx_status(void)
 	ref_v17rx_status(&lb, &s17b);
 	diff_eq_int("v17rx_status: struct byte-identical (%ld)",
 		    memcmp(&s17a, &s17b, sizeof s17a), 0, tag);
-	V17RX_delete((void *)(long)la.int_0014);
-	ref_V17RX_delete((void *)(long)lb.int_0014);
+	V17RX_delete(la.modem);
+	ref_V17RX_delete(lb.modem);
 	tag++;
 
 	c21 = V21RX_CFG;
@@ -718,8 +718,8 @@ run_rx_status(void)
 	ref_v21rx_status(&lb, &s21b);
 	diff_eq_int("v21rx_status: struct byte-identical (%ld)",
 		    memcmp(&s21a, &s21b, sizeof s21a), 0, tag);
-	V21RX_delete((void *)(long)la.int_0014);
-	ref_V21RX_delete((void *)(long)lb.int_0014);
+	V21RX_delete(la.modem);
+	ref_V21RX_delete(lb.modem);
 	tag++;
 
 	c27 = V27RX_CFG;
@@ -733,8 +733,8 @@ run_rx_status(void)
 	ref_v27rx_status(&lb, s27b);
 	diff_eq_int("v27rx_status: 64-byte region byte-identical (%ld)",
 		    memcmp(s27a, s27b, sizeof s27a), 0, tag);
-	V27RX_delete((void *)(long)la.int_0014);
-	ref_V27RX_delete((void *)(long)lb.int_0014);
+	V27RX_delete(la.modem);
+	ref_V27RX_delete(lb.modem);
 	tag++;
 
 	c29 = V29RX_CFG;
@@ -748,8 +748,8 @@ run_rx_status(void)
 	ref_v29rx_status(&lb, s29b);
 	diff_eq_int("v29rx_status: 64-byte region byte-identical (%ld)",
 		    memcmp(s29a, s29b, sizeof s29a), 0, tag);
-	V29RX_delete((void *)(long)la.int_0014);
-	ref_V29RX_delete((void *)(long)lb.int_0014);
+	V29RX_delete(la.modem);
+	ref_V29RX_delete(lb.modem);
 	tag++;
 
 	return diff_end();
@@ -791,8 +791,8 @@ run_rx_process(void)
 			    count_b, 0, tag);
 		diff_eq_int("v17rx_process: out buffer identical (%ld)",
 			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
-		V17RX_delete((void *)(long)la.int_0014);
-		ref_V17RX_delete((void *)(long)lb.int_0014);
+		V17RX_delete(la.modem);
+		ref_V17RX_delete(lb.modem);
 		tag += diff_end();
 	}
 
@@ -827,8 +827,8 @@ run_rx_process(void)
 			    count_b, 0, tag);
 		diff_eq_int("v21rx_process: out buffer identical (%ld)",
 			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
-		V21RX_delete((void *)(long)la.int_0014);
-		ref_V21RX_delete((void *)(long)lb.int_0014);
+		V21RX_delete(la.modem);
+		ref_V21RX_delete(lb.modem);
 		tag += diff_end();
 	}
 
@@ -863,8 +863,8 @@ run_rx_process(void)
 			    count_b, 0, tag);
 		diff_eq_int("v27rx_process: out buffer identical (%ld)",
 			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
-		V27RX_delete((void *)(long)la.int_0014);
-		ref_V27RX_delete((void *)(long)lb.int_0014);
+		V27RX_delete(la.modem);
+		ref_V27RX_delete(lb.modem);
 		tag += diff_end();
 	}
 
@@ -899,8 +899,8 @@ run_rx_process(void)
 			    count_b, 0, tag);
 		diff_eq_int("v29rx_process: out buffer identical (%ld)",
 			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
-		V29RX_delete((void *)(long)la.int_0014);
-		ref_V29RX_delete((void *)(long)lb.int_0014);
+		V29RX_delete(la.modem);
+		ref_V29RX_delete(lb.modem);
 		tag += diff_end();
 	}
 
@@ -987,7 +987,7 @@ v29tx_fixture_build(struct v29tx_fixture *f)
 
 /*
  * NONE OF THE FOUR OBJECT-LEVEL `V??TX_delete` FUNCTIONS WRITE BACK INTO
- * `dp` -- the object's own adapter only ever reads `int_0014` and tail-jumps
+ * `dp` -- the object's own adapter only ever reads `modem` and tail-jumps
  * -- so the two things worth asserting per call are (1) `dp` is byte-for-byte
  * unchanged (the D955 canary, catching a wrong-offset read or an accidental
  * write) and (2) the call returned at all: a wrong-offset bug that hands
@@ -1010,8 +1010,8 @@ run_tx_delete(void)
 		v17tx_fixture_build(&fb);
 		poison_link(&la, 0x80);
 		poison_link(&lb, 0x80);
-		la.int_0014 = (int)(long)fa.modem;
-		lb.int_0014 = (int)(long)fb.modem;
+		la.modem = fa.modem;
+		lb.modem = fb.modem;
 		la0 = la;
 		lb0 = lb;
 		v17tx_delete(&la);
@@ -1030,8 +1030,8 @@ run_tx_delete(void)
 		v21tx_fixture_build(&fb);
 		poison_link(&la, 0x80);
 		poison_link(&lb, 0x80);
-		la.int_0014 = (int)(long)fa.modem;
-		lb.int_0014 = (int)(long)fb.modem;
+		la.modem = fa.modem;
+		lb.modem = fb.modem;
 		la0 = la;
 		lb0 = lb;
 		v21tx_delete(&la);
@@ -1050,8 +1050,8 @@ run_tx_delete(void)
 		v27tx_fixture_build(&fb);
 		poison_link(&la, 0x80);
 		poison_link(&lb, 0x80);
-		la.int_0014 = (int)(long)fa.modem;
-		lb.int_0014 = (int)(long)fb.modem;
+		la.modem = fa.modem;
+		lb.modem = fb.modem;
 		la0 = la;
 		lb0 = lb;
 		v27tx_delete(&la);
@@ -1070,8 +1070,8 @@ run_tx_delete(void)
 		v29tx_fixture_build(&fb);
 		poison_link(&la, 0x80);
 		poison_link(&lb, 0x80);
-		la.int_0014 = (int)(long)fa.modem;
-		lb.int_0014 = (int)(long)fb.modem;
+		la.modem = fa.modem;
+		lb.modem = fb.modem;
 		la0 = la;
 		lb0 = lb;
 		v29tx_delete(&la);
@@ -1105,8 +1105,8 @@ run_tx_status(void)
 		memset(&sb, 0x5a, sizeof sb);
 		poison_link(&la, 0x90);
 		poison_link(&lb, 0x90);
-		la.int_0014 = (int)(long)pa;
-		lb.int_0014 = (int)(long)pb;
+		la.modem = pa;
+		lb.modem = pb;
 		v17tx_status(&la, &sa);
 		ref_v17tx_status(&lb, &sb);
 		diff_eq_int("v17tx_status: struct byte-identical (%ld)",
@@ -1127,8 +1127,8 @@ run_tx_status(void)
 		memset(&sb, 0x5a, sizeof sb);
 		poison_link(&la, 0x90);
 		poison_link(&lb, 0x90);
-		la.int_0014 = (int)(long)pa;
-		lb.int_0014 = (int)(long)pb;
+		la.modem = pa;
+		lb.modem = pb;
 		v21tx_status(&la, &sa);
 		ref_v21tx_status(&lb, &sb);
 		diff_eq_int("v21tx_status: struct byte-identical (%ld)",
@@ -1149,8 +1149,8 @@ run_tx_status(void)
 		memset(sb, 0x5a, sizeof sb);
 		poison_link(&la, 0x90);
 		poison_link(&lb, 0x90);
-		la.int_0014 = (int)(long)pa;
-		lb.int_0014 = (int)(long)pb;
+		la.modem = pa;
+		lb.modem = pb;
 		v27tx_status(&la, sa);
 		ref_v27tx_status(&lb, sb);
 		diff_eq_int("v27tx_status: 64-byte region byte-identical (%ld)",
@@ -1171,8 +1171,8 @@ run_tx_status(void)
 		memset(sb, 0x5a, sizeof sb);
 		poison_link(&la, 0x90);
 		poison_link(&lb, 0x90);
-		la.int_0014 = (int)(long)pa;
-		lb.int_0014 = (int)(long)pb;
+		la.modem = pa;
+		lb.modem = pb;
 		v29tx_status(&la, sa);
 		ref_v29tx_status(&lb, sb);
 		diff_eq_int("v29tx_status: 64-byte region byte-identical (%ld)",
@@ -1224,7 +1224,7 @@ run_tx_process(void)
 		put_ptr(fa.prm, V17TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&la, 0xa0);
 		la.buf = (unsigned short *)(void *)(fa.modem + 0);
-		la.int_0014 = (int)(long)fa.modem;
+		la.modem = fa.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1259,7 +1259,7 @@ run_tx_process(void)
 		put_ptr(fa.prm, V21TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&la, 0xa0);
 		la.buf = (unsigned short *)(void *)(fa.modem + 0);
-		la.int_0014 = (int)(long)fa.modem;
+		la.modem = fa.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1294,7 +1294,7 @@ run_tx_process(void)
 		put_ptr(fa.prm, V29TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&la, 0xa0);
 		la.buf = (unsigned short *)(void *)(fa.modem + 0);
-		la.int_0014 = (int)(long)fa.modem;
+		la.modem = fa.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1336,7 +1336,7 @@ run_tx_process(void)
 		put_ptr(fa.txdata, V27TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&la, 0xa0);
 		la.buf = (unsigned short *)(void *)(fa.modem + 0);
-		la.int_0014 = (int)(long)fa.modem;
+		la.modem = fa.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1380,7 +1380,7 @@ run_tx_process(void)
 		put_ptr(fb.prm, V17TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&lb, 0xb0);
 		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
-		lb.int_0014 = (int)(long)fb.modem;
+		lb.modem = fb.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1411,7 +1411,7 @@ run_tx_process(void)
 		put_ptr(fb.prm, V21TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&lb, 0xb0);
 		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
-		lb.int_0014 = (int)(long)fb.modem;
+		lb.modem = fb.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1442,7 +1442,7 @@ run_tx_process(void)
 		put_ptr(fb.prm, V29TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&lb, 0xb0);
 		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
-		lb.int_0014 = (int)(long)fb.modem;
+		lb.modem = fb.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1473,7 +1473,7 @@ run_tx_process(void)
 		put_ptr(fb.txdata, V27TXP_PROCESS, (void *)probe_tx_handler);
 		poison_link(&lb, 0xb0);
 		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
-		lb.int_0014 = (int)(long)fb.modem;
+		lb.modem = fb.modem;
 		memset(out, 0x5a, sizeof out);
 		count = 16;
 		result = 0xeeee;
@@ -1499,7 +1499,7 @@ run_tx_process(void)
 /*
  * ---------------------------------------------------------------------
  * The five `*_control` adapters (finding F10010): a tail call that swaps
- * `dp` for `dp->int_0014` and forwards the caller's argument unchanged.
+ * `dp` for `dp->modem` and forwards the caller's argument unchanged.
  * Each is driven off a REAL handle from the matching create adapter --
  * already proven correct above -- and its effect is read back through the
  * matching, already-tested status adapter: if `v??_control` forwarded the
@@ -1551,8 +1551,8 @@ run_control(void)
 		diff_eq_int("v17rx_control: status readback identical (%ld)",
 			    memcmp(&sa, &sb, sizeof sa), 0, tag);
 
-		V17RX_delete((void *)(long)la.int_0014);
-		ref_V17RX_delete((void *)(long)lb.int_0014);
+		V17RX_delete(la.modem);
+		ref_V17RX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1590,8 +1590,8 @@ run_control(void)
 		diff_eq_int("v21tx_control: status readback identical (%ld)",
 			    memcmp(&sa, &sb, sizeof sa), 0, tag);
 
-		V21TX_delete((void *)(long)la.int_0014);
-		ref_V21TX_delete((void *)(long)lb.int_0014);
+		V21TX_delete(la.modem);
+		ref_V21TX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1627,8 +1627,8 @@ run_control(void)
 		diff_eq_int("v21rx_control: status readback identical (%ld)",
 			    memcmp(&sa, &sb, sizeof sa), 0, tag);
 
-		V21RX_delete((void *)(long)la.int_0014);
-		ref_V21RX_delete((void *)(long)lb.int_0014);
+		V21RX_delete(la.modem);
+		ref_V21RX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1671,8 +1671,8 @@ run_control(void)
 		diff_eq_int("v27tx_control: status readback identical (%ld)",
 			    memcmp(sa, sb, sizeof sa), 0, tag);
 
-		V27TX_delete((void *)(long)la.int_0014);
-		ref_V27TX_delete((void *)(long)lb.int_0014);
+		V27TX_delete(la.modem);
+		ref_V27TX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1711,8 +1711,8 @@ run_control(void)
 		diff_eq_int("v27rx_control: status readback identical (%ld)",
 			    memcmp(sa, sb, sizeof sa), 0, tag);
 
-		V27RX_delete((void *)(long)la.int_0014);
-		ref_V27RX_delete((void *)(long)lb.int_0014);
+		V27RX_delete(la.modem);
+		ref_V27RX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1759,8 +1759,8 @@ run_control(void)
 		diff_eq_int("v17tx_control: status readback identical (%ld)",
 			    memcmp(&sa, &sb, sizeof sa), 0, tag);
 
-		V17TX_delete((void *)(long)la.int_0014);
-		ref_V17TX_delete((void *)(long)lb.int_0014);
+		V17TX_delete(la.modem);
+		ref_V17TX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1798,8 +1798,8 @@ run_control(void)
 		diff_eq_int("v29tx_control: status readback identical (%ld)",
 			    memcmp(sa, sb, sizeof sa), 0, tag);
 
-		V29TX_delete((void *)(long)la.int_0014);
-		ref_V29TX_delete((void *)(long)lb.int_0014);
+		V29TX_delete(la.modem);
+		ref_V29TX_delete(lb.modem);
 	}
 	tag++;
 
@@ -1836,8 +1836,8 @@ run_control(void)
 		diff_eq_int("v29rx_control: status readback identical (%ld)",
 			    memcmp(sa, sb, sizeof sa), 0, tag);
 
-		V29RX_delete((void *)(long)la.int_0014);
-		ref_V29RX_delete((void *)(long)lb.int_0014);
+		V29RX_delete(la.modem);
+		ref_V29RX_delete(lb.modem);
 	}
 	tag++;
 

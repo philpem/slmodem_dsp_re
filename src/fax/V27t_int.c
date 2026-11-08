@@ -29,7 +29,7 @@
  * tx + V27TX_SDM, and the descrambler in the receiver's.
  */
 void
-ScrambleDataV27(void *modem, unsigned short *data, short count)
+ScrambleDataV27(void *modem, unsigned short *data, unsigned short count)
 {
 	SDMv27_scrambler((struct sdmv27 *)(void *)
 				&((struct v27_tx *)modem)->tx->sdm,

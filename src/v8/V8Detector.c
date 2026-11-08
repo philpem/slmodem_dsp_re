@@ -19,28 +19,6 @@
 
 static const short a[3] = { 16384, -8057, 14787 };
 
-/*
- * One biquad, direct form I, with the histories kept as four shorts: x1, x2
- * then y1, y2.  The original writes them back in a fixed order that matters,
- * because x2 takes the old x1 and y2 the old y1.
- */
-static int
-biquad(short *x, short *y, const short *b, const short *a, int in)
-{
-	int acc = in;
-
-	acc += v8_mpyint(x[0], b[0]);
-	acc += v8_mpyint(x[1], b[1]);
-	acc -= v8_mpyint(y[0], a[0]);
-	acc -= v8_mpyint(y[1], a[1]);
-
-	x[1] = x[0];
-	y[1] = y[0];
-	x[0] = (short)in;
-	y[0] = (short)acc;
-
-	return acc;
-}
 
 /*
  * The fixed input biquad every tone detector shares, in Q14.  The originals
@@ -201,19 +179,37 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 		for (i = 0; i < 2; i++)
 			acc -= v8_mpyint(d->acc_d[i], a[i + 1]);
 
-		d->acc_c[2] = d->acc_c[1];
-		d->acc_d[2] = d->acc_d[1];
-		d->acc_c[1] = d->acc_c[0];
-		d->acc_d[1] = d->acc_d[0];
+		for (i = 0; i < 2; i++) {
+			d->acc_c[2 - i] = d->acc_c[1 - i];
+			d->acc_d[2 - i] = d->acc_d[1 - i];
+		}
 		d->acc_d[0] = (short)acc;
 
 		*in++ = (short)acc;
 
 		/* Then the detector's own two sections. */
-		stage1 = biquad(&d->acc_a[0], &d->acc_b[0], &d->table[0],
-				&d->table[4], (short)acc >> 4);
-		stage2 = biquad(&d->acc_a[2], &d->acc_b[2], &d->table[2],
-				&d->table[6], (short)stage1 >> 4);
+		const short *t = d->table;
+		stage1 = (short)acc >> 4;
+		for (i = 0; i < 2; i++) {
+			stage1 += v8_mpyint(d->acc_a[i], t[i]);
+			stage1 -= v8_mpyint(d->acc_b[i], t[4 + i]);
+		}
+		d->acc_a[1] = d->acc_a[0];
+		d->acc_b[1] = d->acc_b[0];
+		d->acc_a[0] = (short)((short)acc >> 4);
+		d->acc_b[0] = (short)stage1;
+
+		/* The second section narrows after shifting the full accumulator
+		 * (native 0x78762/0x78765), unlike the first section's input. */
+		stage2 = (short)(stage1 >> 4);
+		for (i = 0; i < 2; i++) {
+			stage2 += v8_mpyint(d->acc_a[2 + i], t[2 + i]);
+			stage2 -= v8_mpyint(d->acc_b[2 + i], t[6 + i]);
+		}
+		d->acc_a[3] = d->acc_a[2];
+		d->acc_b[3] = d->acc_b[2];
+		d->acc_a[2] = (short)(stage1 >> 4);
+		d->acc_b[2] = (short)stage2;
 
 		d->integrator = (short)(v8_absfn((short)((short)stage2 >> 4))
 				 + v8_mpyint(d->integrator, 0x3ccd));
@@ -293,13 +289,15 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 	int energy = pr->energy;
 	int smoothed = pr->smoothed;
 	short widx = pr->widx;
+	/* Native code keeps this consumed window-base alias across the loop. */
+	short *window = pr->window;
 	int half = pr->half;
 	int full = half * 2;
 	int spacing = 0;
-	short i;
+	int i;
 
 	for (i = 0; i < count; i++) {
-		int back;
+		short back;
 		int x, old, diff;
 		int level;
 
@@ -313,28 +311,24 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 			back = (short)(back + full);
 
 		x = in[i];
-		old = pr->window[widx];
+		old = window[widx];
 		diff = x - old;
 
 		/* The window's energy, one sample in and one sample out. */
 		energy += (x * x + 0x8000) >> 16;
 		energy -= (old * old + 0x8000) >> 16;
 
-		corr += (pr->window[back] * diff + 0x8000) >> 16;
+		corr += (window[back] * diff + 0x8000) >> 16;
 
 		level = smoothed * 0x7fe2 + (energy * 15) * 2;
 		smoothed = level >> 15;
 
-		if (corr * 2 < (level >> 17)) {
-			/* A reversal, if the run since the last one is long
-			 * enough to be one rather than noise. */
-			if ((short)pr->run > (short)(pr->half * 4)) {
-				spacing = ((short)pr->run * 0xd55) >> 15;
-				pr->run = 0;
-				pr->reversals = (short)(pr->reversals + 1);
-			} else {
-				pr->run = (short)(pr->run + 1);
-			}
+		/* Both failed predicates share the native run increment. */
+		if (corr * 2 < (level >> 17)
+		    && (short)pr->run > pr->half * 4) {
+			spacing = ((short)pr->run * 0xd55) >> 15;
+			pr->run = 0;
+			pr->reversals = (short)(pr->reversals + 1);
 		} else {
 			pr->run = (short)(pr->run + 1);
 		}
@@ -351,7 +345,8 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 			pr->detected = 1;
 		}
 
-		pr->window[widx] = (short)x;
+		/* Reread after run/reversal publication and the optional diagnostic. */
+		window[widx] = in[i];
 	}
 
 	pr->widx = widx;

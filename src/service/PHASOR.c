@@ -81,7 +81,8 @@ MTK_phasor(struct mtk_phasor *p)
 	float y;
 	float frac;
 	float s;
-	int n;
+	/* 0xb0710/0xb0715: PUSH AX and FILDS preserve a short carrier. */
+	short n;
 	int quadrant;
 	int i;
 

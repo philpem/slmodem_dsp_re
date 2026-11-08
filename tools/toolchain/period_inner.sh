@@ -45,6 +45,15 @@ ASFLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
 # stack-only equivalence claim was not supported by the complete comparison.
 DCR_FLAGS="-O2 -fno-rerun-cse-after-loop"
 
+# Same original processor TUs and PRE profile as TC_FAX_PROC_FLAGS in period.mk.
+FAX_PROC_FLAGS="-fno-gcse"
+
+# Same native call/inline contracts as TC_V90P4_FLAGS in period.mk (F12108).
+V90P4_FLAGS="--param max-inline-insns-auto=80"
+
+# Native demodulator call/expansion contract, matching period.mk (F12109).
+V90DEMOD_FLAGS="--param max-inline-insns-auto=50"
+
 HARNESS="test/harness/harness.c test/harness/runtime.c
          test/harness/fakedp.c test/harness/v34hsstep.c
          test/harness/unwritten.c"
@@ -68,6 +77,53 @@ obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 # source and this.
 NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -1)
 
+# Several transcript fixtures include another test/unit .cpp. Its mtime is
+# not covered by NEWEST_HDR. Keep compiler-produced dependencies for fixtures
+# only; reconstruction and harness compilation retain their existing flags.
+fixture_receipt() {
+	f=$1; o=$2
+	cksum "$o" "$o.d" || return 1
+	case $f in
+	*.cpp)	if [ -f "${f%.*}.cxxflags" ]; then
+			cksum "${f%.*}.cxxflags" || return 1
+		else
+			printf '%s\n' no-cxxflags
+		fi ;;
+	esac
+}
+
+fixture_current() {
+	f=$1; o=$2
+	[ -s "$o.d" ] && [ -s "$o.inputs" ] || return 1
+	actual=$(fixture_receipt "$f" "$o") || return 1
+	[ "$actual" = "$(cat "$o.inputs")" ] || return 1
+	# No -MP rules or make evaluation. Fold only backslash-newline; reject
+	# unsupported escaping and extra rules rather than accepting partial input.
+	dependencies=$(awk -v target="$o" '
+		{
+			if (done) bad = 1
+			part = $0
+			continued = sub(/\\$/, "", part)
+			text = text part " "
+			if (!continued) done = 1
+		}
+		END {
+			colon = index(text, ":")
+			if (bad || !done || continued || !colon ||
+			    substr(text, 1, colon - 1) != target) exit 1
+			deps = substr(text, colon + 1)
+			if (deps ~ /[\\:$#*?]/ || deps ~ /\[/ || deps ~ /\]/ ||
+			    deps !~ /[^[:space:]]/) exit 1
+			print deps
+		}' "$o.d") || return 1
+	found_source=0
+	for dependency in $dependencies; do
+		[ "$dependency" != "$f" ] || found_source=1
+		[ -f "$dependency" ] && [ "$o" -nt "$dependency" ] || return 1
+	done
+	[ "$found_source" -eq 1 ]
+}
+
 # COMPILE AND LINK ARE SPLIT, because binutils 2.15 (the period linker) has no
 # `objcopy --globalize-symbols`.  The host does that step between the two
 # stages.  `STAGE=all` (the default) keeps the old one-pass behaviour for a
@@ -78,23 +134,52 @@ STAGE=${STAGE:-all}
 : > "$OUT/failed"
 compile_one() {
 	f=$1; o=$(obj "$f")
+	fixture=0
+	case $f in test/unit/*) fixture=1 ;; esac
 	# Flag/dispatch changes in this script invalidate every compiled object.
 	[ -n "$KEEP" ] && [ -f "$o" ] && [ "$o" -nt "$f" ] && [ "$o" -nt "$0" ] \
 		&& { [ -z "$NEWEST_HDR" ] || [ "$o" -nt "$NEWEST_HDR" ]; } \
+		&& { [ "$fixture" -eq 0 ] || fixture_current "$f" "$o"; } \
 		&& return 0
+	depflags=""
+	if [ "$fixture" -eq 1 ]; then
+		# Remove the old receipt BEFORE compilation. A failed/interrupted
+		# compiler must never pair a newer partial object with old dependencies.
+		rm -f "$o.d" "$o.inputs" "$o.d.tmp" "$o.inputs.tmp"
+		# This driver already derives the target from -o. An explicit -MT
+		# makes GCC 3.4.2 repeat the target in the generated dependency rule.
+		depflags="-MMD -MF $o.d.tmp"
+	fi
 	case $f in
-	src/*.cpp) g++ -c $SOURCE_CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
+	src/*.cpp)
+		cxxflags="$SOURCE_CXXFLAGS"
+		case $f in
+		src/pump/v90/V90Phase4Modulator.cpp) cxxflags="$cxxflags $V90P4_FLAGS" ;;
+		src/pump/v90/V90Demodulator.cpp) cxxflags="$cxxflags $V90DEMOD_FLAGS" ;;
+		esac
+		g++ -c $cxxflags -o "$o" "$f" 2>"$o.log" ;;
 	*.cpp)	extra=""; [ -f "${f%.*}.cxxflags" ] && extra=$(cat "${f%.*}.cxxflags")
-		g++ -c $CXXFLAGS $extra -o "$o" "$f" 2>"$o.log" ;;
+		g++ -c $CXXFLAGS $extra $depflags -o "$o" "$f" 2>"$o.log" ;;
 	src/*.S) (cd "$(dirname "$f")" && gcc -c $ASFLAGS \
 		-o "$o" "$(basename "$f")") 2>"$o.log" ;;
 	*)	case $f in
 		src/service/dcr.c) cflags="$SOURCE_CFLAGS $DCR_FLAGS" ;;
+		src/fax/V17t_prc.c|src/fax/V27t_prc.c|src/fax/V29t_prc.c) cflags="$SOURCE_CFLAGS $FAX_PROC_FLAGS" ;;
 		src/*) cflags="$SOURCE_CFLAGS" ;;
 		*) cflags="$CFLAGS" ;;
 		esac
-		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
-	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }
+		gcc -c $cflags $depflags -o "$o" "$f" 2>"$o.log" ;;
+	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; return 0; }
+	if [ "$fixture" -eq 1 ]; then
+		if [ -s "$o.d.tmp" ] && mv "$o.d.tmp" "$o.d" \
+		    && fixture_receipt "$f" "$o" > "$o.inputs.tmp" \
+		    && mv "$o.inputs.tmp" "$o.inputs"; then
+			:
+		else
+			echo "$f" >> "$OUT/failed"
+			echo "period: missing fixture dependency receipt: $f" >&2
+		fi
+	fi
 }
 
 if [ "$STAGE" != "link" ]; then
@@ -103,8 +188,12 @@ echo "period: flags $(echo $FLAGS)"
 echo "period: C source flags $(echo $SOURCE_CFLAGS)"
 echo "period: C fixture flags $(echo $CFLAGS)"
 echo "period: DCR source flags $(echo $SOURCE_CFLAGS $DCR_FLAGS)"
+echo "period: V17t_prc.c/V27t_prc.c/V29t_prc.c source flags $(echo $SOURCE_CFLAGS $FAX_PROC_FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
+echo "period: V90Phase4Modulator.cpp source flags $(echo $SOURCE_CXXFLAGS $V90P4_FLAGS)"
+echo "period: V90Demodulator.cpp source flags $(echo $SOURCE_CXXFLAGS $V90DEMOD_FLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
+echo "period: fixture dependency apparatus -MMD -MF <object>.d.tmp"
 for f in $SRC $CXXSRC $ASRC $HARNESS; do
 	# A serial gate must not depend on jobs output from a command
 	# substitution (the period shell can report an empty job table there).
@@ -252,16 +341,48 @@ for t in $TESTS; do
 		;;
 	*) echo "invalid period link mode: $LINK_MODE" >&2; exit 1 ;;
 	esac
-	LINK_NEWEST=$(ls -t $LINK_OBJS "$REF" 2>/dev/null | head -1)
+	LINK_REF=$REF
+	LD_CONTEXT=""
+	[ ! -f "test/unit/$t.ldcontext" ] || LD_CONTEXT=$(cat "test/unit/$t.ldcontext")
+	case "$LD_CONTEXT" in
+	"") ;;
+	d302)
+		[ "$LINK_MODE" = individual ] || { echo "d302 context requires individual inputs" >&2; exit 1; }
+		CONTEXT_OBJS=""; replaced=0
+		for o in $LINK_OBJS; do
+			case "$o" in
+			*/src_pump_v32_V32dec.o) o="$OUT/context/d302/source.o"; replaced=$((replaced + 1)) ;;
+			esac
+			CONTEXT_OBJS="$CONTEXT_OBJS $o"
+		done
+		[ "$replaced" -eq 1 ] || { echo "d302 context source count: $replaced" >&2; exit 1; }
+		LINK_OBJS=$CONTEXT_OBJS; LINK_REF="$OUT/context/d302/ref.o"
+		;;
+	fp-pow-seventh)
+		[ "$LINK_MODE" = individual ] || { echo "FP_Pow context requires individual inputs" >&2; exit 1; }
+		CONTEXT_OBJS=""; replaced=0
+		for o in $LINK_OBJS; do
+			case "$o" in
+			*/src_dsp_FP_math.o) o="$OUT/context/fp-pow-seventh/source.o"; replaced=$((replaced + 1)) ;;
+			esac
+			CONTEXT_OBJS="$CONTEXT_OBJS $o"
+		done
+		[ "$replaced" -eq 1 ] || { echo "FP_Pow context source count: $replaced" >&2; exit 1; }
+		LINK_OBJS=$CONTEXT_OBJS; LINK_REF="$OUT/context/fp-pow-seventh/ref.o"
+		;;
+	*) echo "unknown fixture context: $LD_CONTEXT" >&2; exit 1 ;;
+	esac
+	LINK_NEWEST=$(ls -t $LINK_OBJS "$LINK_REF" 2>/dev/null | head -1)
 	{
-		printf '%s\n' "$LINK_MODE" "$LINK_OBJS" "$REF" "$EXTRA_LD"
+		printf '%s\n' "$LINK_MODE" "$LINK_OBJS" "$LINK_REF" "$EXTRA_LD"
 		cksum tools/toolchain/period_inner.sh
+		printf 'context %s\n' "$LD_CONTEXT"
 	} > "$OUT/$t.link-config.tmp"
 
 	if [ -n "$KEEP" ] && cmp -s "$OUT/$t.link-config.tmp" "$OUT/$t.link-config" && [ -x "$OUT/$t" ] && [ "$OUT/$t" -nt "$(obj "$src")" ] \
 	   && { [ -z "$LINK_NEWEST" ] || [ "$OUT/$t" -nt "$LINK_NEWEST" ]; }; then
 		:					# inputs unmoved; keep the binary
-	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $LINK_OBJS "$REF" \
+	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $LINK_OBJS "$LINK_REF" \
 	     $EXTRA_LD -lm \
 	     > "$OUT/$t.link.log" 2>&1; then
 		echo "  LINK-FAIL    $t"; sed -n '1,3p' "$OUT/$t.link.log"

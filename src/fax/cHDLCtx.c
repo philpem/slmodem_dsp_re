@@ -32,7 +32,7 @@ extern struct v21rx_ctl V21RX_CTL;
 /*
  * `cHDLCtx_preamble_state_init`, 0x9e380, 193 bytes.  Merge `V21TX_CTL`
  * (REINIT bit OR'd into `flags_0d`) into a plain copy of `FAXVMI_CTL` --
- * `int_0014` is the only field this one touches, so no ring-clear, framer
+ * `control_req` is the only field this one touches, so no ring-clear, framer
  * reset or mode change reaches `FAXVMI_control`, unlike the RX-side sibling
  * below -- and send it to `ctx->vmi_c`, the V.21 TX handle.  Opens an HDLC
  * frame (return discarded) and resets the session to
@@ -45,7 +45,7 @@ cHDLCtx_preamble_state_init(struct fax_class1 *ctx)
 	struct faxvmi_ctl ctl = FAXVMI_CTL;
 
 	req.flags |= V21TXCTL_REINIT;
-	ctl.int_0014 = (int)(long)&req;
+	ctl.control_req = &req;
 
 	FAXVMI_control(ctx->vmi_c, &ctl);
 	_handle_hdlc_input_open(ctx);
@@ -93,8 +93,8 @@ _send_hdlc_between_buffer_state_init(struct fax_class1 *ctx)
  */
 int
 _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			int word3, int word4, int *rx_count, int *tx_count,
-			int word7, int *word8)
+			unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+			int *word7, int *word8)
 {
 	short cnt = 0;
 	unsigned short result = (unsigned short)*tx_count;
@@ -145,8 +145,8 @@ _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 int
 _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
-			     short *tx, int word3, int word4,
-			     int *rx_count, int *tx_count, int word7,
+			     short *tx, unsigned char *word3, const unsigned char *word4,
+			     int *rx_count, int *tx_count, int *word7,
 			     int *word8)
 {
 	(void)rx;
@@ -211,8 +211,8 @@ _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
  */
 int
 _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		    int word3, int word4, int *rx_count, int *tx_count,
-		    int word7, int *word8)
+		    unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		    int *word7, int *word8)
 {
 	short cnt = 0;
 	unsigned short result = 0;
@@ -230,7 +230,7 @@ _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			    "%2d.%02d[sec] Collect data with %d bytes.\n",
 			    ctx->clock_sec, ctx->clock_frac, *word8);
 		ctx->hdlc_frame_done = _handle_hdlc_input(ctx,
-		    (const unsigned char *)(long)word4,
+		    word4,
 		    (unsigned short *)(void *)ctx, word8);
 		if (ctx->hdlc_frame_done)
 			ctx->buffers_sent++;
@@ -309,8 +309,8 @@ _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  */
 int
 _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
-				short *tx, int word3, int word4,
-				int *rx_count, int *tx_count, int word7,
+				short *tx, unsigned char *word3, const unsigned char *word4,
+				int *rx_count, int *tx_count, int *word7,
 				int *word8)
 {
 	short cnt = 0;
@@ -339,7 +339,7 @@ _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
 
 	if (*word8 > 0 && (unsigned int)ctx->countdown > 1) {
 		int done = _handle_hdlc_input(ctx,
-		    (const unsigned char *)(long)word4,
+		    word4,
 		    (unsigned short *)(void *)ctx, word8);
 
 		if (done != 0) {
@@ -376,7 +376,7 @@ _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
  * quiescent HALF of `_cHDLCrx_init_from_idle` immediately above: the same
  * `V21RX_CTL`-sourced `req` with the same `V21RXCTL_REINIT` bit forced, the
  * same full-framer-reset `ctl` (`ptr_0000 = 1`, `int_000c = 1`,
- * `short_0010 = 2`, `int_0014 = &req`) sent to the same `ctx->vmi_a`, but
+ * `short_0010 = 2`, `control_req = &req`) sent to the same `ctx->vmi_a`, but
  * WITHOUT the `arg2 == 3` state transition, WITHOUT touching
  * `delayed_status_countdown`, and WITHOUT the debug line -- `dis.py` shows no
  * second argument at all (one push, one `sub $0x48,%esp`, no comparison
@@ -385,20 +385,30 @@ _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
  * through: the object's `%eax` is never touched between the `call` and the
  * final `ret`.  The only other effect is `ctx->countdown = 0` (`+0x1228`,
  * matching `_cHDLCrx_init_from_idle`'s own clear of the same field).
+ *
+ * THE STATEMENT ORDER IS THE OBJECT'S TOO: `ctl` is declared before `req`,
+ * `req` is copied first, `req.flags` is OR'd before the `ctl` copy, and the
+ * four `ctl` fields are written `control_req`, `ptr_0000`, `int_000c`,
+ * `short_0010`.  That combination puts `req` at +0x10 and `ctl` at +0x20 and
+ * reproduces the store sequence; the other orders were measured and differ.
  */
 int
 cHDLCtx_off_init(struct fax_class1 *ctx)
 {
-	struct v21rx_ctl req = V21RX_CTL;
-	struct faxvmi_ctl ctl = FAXVMI_CTL;
+	struct faxvmi_ctl ctl;
+	struct v21rx_ctl req;
 	int ret;
+
+	req = V21RX_CTL;
 
 	req.flags |= V21RXCTL_REINIT;
 
+	ctl = FAXVMI_CTL;
+
+	ctl.control_req = &req;
 	ctl.ptr_0000 = (void *)1;
 	ctl.int_000c = 1;
 	ctl.short_0010 = 2;
-	ctl.int_0014 = (int)(long)&req;
 
 	ret = FAXVMI_control(ctx->vmi_a, &ctl);
 
@@ -420,19 +430,24 @@ cHDLCtx_off_init(struct fax_class1 *ctx)
  * `ctx->status = FAX_CLASS1_OK_NO_CARRIER`, `ctx->state =
  * CLASS1_IDLE_STATE`, `_idle_state_init(ctx)`.  Neither: nothing.
  *
+ * THE TEST IS AN OR, NOT A TERNARY.  The object evaluates the 15 test even
+ * when the bit is clear and the count is <= 2 (0x9ea7d `jbe` lands on the
+ * 0x9eaf0 `cmp $0xf`), which only `(!(bit) && count > 2) || count > 15`
+ * produces; a `? :` on the bit branches straight past it.  Same result for
+ * every value, different instruction sequence.
+ *
  * Tail, unconditional: `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`, `*tx_count
  * = CLASS1_BLOCK_SAMPLES`.
  *
  * FORMAT STRING: 0x12b40 "%2d.%02d[sec] End of off state, COUNTER %d\n"
  */
 int
-cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, int word3,
-	   int word4, int *rx_count, int *tx_count, int word7, int *word8)
+cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, unsigned char *word3,
+	   const unsigned char *word4, int *rx_count, int *tx_count, int *word7, int *word8)
 {
 	short cnt = 0;
 	unsigned short result = (unsigned short)*rx_count;
 	int status;
-	int over;
 
 	(void)word3;
 	(void)word4;
@@ -444,16 +459,14 @@ cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, int word3,
 	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
 				&cnt, &result);
 
-	if (status & FAXVMI_RESULT_BIT_2000)
-		over = ctx->countdown > 15;
-	else
-		over = ctx->countdown > 2;
-
-	if (over) {
-		if (dsplibs_debug_level > 1)
+	if ((!(status & FAXVMI_RESULT_BIT_2000) &&
+	     (unsigned int)ctx->countdown > 2) ||
+	    (unsigned int)ctx->countdown > 15) {
+		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 			    "%2d.%02d[sec] End of off state, COUNTER %d\n",
 			    ctx->clock_sec, ctx->clock_frac, ctx->countdown);
+		}
 		ctx->status = FAX_CLASS1_OK_NO_CARRIER;
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);

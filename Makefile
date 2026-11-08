@@ -97,9 +97,9 @@ MAKEFLAGS  += -j$(J) --output-sync=target
 endif
 BUILD      := build
 
-# 32-bit is forced by the reference object, not by our own code -- the
-# reconstruction is written 64-bit-clean.  `make check64` proves it still
-# compiles for a native target; it just cannot be differential-tested there.
+# The reference object forces 32-bit differential testing. `make check64`
+# checks native compilation; it does not establish runtime pointer safety,
+# native structure layouts or allocation extents.
 ARCH32     := -m32
 CC         := gcc
 CXX        := g++
@@ -421,6 +421,16 @@ $(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
 VPARSER_WEAK := --weaken-symbol=ref_Vparser_read_int \
                 --weaken-symbol=ref_Vparser_read_float
 
+# Observe lifecycle-produced request bytes in t_faxctlrequests. The blob's
+# adapter table and callees share one object, so --wrap cannot interpose them.
+# Only that fixture supplies these strong adapters; each records the request
+# then forwards to the original upper-case control endpoint. Other fixtures
+# retain the blob adapters. No instruction or relocation addend is changed.
+FAX_ADAPTER_WEAK := --weaken-symbol=ref_v17tx_control \
+                    --weaken-symbol=ref_v17rx_control \
+                    --weaken-symbol=ref_v29rx_control \
+                    --weaken-symbol=ref_v27rx_control
+
 # `Makefile` IS A PREREQUISITE, for finding 1387's reason one level up: the
 # weakening above is a recipe flag, not an input file, so an edit to it left a
 # stale reference object with STRONG stubs and the one binary that overrides
@@ -428,7 +438,7 @@ VPARSER_WEAK := --weaken-symbol=ref_Vparser_read_int \
 # 1387's silent class -- but the fix is the same and costs one objcopy.
 $(REF): $(SYMMAP) $(BLOB) tools/refrename.py Makefile
 	objcopy --globalize-symbols=$(GLOBALS) $(BLOB) $(BUILD)/dsplibs_glob.o
-	objcopy --redefine-syms=$(SYMMAP) $(VPARSER_WEAK) \
+	objcopy --redefine-syms=$(SYMMAP) $(VPARSER_WEAK) $(FAX_ADAPTER_WEAK) \
 	        $(BUILD)/dsplibs_glob.o $@
 	@# The blob's linkonce sections carry the SAME names our objects would
 	@# use if built by the period compiler, and linkonce keeps only the
@@ -487,6 +497,33 @@ $(BUILD)/testhost/%.o: $(BUILD)/repro/%.o $(TESTVISIBLE) $(TESTREDEFINE) Makefil
 	objcopy --redefine-syms=$(TESTREDEFINE) $< $@.redef
 	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@
 	rm -f $@.redef
+
+# A D302 lookup can read beyond the named three-short table. Bind only the
+# test-host function's read to the reference memory environment; table exports
+# and fixture table comparisons retain their own ordinary definitions.
+$(BUILD)/testhost/pump/v32/V32dec.o: $(BUILD)/repro/pump/v32/V32dec.o $(BUILD)/repro/pump/v32/v32dec_tables.o $(TESTVISIBLE) $(TESTREDEFINE) tools/testtable_context.py tools/test_table_binding.py Makefile
+	@mkdir -p $(dir $@)
+	objcopy --redefine-syms=$(TESTREDEFINE) $< $@.redef
+	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@.unbound
+	@$(PYTHON) tools/testtable_context.py default $@.unbound $(BUILD)/repro/pump/v32/v32dec_tables.o $@ > $@.binding.json
+	rm -f $@.redef $@.unbound
+
+$(BUILD)/context/d302/source.o $(BUILD)/context/d302/ref.o &: $(BUILD)/testhost/pump/v32/V32dec.o $(REF) tools/testtable_context.py tools/test_table_binding.py
+	@mkdir -p $(BUILD)/context/d302
+	@$(PYTHON) tools/testtable_context.py d302 $(BUILD)/testhost/pump/v32/V32dec.o $(REF) $(BUILD)/context/d302 > $(BUILD)/context/d302/binding.json
+
+# FP_Pow preserves the original seventh read beyond its six-word table.
+# Only test-host lookup operands share the reference memory environment.
+$(BUILD)/testhost/dsp/FP_math.o: $(BUILD)/repro/dsp/FP_math.o $(REF) $(TESTVISIBLE) $(TESTREDEFINE) tools/testtable_context.py tools/test_table_binding.py Makefile
+	@mkdir -p $(dir $@)
+	objcopy --redefine-syms=$(TESTREDEFINE) $< $@.redef
+	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@.unbound
+	@$(PYTHON) tools/testtable_context.py fp-pow $@.unbound $(REF) $@ > $@.binding.json
+	rm -f $@.redef $@.unbound
+
+$(BUILD)/context/fp-pow-seventh/source.o $(BUILD)/context/fp-pow-seventh/ref.o &: $(BUILD)/testhost/dsp/FP_math.o $(REF) tools/testtable_context.py tools/test_table_binding.py
+	@mkdir -p $(BUILD)/context/fp-pow-seventh
+	@$(PYTHON) tools/testtable_context.py fp-pow-seventh $(BUILD)/testhost/dsp/FP_math.o $(REF) $(BUILD)/context/fp-pow-seventh > $(BUILD)/context/fp-pow-seventh/binding.json
 
 # Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
 # -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --
@@ -556,6 +593,16 @@ $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)
 	@$(PYTHON) tools/linkdiverge.py --test $* -- \
 	    $(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
 
+# The synthetic D302 fixture supplies its own backing storage. Keep every
+# other test-host object, replacing exactly V32dec and the reference input.
+$(BUILD)/test/t_v32d302: $(BUILD)/test/unit/t_v32d302.o $(filter-out $(BUILD)/testhost/pump/v32/V32dec.o,$(TESTHOST_OBJ)) $(HARNESS_OBJ) $(BUILD)/context/d302/source.o $(BUILD)/context/d302/ref.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
+
+$(BUILD)/test/t_fp_pow_seventh: $(BUILD)/test/unit/t_fp_pow_seventh.o $(filter-out $(BUILD)/testhost/dsp/FP_math.o,$(TESTHOST_OBJ)) $(HARNESS_OBJ) $(BUILD)/context/fp-pow-seventh/source.o $(BUILD)/context/fp-pow-seventh/ref.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
+
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
@@ -567,6 +614,16 @@ $(BUILD)/test/unit/%.o: test/unit/%.cpp Makefile
 # Safety checks exercise deliberately fixed paths without defining
 # DSPLIB_REPRODUCE_BUGS. Their expected values are source contracts,
 # not differential claims.
+$(BUILD)/safety/t_iir_sections: test/safety/t_iir_sections.c $(BUILD)/src/dsp/fpm_iir.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -o $@ $^
+
+.PHONY: check-iir-sections
+check-iir-sections: $(BUILD)/safety/t_iir_sections
+	@./$(BUILD)/safety/t_iir_sections
+
+safety: check-iir-sections
+
 $(BUILD)/safety/t_alloc_sizes: test/safety/t_alloc_sizes.c $(OBJ) $(SAFETY_HARNESS)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
@@ -638,7 +695,37 @@ $(BUILD)/safety/t_numeric_storage64: test/safety/t_numeric_storage.c $(BUILD)/sa
 $(BUILD)/safety/t_numeric_storage_exact64: test/safety/t_numeric_storage.c $(BUILD)/safety/harness_exact64.o
 	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -Itest/harness -o $@ $^ -lm
 
-safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
+$(BUILD)/safety/t_fax_pointer64: test/safety/t_fax_pointer64.c src/fax/faxvmi.c src/fax/Vmi_v21.c src/fax/faxvmi_null.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_fax_pointer64.c src/fax/faxvmi.c src/fax/Vmi_v21.c src/fax/faxvmi_null.c
+
+$(BUILD)/safety/t_class1_pointer64: test/safety/t_class1_pointer64.c src/fax/class1.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_class1_pointer64.c src/fax/class1.c
+
+.PHONY: safety-class1-pointer64
+safety-class1-pointer64: $(BUILD)/safety/t_class1_pointer64
+	@./$(BUILD)/safety/t_class1_pointer64
+
+.PHONY: safety-fax-pointer64
+safety-fax-pointer64: $(BUILD)/safety/t_fax_pointer64
+	@./$(BUILD)/safety/t_fax_pointer64
+
+# Native runtime component check, separate from syntax-only check64 and period.
+V90_PARAMETERS64_SRC := src/pump/v90/V90PreFilter.cpp \
+ src/pump/v90/V90Parameters.cpp src/pump/v90/V90Phase2Info.cpp \
+ src/pump/v90/V90PreFilterCoeffType1.cpp src/pump/v90/V90PreFilterCoeffType2.cpp \
+ src/pump/v90/V90PreFilterCoeffType3.cpp src/pump/v90/V90PreFilterRefLoops.cpp \
+ src/dsp/FloatFIR.cpp src/core/Vparser.c
+$(BUILD)/safety/t_v90_parameters64: test/safety/t_v90_parameters64.cpp $(V90_PARAMETERS64_SRC) $(wildcard include/dsplib/*.h)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_v90_parameters64.cpp $(V90_PARAMETERS64_SRC) -lm
+
+.PHONY: safety-v90-parameters64
+safety-v90-parameters64: $(BUILD)/safety/t_v90_parameters64
+	@./$(BUILD)/safety/t_v90_parameters64
+
+safety: safety-class1-pointer64 safety-fax-pointer64 firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
         $(BUILD)/safety/t_v34info0carrier \
         $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed \
         $(BUILD)/safety/t_region_float $(BUILD)/safety/t_region_float_exact \
@@ -684,7 +771,7 @@ $(BUILD):
 #
 #
 # Ask make what a variable expands to, rather than having tools grep this
-# file for it.  debugcov.py and mewtsweep.py both did, with a regex for
+# file for it.  debugcov.py did, with a regex for
 # `^TESTS\s*:=(.*)$`, and the moment TESTS became a wildcard expression they
 # got the expression as text and tried to build a target called
 # `$(basename`.  A tool that parses a Makefile is a tool that breaks when the
@@ -916,16 +1003,17 @@ debugcov:
 # The prose half of the same job.  `offsets` holds the compiler to the
 # /* +0xNNN */ annotations; nothing at all held the `finding N` and `DN`
 # citations, and those are renumbered BY HAND every time a merge makes
-# room for two sessions' findings.  Only the dangling check belongs here.
-# The mode that catches the failure that actually happens -- a reference
-# that still resolves, to the wrong entry -- needs a revision to compare
-# against, and the revision that matters is a merge parent:
+# room for two sessions' findings. The default check catches dangling or
+# duplicated references; comparing meaning across a merge needs its parent
+# revisions:
 #
 #     git log --merges -1 --format=%P | tr ' ' '\n' | \
 #         xargs -I{} tools/refcheck.py --since {}
 # Mutation suites and anchor/snapshot maintenance are deprecated. This target
-# validates citations only; source recovery is gated by period differential.
+# validates citations and fixture bindings; source recovery is gated by period differential.
 refs:
+	@$(PYTHON) -m unittest discover -s test/safety -p test_table_binding.py -v
+#
 	@$(PYTHON) tools/ci/test_refcheck.py
 	@$(PYTHON) tools/refcheck.py
 
@@ -1070,14 +1158,22 @@ COVCOUNTS  := build-cov/measured.txt
 # but are portability/analysis tiers and deliberately opt-in.  See F11201.
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest period-selection-selftest \
-               dis-selftest period-compile-selftest
+               dis-selftest period-compile-selftest diffvector-selftest
 
-PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov
+PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov native-layout-checks
+
+.PHONY: native-layout-checks
+native-layout-checks: safety-v90-parameters64 fax-native safety-cid-owner64 \
+                      safety-fax-pointer64 safety-class1-pointer64
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
 	@echo
 	@echo "phase boundary: period differential and structural checks all OK"
+
+.PHONY: diffvector-selftest
+diffvector-selftest:
+	@$(PYTHON) -m unittest discover -s test/safety -p test_diffvector.py -v
 
 .PHONY: dis-selftest
 dis-selftest:
@@ -1220,7 +1316,18 @@ check64:
 	  && $(CXX) $(SYNCXXFLAGS) -fsyntax-only $(CXXSRC) \
 	  && $(CC) $(SYNCFLAGS) $(REPRODUCE) -fsyntax-only $(SRC) \
 	  && $(CXX) $(SYNCXXFLAGS) $(REPRODUCE) -fsyntax-only $(CXXSRC) \
-	  && echo "64-bit clean, both configurations: OK"
+	  && echo "64-bit syntax check, both configurations: OK"
+
+# Native Caller ID owner-allocation boundary.
+$(BUILD)/safety/t_cid_owner64: test/safety/t_cid_owner64.c src/service/cidcore/cid.c $(wildcard include/dsplib/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ test/safety/t_cid_owner64.c src/service/cidcore/cid.c
+
+.PHONY: safety-cid-owner64
+safety-cid-owner64: $(BUILD)/safety/t_cid_owner64
+	@./$(BUILD)/safety/t_cid_owner64
+
+safety: safety-cid-owner64
 
 # Regenerate the analysis documents from the blob.
 # Two numbers, both from symbol tables rather than from grepping source:
@@ -1310,8 +1417,9 @@ period: $(REF)
 # was standing in for.  The guard STAYS: it still catches the directory being
 # read by something that did not come through make.
 #
-.PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
-	partial-compare partial-compare-exact partial-compare-selftest castscan castscan-selftest \
+.PHONY: tc tc-repro byteident byteident-ratchet similarity structsim contentgap partial-link \
+	partial-compare partial-compare-exact partial-compare-selftest placement-ledger \
+	placement-ledger-selftest castscan castscan-selftest \
 	offsetcensus offsetcensus-selftest \
 	bbalign bbalign-selftest
 tc:
@@ -1325,14 +1433,72 @@ tc-repro:
 		TC_OUT='$(abspath $(BUILD)/tc_repro)' \
 		TC_EXTRA='-DDSPLIB_REPRODUCE_BUGS'
 
-byteident: tc
+# The census resolves an UNDEFINED private-frame callee through the
+# recovered-order partial link, so that artifact is part of this target.  It
+# never resolves a callee DEFINED in the per-TU object, and a tree without the
+# link keeps the older refusal (the grade stays UNRESOLVED) rather than
+# borrowing a body from the blob.
+byteident: tc partial-link
 	@$(PYTHON) tools/toolchain/byteident.py
 
-byteident-ratchet: tc
+byteident-ratchet: tc partial-link
 	@$(PYTHON) tools/toolchain/byteident.py --ratchet
 
 similarity: tc
 	@$(PYTHON) tools/toolchain/compare.py --ratchet
+
+#
+# STRUCTURAL SIMILARITY, as a MEASURE and not a grade.  `byteident` answers
+# exact-or-not and its grade 1 rejects any length difference, so a function
+# two instructions out and one that shares nothing both read the same.
+# `structsim` reports the longest common contiguous run and the LCS between
+# the object's copy and ours, registers canonicalised and per-TU section
+# addends masked.  A pure renaming scores 100% (measured on v8_fsktxfilter,
+# grade 1, and v8_fskmodulate, grade 0), so it measures SHAPE.
+#
+# NOT a gate and NOT a ratchet: LCS falls when the compiler schedules
+# independent statements differently, and a whole-tree score invites
+# hill-climbing a number -- the fit-versus-recovery rule declines that.
+# `make structsim S=SYMBOL` is the single-symbol form; `--worst N` ranks the
+# least structurally right symbols first (about 34 s on 8 cores, because it
+# objdumps each symbol on each side).
+#
+structsim: tc
+	@$(PYTHON) tools/toolchain/structsim.py $(S)
+
+# `contentgap` answers a different question from `structsim`: does a size gap
+# mean MISSING CODE or a different ARRANGEMENT?  It aligns the two instruction
+# lists and reports the multiset surplus at three levels -- mnemonic only,
+# operands masked, operands kept.  A structure-level ZERO proves arrangement
+# (nothing is missing at that granularity); a surplus is a question, because
+# GCC substitutes `lea` for `add` and `xor` for `mov $0` without any source
+# difference.  Not a gate: use `S=SYMBOL`, or `--worst 40` to rank the tree.
+contentgap: tc
+	@$(PYTHON) tools/toolchain/contentgap.py $(S)
+
+# `inlineedges` screens CALL-EDGE differences that can mean an inline boundary
+# moved.  GCC 3.4.2 decides inlining from a frontend cost estimate (~100
+# instructions), not from a lexeme, so a body-identical spelling can move a
+# call out of line (#333 recovered V92ConvolutionEncoder::process this way).
+# The screen diffs each symbol's direct-call and tail-jump multisets against
+# the object and prints only rows whose differing target is itself grade-0
+# EXACT.  A row is a LEAD, not a verdict: the same edge can differ because the
+# object inlined a helper this tree keeps out of line, because the two files
+# were one input file in the object, or because a statement is missing.
+inlineedges: tc
+	@$(PYTHON) tools/toolchain/byteident.py --list-exact > $(BUILD)/inlineedges-exact.txt
+	@$(PYTHON) tools/toolchain/inlineedges.py --exact-list $(BUILD)/inlineedges-exact.txt $(S)
+
+# `widthaudit` reports every memory access whose WIDTH or EXTENSION disagrees
+# with the object, keyed by owning base and displacement.  A store-width
+# disagreement is a field or local type fact; a load-extension disagreement is
+# a signedness fact when the value is live (`extcheck.py` decides that).  Two
+# classes are suppressed because they carry no type information: a `movzwl`
+# immediately re-sign-extended, and `%esp` slots.  `EXACT_LIST=... --exact-only`
+# is the calibration check (2 of 1,118 EXACT symbols at fc174e5fc, both
+# displacement collisions).  Triage aid, never a gate.
+widthaudit: tc
+	@$(PYTHON) tools/toolchain/widthaudit.py $(S)
 
 # Cast audit: explicit numeric casts the context already performs (issue #69,
 # finding F11353).  clang is analysis apparatus, not a reconstruction
@@ -1379,8 +1545,18 @@ partial-compare-exact: partial-link
 		$(BUILD)/partial/dsplibs.o --require-exact --require-raw-exact
 
 partial-compare-selftest:
+	@$(PYTHON) tools/toolchain/test_framefree.py
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
 	@$(PYTHON) tools/toolchain/recoverorder.py --self-test
+
+# Causal placement ledger: why each linked function moved, one owner category
+# per delta step.  Reads the artifacts partial-link writes; refuses a missing
+# or empty one rather than printing a clean zero.
+placement-ledger: partial-link
+	@$(PYTHON) tools/toolchain/placementledger.py $(S)
+
+placement-ledger-selftest:
+	@$(PYTHON) tools/toolchain/placementledger.py --self-test
 
 tumap-selftest:
 	@$(PYTHON) tools/tumap.py $(BLOB) --self-test
@@ -1434,3 +1610,21 @@ clean:
 ifneq ($(if $(MAKECMDGOALS),$(filter-out print-%,$(MAKECMDGOALS)),default),)
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
 endif
+
+# Native fax RX component lifecycle, using the actual modem and DSP endpoints.
+# Separate from the period differential and syntax-only check64 tiers.
+FAX_NATIVE_DIR := $(BUILD)/fax-native
+FAX_NATIVE_FLAGS := -g -O1 -ffunction-sections -fdata-sections -fsanitize=address,undefined -Iinclude -Itest/harness
+FAX_NATIVE_SRC := $(wildcard src/fax/*.c src/dsp/*.c)
+FAX_NATIVE_OBJ := $(patsubst %.c,$(FAX_NATIVE_DIR)/%.o,$(FAX_NATIVE_SRC))
+FAX_NATIVE_APP := $(FAX_NATIVE_DIR)/test/safety/t_fax_rx_native.o $(FAX_NATIVE_DIR)/test/harness/runtime.o $(FAX_NATIVE_DIR)/test/harness/harness.o
+.PHONY: fax-native
+fax-native: $(FAX_NATIVE_DIR)/t_fax_rx_native
+	UBSAN_OPTIONS=halt_on_error=1 $<
+$(FAX_NATIVE_DIR)/%.o: %.c $(shell find include -name '*.h') Makefile
+	@mkdir -p $(dir $@)
+	$(CC) $(FAX_NATIVE_FLAGS) -c $< -o $@
+$(FAX_NATIVE_DIR)/libfax.a: $(FAX_NATIVE_OBJ)
+	$(AR) rcs $@ $^
+$(FAX_NATIVE_DIR)/t_fax_rx_native: $(FAX_NATIVE_APP) $(FAX_NATIVE_DIR)/libfax.a
+	$(CC) -fsanitize=address,undefined -Wl,--gc-sections -o $@ $^ -lm

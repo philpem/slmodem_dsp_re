@@ -116,11 +116,14 @@ struct v32fp_params {
 	 * +0x11 -- is patched from the caller's configuration by
 	 * `V32FP_create` and is the only part of it that function touches.
 	 *
-	 * One `unsigned int` and not bitfields: the object's accesses are
-	 * `movzbl`/`andb` against immediates, which is what CLAUDE.md's
-	 * measurement says a bitfield would move away from.
+	 * Keep the full-word view for existing masks and a byte view for the
+	 * constructor's update at +0x11.  These measured access widths do not
+	 * uniquely establish the original C declaration.
 	 */
-	unsigned int options;	/* +0x10 template 0x68b                      */
+	union {
+		unsigned int options;	/* +0x10 template 0x68b */
+		unsigned char options_bytes[4];
+	};
 	/*
 	 * +0x14.  v32fpctl.h's V32_OBJ_EC_NEAR_DELAY: `SetAdaptEcV32` mode 0
 	 * copies it into `fpm_ecc::near_delay`.  `V32FP_create` patches it

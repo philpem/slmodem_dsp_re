@@ -19,6 +19,7 @@
  */
 
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "dsplib/V90Jd.h"
 #include "dsplib/V90Parameters.h"	/* the constructor's five fields */
@@ -684,7 +685,7 @@ V90Jd::unPackData(int bit)
 		for (i = 0; i <= 15; i++) {
 			int d = crc[i] - bits[32 + i];
 
-			sum += d < 0 ? -d : d;
+			sum += abs(d);
 		}
 		if (sum != 0) {
 			unPackReset();

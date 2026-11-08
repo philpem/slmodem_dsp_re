@@ -262,7 +262,7 @@ struct v34_ratecfg {
 	 */
 	short preemp;			/* +0x06                         */
 	short depth;			/* +0x08 trellis, initV34's arg  */
-	short use_max;			/* +0x0a picks MMaxTable         */
+	unsigned short use_max;		/* +0x0a picks MMaxTable         */
 	const short *divtab;		/* +0x0c the divisor table       */
 	short carrier;			/* +0x10 transmit carrier, Hz    */
 	short rx_baud;			/* +0x12 receive symbol rate     */
@@ -284,7 +284,7 @@ struct v34_ratecfg {
 	short pe_3000;			/* +0x1c                         */
 	short pe_3200;			/* +0x1e                         */
 	short pe_3429;			/* +0x20                         */
-	short rx_use_max;		/* +0x22                         */
+	unsigned short rx_use_max;	/* +0x22                         */
 	/*
 	 * The receive carrier: the field `VPcmV34GetCurrentRxCarrier`
 	 * returns, and the receive half of the same tx/rx pairing every
@@ -323,6 +323,134 @@ typedef char v34ratecfg_size[
 struct v34_engine_control {
 #include "dsplib/v34_engine_control_fields.h"
 };
+
+/*
+ * ---------------------------------------------------------------------------
+ * The TRANSMIT BLOCK, +0x221c .. +0x2a54, as one type.
+ *
+ * WHY IT IS A TYPE AND NOT A FLAT RUN OF FIELDS.  `v34handshak` computes ONE
+ * base at 0x62920 (`add $0x221c,%eax`) and stores it in its frame at
+ * 0x4c(%esp), then reaches EVERY transmit scalar through that base with a
+ * displacement: `+0x3a4` (seg_symcount, six uses), `+0x3a6` (tx_flags,
+ * sixteen), `+0x3aa`/`+0x3ac` (the quadrants), `+0x3b0` (tx_scr_sr),
+ * `+0x3b4` (txpoint), `+0x3b8` (tx_scale), `+0x3bc`/`+0x3be` -- measured over
+ * the whole function, and not one use outside 0x3a4..0x3be.  A base at
+ * +0x221c addressing +0x3be is 958 bytes, which no `struct v34_queue *`
+ * covers, so the original's pointer had a type spanning the queue, its ring
+ * tail AND those scalars.  This is that type.
+ *
+ * The same base appears in the standalone functions the object kept: the
+ * handshake-entry pair `V34XF_IndicateDilReceived`/`V34XF_IndicateJdReceived`
+ * do `lea 0x221c(%obj)` and then `mov %si,0x3a4(...)` -- seg_symcount -- and
+ * `txmitquadbit` reaches tx_flags and the quadrants through it.  Those were
+ * recorded as "lea-base, cause not established"; this is the cause.
+ *
+ * `txq` is a `struct v34_queue` and is 0x10 bytes in a container (its
+ * `ring[1]` member sits at +0x0c and the last four bytes of the struct are
+ * the first ring entry's tail padding), so the tail starts at +0x010 and the
+ * 230-entry ring runs exactly to +0x3a4 = V34_TXQ_END.
+ *
+ * The trailing unmapped run is inside the type rather than after it so that
+ * the member's extent is the object's: `scrambler` follows at +0x2a54.
+ */
+struct v34_tx {
+	struct v34_queue txq;			/* +0x000 count, rd, wr, ring[0] */
+	int ring_tail[V34_TXQ_RING - 1];	/* +0x010 .. +0x3a4 = TXQ_END  */
+	short seg_symcount;			/* +0x3a4                      */
+	short tx_flags;				/* +0x3a6                      */
+	unsigned char unmapped_3a8[0x3aa - 0x3a8];
+	short prev_quadrant;			/* +0x3aa                      */
+	short cur_quadrant;			/* +0x3ac                      */
+	unsigned char unmapped_3ae[0x3b0 - 0x3ae];
+	int tx_scr_sr;				/* +0x3b0                      */
+	union {
+		int word;			/* +0x3b4 both at once         */
+		short c[2];			/* [0] real, [1] imag          */
+	} txpoint;
+	short tx_scale;				/* +0x3b8                      */
+	unsigned char unmapped_3ba[0x3c0 - 0x3ba];
+	short tx_pwr_reduction;			/* +0x3c0                      */
+	unsigned char unmapped_3c2[0x838 - 0x3c2];	/* to +0x2a54 */
+};
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34tx_off_ring_tail[
+	((int)__builtin_offsetof(struct v34_tx, ring_tail) == 0x010) ? 1 : -1];
+typedef char v34tx_off_seg_symcount[
+	((int)__builtin_offsetof(struct v34_tx, seg_symcount) == 0x3a4) ? 1 : -1];
+typedef char v34tx_off_tx_flags[
+	((int)__builtin_offsetof(struct v34_tx, tx_flags) == 0x3a6) ? 1 : -1];
+typedef char v34tx_off_prev_quadrant[
+	((int)__builtin_offsetof(struct v34_tx, prev_quadrant) == 0x3aa) ? 1 : -1];
+typedef char v34tx_off_cur_quadrant[
+	((int)__builtin_offsetof(struct v34_tx, cur_quadrant) == 0x3ac) ? 1 : -1];
+typedef char v34tx_off_tx_scr_sr[
+	((int)__builtin_offsetof(struct v34_tx, tx_scr_sr) == 0x3b0) ? 1 : -1];
+typedef char v34tx_off_txpoint[
+	((int)__builtin_offsetof(struct v34_tx, txpoint) == 0x3b4) ? 1 : -1];
+typedef char v34tx_off_tx_scale[
+	((int)__builtin_offsetof(struct v34_tx, tx_scale) == 0x3b8) ? 1 : -1];
+typedef char v34tx_off_tx_pwr_reduction[
+	((int)__builtin_offsetof(struct v34_tx, tx_pwr_reduction) == 0x3c0)
+		? 1 : -1];
+typedef char v34tx_size[(sizeof(struct v34_tx) == 0x838) ? 1 : -1];
+#endif
+
+/*
+ * The engine-level view of `struct v34_object`, +0x0004 .. +0x250.
+ *
+ * THIRTY-NINE functions in the object form a base at `obj+4` on entry
+ * (`add $0x4,%r` or `lea 0x4(%r),%r` within their first fourteen
+ * instructions) and then reach members at displacements four less than
+ * their absolute offsets: 0x248 x30, 0x220 x14, 0x24c x12, 0x21c x11,
+ * 0x234 x6, 0x218 x5, 0x230 x4, 0x250 x4, 0x244 x4, and more.  Adding
+ * four back lands on `v90_receiver` (+0x24c), `k56flex_receiver`
+ * (+0x250), `hs_mode` (+0x218), `ptc` (+0x8) and the rest, so the
+ * original declared the outer type as `{ int status; struct <body> body; }`
+ * with the body starting at `progress`.  This is that body, as far as the
+ * evidence reaches; the flat members of `struct v34_object` stay where
+ * they are because the DSP core reads the same words directly (see
+ * `V34demodulate`, `receiver`, `datapumpv34`).
+ */
+struct v34_engine {
+	int progress;				/* +0x000 */
+	int ptc;				/* +0x004 */
+	unsigned char unmapped_008[0x21c - 0x008];
+	int rate_min;				/* +0x21c */
+	int rate_max;				/* +0x220 */
+	int rate_now;				/* +0x224 (object +0x228) */
+	int rate_want;				/* +0x228 */
+	int rx_energy_floor;			/* +0x22c */
+	int low_energy_count;			/* +0x230 */
+	int sample_count;			/* +0x234 */
+	int timeout_deadline;			/* +0x238 */
+	unsigned char unmapped_23c[0x240 - 0x23c];
+	int int_0244;				/* +0x240 (object +0x244) */
+	int int_0248;				/* +0x244 (object +0x248) */
+	int v90_receiver;			/* +0x248 */
+	int k56flex_receiver;			/* +0x24c */
+};
+
+#define V34_ENGINE_ASSERT(field, off) \
+	typedef char v34_engine_##field[(__builtin_offsetof(struct v34_engine, field) == (off)) ? 1 : -1]
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+V34_ENGINE_ASSERT(progress,          0x000);
+V34_ENGINE_ASSERT(ptc,               0x004);
+V34_ENGINE_ASSERT(rate_min,          0x21c);
+V34_ENGINE_ASSERT(rate_max,          0x220);
+V34_ENGINE_ASSERT(rate_now,          0x224);
+V34_ENGINE_ASSERT(rate_want,         0x228);
+V34_ENGINE_ASSERT(rx_energy_floor,   0x22c);
+V34_ENGINE_ASSERT(low_energy_count,  0x230);
+V34_ENGINE_ASSERT(sample_count,      0x234);
+V34_ENGINE_ASSERT(timeout_deadline,  0x238);
+V34_ENGINE_ASSERT(int_0244,          0x240);
+V34_ENGINE_ASSERT(int_0248,          0x244);
+V34_ENGINE_ASSERT(v90_receiver,      0x248);
+V34_ENGINE_ASSERT(k56flex_receiver,  0x24c);
+typedef char v34_engine_size[(sizeof(struct v34_engine) == 0x250) ? 1 : -1];
+#endif
+#undef V34_ENGINE_ASSERT
 
 struct v34_object {
 	/*
@@ -405,8 +533,9 @@ struct v34_object {
 		struct {
 #include "dsplib/v34_tx_control_fields.h"
 		};
+		/* The wider transmit view is used by the dispatcher and shell. */
+		struct v34_tx tx;
 	};
-	unsigned char unmapped_25e0[0x2a54 - 0x25e0];
 	/* The scrambler's shift register; see `struct v34_scrambler`. */
 	struct v34_scrambler scrambler;			/* +0x2a54 */
 	/*

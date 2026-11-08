@@ -1145,7 +1145,7 @@ loop_order_cases(void)
 			/* First mapper entry is its documented fresh-vector boundary;
 			 * eight genuine calls return it there for the tested step. */
 			o->vect_idx = 8;
-			o->tx_flags = 0;
+			o->tx.tx_flags = 0;
 			for (n = 0; n < 8; n++) {
 				if (ref)
 					ref_modulatevector(o);
@@ -1156,7 +1156,7 @@ loop_order_cases(void)
 				    o->vect_idx, 8, tag + side * 1000);
 			diff_eq_int("unlatched receive history delays tx training",
 				    o->train_symcount, 0, tag + side * 1000);
-			o->tx_fill_target = (short)(o->txq.count + 4);
+			o->tx_fill_target = (short)(o->tx.txq.count + 4);
 			o->receiver.rxq.count = 8;
 			o->receiver.rx_blocks = 0x333;
 			o->receiver.rtncount = 0;

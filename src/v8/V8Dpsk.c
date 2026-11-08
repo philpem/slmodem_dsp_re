@@ -232,15 +232,18 @@ short
 v8_fsktxfilter(struct v8 *v, short sample)
 {
 	int acc = 0x8000;
-	int i;
+	short *src = &v->rx_scratch[V8_FSK_TAP_TOP];
+	short *dst = &v->rx_scratch[V8_FSK_TAP_TOP + 1];
+	const short *tap = v->v21_taps;
+	short k;
 
 	v->rx_scratch[0] = sample;
 
-	for (i = 0; i < V8_V21_TAPS; i++) {
-		short x = v->rx_scratch[V8_FSK_TAP_TOP - i];
+	for (k = 0; k <= V8_FSK_TAP_TOP; k++) {
+		unsigned short x = *src--;
 
-		v->rx_scratch[V8_FSK_TAP_TOP + 1 - i] = x;
-		acc += x * v->v21_taps[i];
+		acc += (short)x * *tap++;
+		*dst-- = x;
 	}
 
 	return (short)(acc >> 16);

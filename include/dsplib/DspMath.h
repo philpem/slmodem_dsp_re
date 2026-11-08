@@ -282,7 +282,8 @@ DSPMATH_STEP void hanning(T *w, unsigned n)
 		long double inv = 1.0L / (long double)(unsigned long long)(n + 1u);
 		unsigned i;
 
-		for (i = 1; i <= n; i++) {
+		i = 1;
+		do {
 			long double x = (long double)(unsigned long long)i;
 			long double c;
 
@@ -301,7 +302,7 @@ DSPMATH_STEP void hanning(T *w, unsigned n)
 
 			/* .rodata.cst4+0x1dc is 0.5f, a FLOAT here. */
 			w[i - 1] = (T)((1.0L - c) * (long double)0.5f);
-		}
+		} while (i++ < n);
 	}
 }
 

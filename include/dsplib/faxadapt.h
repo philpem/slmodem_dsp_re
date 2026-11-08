@@ -29,7 +29,7 @@
  *                          always; V.21/V.27/V.29 leave it 0)
  *   +0x0e `pack_width`     the TX side's bits-per-symbol, by rate
  *   +0x10 `unpack_width`   the RX side's bits-per-symbol, by rate
- *   +0x14 `int_0014`       the wrapped vxx handle: read as the "existing
+ *   +0x14 `modem`       the wrapped vxx handle: read as the "existing
  *                          instance" argument to V??_create (0 on a fresh
  *                          `dp`) and overwritten with what it returns
  *
@@ -40,14 +40,7 @@
  * names already predict (evidence class 2, a struct whose own header types
  * the site).
  *
- * `int_0014` is cast through `long`, not directly, because `faxvmi.h` (a
- * different file, another strand of this wave) spells the field `int` and
- * this file does not rename it -- CLAUDE.md's "one type, one home" cuts the
- * other way here: the type is somebody else's live modelling and not this
- * file's to correct. `(void *)(long)` avoids a `-Wint-to-pointer-cast`
- * warning under `make check64` at the cost of being exactly as lossy on a
- * 64-bit build as the field it reads -- a pre-existing property of
- * `int_0014`'s own type, not something introduced here.
+ * `modem` is pointer typed in faxvmi.h; adapters pass it unchanged.
  *
  * Status, address order (F9271's map): all 40 non-message symbols are now
  * written. The last three -- `v17tx_control`, `v29tx_control`,
@@ -93,8 +86,8 @@ struct v29rx_control_req;
  *
  * Every `*_create` copies `*cfg` (or the modulation's own default table when
  * `cfg` is NULL) into a local, calls the matching `V??[TR]X_create` with
- * `dp->int_0014` as the "existing instance" handle, stores the result back
- * into `dp->int_0014`, and sets `dp->pack_count`/`pack_width`/`unpack_width`
+ * `dp->modem` as the "existing instance" handle, stores the result back
+ * into `dp->modem`, and sets `dp->pack_count`/`pack_width`/`unpack_width`
  * from the local's bit rate. TX writes `pack_count`/`pack_width` and zeroes
  * `unpack_width`; RX writes `unpack_width` and zeroes `pack_width` (and
  * `pack_count`). Where a modulation has more than one rate, the width (and,
@@ -182,7 +175,7 @@ void v29rx_create(struct faxvmi_link *dp, const struct v29rx_cfg *cfg);
 /*
  * ---- delete ---------------------------------------------------------------
  *
- * Every `*_delete` is `V??_delete(dp->int_0014)`, tail-called in the object.
+ * Every `*_delete` is `V??_delete(dp->modem)`, tail-called in the object.
  */
 
 /** @brief Tear down a V.17 transmit adapter. @param dp  The link handle. */
@@ -205,7 +198,7 @@ void v29rx_delete(struct faxvmi_link *dp);
 /*
  * ---- status -----------------------------------------------------------
  *
- * Every `*_status` is `V??_status(dp->int_0014, status)`, tail-called.
+ * Every `*_status` is `V??_status(dp->modem, status)`, tail-called.
  */
 
 /** @brief Report V.17 transmit status.
@@ -261,7 +254,7 @@ int v29rx_status(struct faxvmi_link *dp, void *status);
  * ---- process: drive one block through `V??_modem` and relay the count ----
  *
  * The TX and RX shapes are mirrored, not the same shape twice. Both read
- * `dp->int_0014` as the handle and both zero a caller `count` after copying
+ * `dp->modem` as the handle and both zero a caller `count` after copying
  * it to a caller `result`, but which formal is `in`/`out` and which pair is
  * (result, count) vs (count, result) differs by side -- read directly off
  * `dis.py`, not assumed:
@@ -351,7 +344,7 @@ int v29rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
 
 /*
- * ---- control: `V??_control(dp->int_0014, arg)`, tail-called --------------
+ * ---- control: `V??_control(dp->modem, arg)`, tail-called --------------
  *
  * All twelve are now written -- `v17tx_control`/`v29tx_control`/
  * `v29rx_control` (F10107) were the last three, unblocked by

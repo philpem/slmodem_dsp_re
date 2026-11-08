@@ -311,10 +311,10 @@ sysdep_strcat(char *dst, const char *src)
 	return strcat(dst, src);
 }
 
-unsigned
+size_t
 sysdep_strlen(const char *s)
 {
-	return (unsigned)strlen(s);
+	return strlen(s);
 }
 
 int

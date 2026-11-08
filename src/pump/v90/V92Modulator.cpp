@@ -1032,21 +1032,21 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 	symbolCount += n;
 
 	want = queuePrime - queue->count() + n;
+	blockRemaining = want;
 
 	switch (phase) {
 	case V92MOD_PHASE_RESET:
 		blockRemaining = n;
-		for (i = 0; i < blockRemaining; i++)
+		for (i = 0; i < n; i++)
 			buf_7c[i] = 0;
 		nbits = 0;
 		break;
 
 	case V92MOD_PHASE_3:
-		blockRemaining = want;
 		for (i = 0; i < blockRemaining; i++) {
 			if (phase == V92MOD_PHASE_3) {
-				buf_7c[i] = (short)
-				    phase3Modulator->generateSymbol();
+				int sym = phase3Modulator->generateSymbol();
+				buf_7c[i] = (short)sym;
 				if (phase3Modulator->eventCode != 0) {
 					eventCode = phase3Modulator->eventCode;
 					/* entering SuSecond */
@@ -1069,8 +1069,8 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 						    "V92Modulator progress: " "Enter phase4\r\n");
 				}
 			} else {
-				buf_7c[i] = (short)
-				    phase4Modulator->generateSymbol();
+				int sym = phase4Modulator->generateSymbol();
+				buf_7c[i] = (short)sym;
 				if (phase4Modulator->eventCode != 0)
 					eventCode = phase4Modulator->eventCode;
 			}
@@ -1079,10 +1079,9 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 		break;
 
 	case V92MOD_PHASE_4:
-		blockRemaining = want;
 		for (i = 0; i < blockRemaining; i++) {
-			buf_7c[i] = (short)
-			    phase4Modulator->generateSymbol();
+			int sym = phase4Modulator->generateSymbol();
+			buf_7c[i] = (short)sym;
 			if (phase4Modulator->eventCode != 0)
 				eventCode = phase4Modulator->eventCode;
 		}
@@ -1095,13 +1094,11 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 		break;
 
 	case V92MOD_PHASE_DATA:
-		blockRemaining = want;
 		scrambler.process(bits, buf_88, nbits);
 		bitsToSymbol->process(buf_88, nbits, buf_7c);
 		break;
 
 	default:
-		blockRemaining = want;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V92Modulator progress: Illegal state\r\n");
@@ -1114,8 +1111,10 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 	resampler->setTimingOffset(float_28);
 	mkResampledSignal(nOut);
 
-	if (params->V92_APPLY_TX_SHAPING_FILTER)
-		txFilter->process(resampleOut, resampleOut, nOut);
+	if (params->V92_APPLY_TX_SHAPING_FILTER) {
+		float *shape = resampleOut;
+		txFilter->process(shape, shape, nOut);
+	}
 
 	queue->write(resampleOut, nOut);
 	queue->read(out, nSamples);

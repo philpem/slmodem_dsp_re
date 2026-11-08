@@ -684,7 +684,8 @@ template <class T, class I>
 Descrambler<T, I>::Descrambler(unsigned int a, unsigned int b, unsigned int c)
 {
 	tailLength = b;
-	pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+	unsigned int count = b + c + 1;
+	pLimit = (T *)sysdep_malloc(count * sizeof(T));
 	pInitOut = pLimit + c;
 	pInitTap1 = pInitOut + a;
 	pInitTap2 = pInitOut + b;

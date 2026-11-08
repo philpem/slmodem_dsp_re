@@ -883,7 +883,7 @@ probe_power_input_alias(void)
 				pb = (const short *)(ob + 0xa9dc);
 			} else if (mode == 2) {
 				poke_short(0x25dc, a);
-				pa = &oa.tx_pwr_reduction;
+				pa = &oa.tx.tx_pwr_reduction;
 				pb = (const short *)(ob + 0x25dc);
 			}
 			settxlevel(&oa, pa);
@@ -3660,15 +3660,15 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.tx_scale = ob.tx_scale = 0x4000;
-			oa.tx_flags = ob.tx_flags =
+			oa.tx.tx_scale = ob.tx.tx_scale = 0x4000;
+			oa.tx.tx_flags = ob.tx.tx_flags =
 				(short)((gate ? 0x200 : 0) | (gpc ? 1 : 0));
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
 			/* A scrambler state that is not all zeroes. */
-			oa.tx_scr_sr = ob.tx_scr_sr = 0x2f6b3d51;
-			oa.prev_quadrant = ob.prev_quadrant = 2;
+			oa.tx.tx_scr_sr = ob.tx.tx_scr_sr = 0x2f6b3d51;
+			oa.tx.prev_quadrant = ob.tx.prev_quadrant = 2;
 
 			for (it = 0; it < 40; it++) {
 				short b = bits[it % 10];

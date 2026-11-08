@@ -33,6 +33,15 @@ static const short c2100[8] = {
 	     0,      0,      0,      0,  -6608,  15416,  -5792,  15416
 };
 
+/* Keep the mask operation byte-sized before promoting its result.  The
+ * period compiler inlines this contract to an immediate byte TEST, which
+ * is how the object tests bit 7 of the call-menu bytes. */
+static int
+v8_seq_flag_test(unsigned char value, unsigned char mask)
+{
+	return value & mask;
+}
+
 /* The two configured timeouts are in units of a quarter of a 9600 Hz second. */
 static int
 deadline(int units)
@@ -56,12 +65,12 @@ ext_expected(unsigned char c)
  * character advances but the received word does not, so a repeated word
  * still lines up; once something has matched, the first mismatch ends it.
  *
- * `*matched` is the "something has matched" flag, and it belongs to the
- * caller because the two callers give it different lifetimes: the first
- * keeps it in `fn_matched` and clears it before every marker word, the
- * second in a local that is set up once and then carries across markers --
- * so once anything has matched there, a later marker whose very first
- * character is wrong is abandoned instead of scanned through.
+ * `*matched` belongs to the second-extension caller, which initializes
+ * its private local once before scanning marker words. The state
+ * therefore carries across markers rather than resetting on entry to
+ * this helper. After any match, a later marker whose first character
+ * is wrong is abandoned instead of being scanned through. The first
+ * extension uses its separate WORD field state directly in the caller.
  */
 static int
 match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep,
@@ -182,7 +191,7 @@ initTxSequence(struct v8 *v)
 		seq->word[n++] = V8_SEQ_FN_DEFAULT;
 	} else if (cm->b2 & 0x01) {
 		seq->word[n++] = V8_SEQ_FN_B0;
-	} else if (cm->b1 & 0x80) {
+	} else if (v8_seq_flag_test(cm->b1, 0x80)) {
 		seq->word[n++] = V8_SEQ_FN_B1_80;
 	} else if (cm->b2 & 0x02) {
 		seq->word[n++] = V8_SEQ_FN_B2;
@@ -231,7 +240,14 @@ initTxSequence(struct v8 *v)
 	 * flag bytes, which is the same as testing bit 3 of b0 and bit 3
 	 * of b2.
 	 */
+	seq = v->tx_seq;
+	cm = v->cm;
+
+#ifdef DSPLIB_REPRODUCE_BUGS
+	if ((*(const unsigned int *)cm & 0x80008) == 0)
+#else
 	if ((cm->b0 & 0x08) == 0 && (cm->b2 & 0x08) == 0)
+#endif
 		seq->word[n++] = V8_SEQ_TAIL_A;
 
 	seq->word[n] = V8_SEQ_TAIL_B;
@@ -272,7 +288,6 @@ void
 rebuildJMSequence(struct v8 *v)
 {
 	struct v8_tx_sequence *jm = v->tx_seq;
-	struct v8_tx_sequence *rx = &v->seq[0];
 	struct v8_cm *cm = v->cm;
 	int n = 2;
 	int base;
@@ -287,8 +302,8 @@ rebuildJMSequence(struct v8 *v)
 	jm->word[1] = V8_SEQ_PREAMBLE_1;
 
 	/* Find the call function in what arrived, and try to accept it. */
-	for (i = 0; i < (short)rx->wordidx; i++) {
-		unsigned short w = (unsigned short)rx->word[i];
+	for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+		unsigned short w = (unsigned short)v->seq[0].word[i];
 		int accept = 0;
 
 		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
@@ -304,7 +319,7 @@ rebuildJMSequence(struct v8 *v)
 
 			while (cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
 				unsigned short got =
-					(unsigned short)rx->word[i];
+					(unsigned short)v->seq[0].word[i];
 
 				if (got == (unsigned short)
 					   ext_expected(cm->ext1[k])) {
@@ -341,7 +356,7 @@ rebuildJMSequence(struct v8 *v)
 				dsplibs_debug_printf(
 				    "V8: call function FAX TX from caller " "indication...\r\n");
 			accept = 1;
-		} else if (w == 0x10b && (cm->b1 & 0x80)) {
+		} else if (w == 0x10b && v8_seq_flag_test(cm->b1, 0x80)) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V8: call function FAX RX to caller " "indication...\r\n");
@@ -352,7 +367,7 @@ rebuildJMSequence(struct v8 *v)
 			accept = 1;
 		}
 
-		w = (unsigned short)rx->word[i];
+		w = (unsigned short)v->seq[0].word[i];
 
 		/* Or one the menu lists explicitly? */
 		if (!accept
@@ -386,7 +401,7 @@ rebuildJMSequence(struct v8 *v)
 			jm->word[n++] = 0x107;
 		} else if (cm->b2 & 0x01) {
 			jm->word[n++] = 0x103;
-		} else if (cm->b1 & 0x80) {
+		} else if (v8_seq_flag_test(cm->b1, 0x80)) {
 			jm->word[n++] = 0x10b;
 		} else if (cm->b2 & 0x02) {
 			jm->word[n++] = 0x109;
@@ -408,23 +423,23 @@ rebuildJMSequence(struct v8 *v)
 		 * the three already in the buffer, gathering the three flags
 		 * on the way.
 		 */
-		for (i = 0; i < (short)rx->wordidx; i++) {
-			unsigned short w = (unsigned short)rx->word[i];
+		for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+			unsigned short w = (unsigned short)v->seq[0].word[i];
 
 			if ((w & V8_JM_FN_MASK) == 0x141) {
 				int at = base;
 
 				jm->word[at] = (short)(jm->word[at] & w);
 				at++;
-				v90_mod = (rx->word[i] >> 3) & 1;
+				v90_mod = (v->seq[0].word[i] >> 3) & 1;
 				i++;
-				w = (unsigned short)rx->word[i];
+				w = (unsigned short)v->seq[0].word[i];
 				while ((w & 0x39) == 0x11 && at < base + 3) {
 					jm->word[at] = (short)(jm->word[at]
 							       & w);
 					at++;
 					i++;
-					w = (unsigned short)rx->word[i];
+					w = (unsigned short)v->seq[0].word[i];
 				}
 				n = base + 3;
 			}
@@ -489,8 +504,8 @@ rebuildJMSequence(struct v8 *v)
 	 */
 	if (all_flags) {
 		if (cm->b2 & V8_CM_EXT2_PRESENT) {
-			for (i = 0; i < (short)rx->wordidx; i++) {
-				unsigned short w = (unsigned short)rx->word[i];
+			for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+				unsigned short w = (unsigned short)v->seq[0].word[i];
 				int k = 0;
 
 				if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
@@ -499,7 +514,7 @@ rebuildJMSequence(struct v8 *v)
 				while (cm->ext2[k] != 0
 				       && k <= V8_CM_EXT_MAX - 1) {
 					unsigned short got = (unsigned short)
-							     rx->word[i];
+							     v->seq[0].word[i];
 
 					if (got == (unsigned short)
 						   ext_expected(cm->ext2[k])) {
@@ -519,8 +534,8 @@ rebuildJMSequence(struct v8 *v)
 			}
 		}
 	} else {
-		for (i = 0; i < (short)rx->wordidx; i++) {
-			unsigned short w = (unsigned short)rx->word[i];
+		for (i = 0; i < (short)v->seq[0].wordidx; i++) {
+			unsigned short w = (unsigned short)v->seq[0].word[i];
 			int k = 0;
 
 			if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
@@ -530,7 +545,7 @@ rebuildJMSequence(struct v8 *v)
 				while (cm->ext2[k] != 0
 				       && k <= V8_CM_EXT_MAX - 1) {
 					unsigned short got = (unsigned short)
-							     rx->word[i];
+							     v->seq[0].word[i];
 
 					if (got == (unsigned short)
 						   ext_expected(cm->ext2[k])) {
@@ -663,38 +678,53 @@ evaluateRxJMSequence(struct v8 *v)
 			dsplibs_debug_printf(
 			    "V8: on CALLER: remote call function is: %X\r\n", w);
 
-		if (cm->b2 & V8_CM_EXT1_PRESENT) {
-			matched = 0;
-			if (match_extension(v, cm->ext1, &i, &v->fn_word,
-					    &matched)) {
-				v->fn_matched = 1;
-				break;
+		if (v->cm->b2 & V8_CM_EXT1_PRESENT) {
+			int k = 0;
+
+			while (v->cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				int expected = (charFlip(v->cm->ext1[k]) << 1) | 1;
+				unsigned short got = (unsigned short)seq->word[i];
+
+				if (got == expected) {
+					v->fn_word = (short)got;
+					v->fn_matched = 1;
+					k++;
+					i++;
+					continue;
+				}
+				if (v->fn_matched != 0)
+					break;
+				k++;
 			}
+			if ((v->cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)
+			    && v->fn_matched != 0)
+				break;
 			v->fn_word = 0;
 			v->fn_matched = 0;
 		} else {
+			unsigned short currentword = (unsigned short)seq->word[i];
 			/*
 			 * No extension: the function word itself has to be
 			 * one the menu asked for.  Each of the four announces
 			 * itself; V.80 shares the data announcement, which is
 			 * why the object has four tests and three strings.
 			 */
-			if (w == 0x107 && (cm->b1 & 0x40)) {
+			if (currentword == 0x107 && (v->cm->b1 & 0x40)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function DATA " "indication...\r\n");
 				v->fn_matched = 1;
-			} else if (w == 0x103 && (cm->b2 & 0x01)) {
+			} else if (currentword == 0x103 && (v->cm->b2 & 0x01)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function FAX TX from " "caller indication...\r\n");
 				v->fn_matched = 1;
-			} else if (w == 0x10b && (cm->b1 & 0x80)) {
+			} else if (currentword == 0x10b && (v->cm->b1 & 0x80)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function FAX RX to " "caller indication...\r\n");
 				v->fn_matched = 1;
-			} else if (w == 0x109 && (cm->b2 & 0x02)) {
+			} else if (currentword == 0x109 && (v->cm->b2 & 0x02)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function DATA " "indication...\r\n");
@@ -702,7 +732,7 @@ evaluateRxJMSequence(struct v8 *v)
 			}
 
 			if (v->fn_matched != 0)
-				v->fn_word = (short)w;
+				v->fn_word = seq->word[i];
 		}
 	}
 
@@ -718,14 +748,34 @@ evaluateRxJMSequence(struct v8 *v)
 		if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
 			continue;
 
-		if ((cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
+		if ((v->cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
 			v->ext2_word = (short)w;
 			v->ext2_matched = 1;
 			continue;
 		}
-		if (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {
-			v->ext2_matched = 1;
-			break;
+		{
+			int k = 0;
+
+			while (v->cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				int expected = (charFlip(v->cm->ext2[k]) << 1) | 1;
+				unsigned short got = (unsigned short)seq->word[i];
+
+				if (got == expected) {
+					v->ext2_word = (short)got;
+					matched = 1;
+					k++;
+					i++;
+					continue;
+				}
+				if (matched)
+					break;
+				k++;
+			}
+			if ((v->cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
+			    && matched) {
+				v->ext2_matched = 1;
+				break;
+			}
 		}
 		v->ext2_word = 0;
 	}
@@ -951,8 +1001,17 @@ v8_TONEq_generate(struct v8 *v, short *out)
  *
  * The reversal counter only runs while the enable at +0x0e is set, so a
  * caller can have the tone without the reversals.
+ *
+ * The DEFINITION is `inline`.  The object has NO `R_386_PC32` call to
+ * `v8_ansamgenerate` anywhere in its 1.2 MB while the symbol itself is
+ * still emitted (0x77210, 249 bytes), which is what a globally visible
+ * function declared `inline` leaves when its only call site -- the tone
+ * arm of `v8handshak` -- runs the body inline.  At -O3 the automatic
+ * budget (max-inline-insns-auto, about 130 RTL instructions) is under this
+ * body, so the copy is reachable only with the declaration.  The header
+ * declaration stays plain, which keeps the out-of-line copy emitted.
  */
-void
+inline void
 v8_ansamgenerate(struct v8 *v, short *out)
 {
 	struct v8_tone *t = &v->tone;
@@ -1019,12 +1078,9 @@ v8_ansamgenerate(struct v8 *v, short *out)
  * carry on, or a value to return from the handshake.
  */
 static int
-transmit(struct v8 *v, int *done)
+transmit(struct v8 *v)
 {
-	struct v8_v21_params *p = &v->v21_params;
 	int i;
-
-	*done = 0;
 
 	switch ((short)v->tx_state) {
 	case V8_TX_SILENCE:
@@ -1055,7 +1111,6 @@ transmit(struct v8 *v, int *done)
 				v->elapsed++;
 			}
 			v->rx_state = 4;
-			*done = 1;
 			return 1;
 		}
 		v8_ansamgenerate(v, v->tx_stage);
@@ -1079,22 +1134,21 @@ transmit(struct v8 *v, int *done)
 					    v->side == 1 ? "CJ" : "JM");
 				v->elapsed++;
 			}
-			*done = 1;
 			return 1;
 		}
 		v8_fskmodulate(v, v->tx_bit);
-		p->sample_count = (short)(p->sample_count + 4);
-		if (p->samples_per_bit == p->sample_count) {
+		v->v21_params.sample_count = (short)(v->v21_params.sample_count + 4);
+		if (v->v21_params.samples_per_bit == v->v21_params.sample_count) {
 			v->tx_bit = (short)v8_getbit(v->tx_seq);
-			p->sample_count = 0;
+			v->v21_params.sample_count = 0;
 		}
 		v->elapsed++;
 		return 0;
 
 	case V8_TX_FSK:
 		v8_fskmodulate(v, v->tx_bit);
-		p->sample_count = (short)(p->sample_count + 4);
-		if (p->samples_per_bit == p->sample_count) {
+		v->v21_params.sample_count = (short)(v->v21_params.sample_count + 4);
+		if (v->v21_params.samples_per_bit == v->v21_params.sample_count) {
 			v->tx_bit = (short)v8_getbit(v->tx_seq);
 			v->cm_bit_count = (short)(v->cm_bit_count + 1);
 			if (v->cm_bit_count == V8_HS_CM_BITS) {
@@ -1105,7 +1159,7 @@ transmit(struct v8 *v, int *done)
 				v->tx_state = V8_TX_FSK_TIMED;
 				v->tx_seq = &v->seq[0];
 			}
-			p->sample_count = 0;
+			v->v21_params.sample_count = 0;
 		}
 		return 0;
 
@@ -1435,8 +1489,8 @@ v8_hs_qca1(struct v8 *v, int ch)
 {
 	struct v8_tx_sequence *s = v->seq_spare;
 	int idx = (short)v->word_count;
-	int w1;
-	int w4;
+	unsigned w1;
+	unsigned w4;
 	int is_d;
 	int ok;
 
@@ -1536,7 +1590,7 @@ static int
 v8_hs_cj(struct v8 *v, int ch)
 {
 	int mask = V8_HS_CHAR_TOP;
-	int i;
+	short i;
 
 	for (i = 0; i < V8_HS_CHAR_BITS; i++) {
 		if ((ch & mask) != 0) {
@@ -1580,7 +1634,7 @@ v8_handshak_demod(struct v8 *v)
 	for (k = 0; k < got; k++) {
 		int shift = got - k - 1;
 
-		if (((unsigned short)p->bits >> shift) & 1) {
+		if ((short)(((int)(unsigned short)p->bits & (1 << shift)) >> shift) == 1) {
 			p->zero_run = 0;
 			p->ones_run = (short)(p->ones_run + 1);
 			p->ones_run_len = p->ones_run;
@@ -1604,7 +1658,7 @@ v8_handshak_demod(struct v8 *v)
 	 * hunting for CJ, which is all zeros and would never survive it.
 	 */
 	if ((unsigned short)p->gap_seen != (unsigned short)p->gap_count
-	    && (short)(p->gap_count - 1) > 0 && sub != V8_HS_CJ) {
+	    && p->gap_count > 1 && sub != V8_HS_CJ) {
 		p->bitcount = V8_HS_ZERO_RUN;
 		p->bits = 0;
 		p->gap_seen = (short)(p->gap_seen + 1);
@@ -1656,7 +1710,6 @@ int
 v8handshak(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
-	int done = 0;
 	int rc;
 
 	/*
@@ -1670,8 +1723,8 @@ v8handshak(struct v8 *v)
 
 		if ((unsigned)st > 0x28)
 			continue;
-		rc = transmit(v, &done);
-		if (done)
+		rc = transmit(v);
+		if (rc)
 			return rc;
 	}
 

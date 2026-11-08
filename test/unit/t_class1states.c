@@ -40,14 +40,14 @@ extern unsigned int ref_dsplibs_debug_level;
 
 extern int ref__idle_state_init(void *ctx);
 extern int ref__idle_state(void *ctx, const short *rx, short *tx,
-			   int w3, int w4, int *rx_count, int *tx_count,
-			   int w7, int *w8);
+			   unsigned char *w3, const unsigned char *w4, int *rx_count, int *tx_count,
+			   int *w7, int *w8);
 extern int ref__send_silence_state(void *ctx, const short *rx, short *tx,
-				   int w3, int w4, int *rx_count,
-				   int *tx_count, int w7, int *w8);
+				   unsigned char *w3, const unsigned char *w4, int *rx_count,
+				   int *tx_count, int *w7, int *w8);
 extern int ref__recieve_silence_state(void *ctx, const short *rx, short *tx,
-				      int w3, int w4, int *rx_count,
-				      int *tx_count, int w7, int *w8);
+				      unsigned char *w3, const unsigned char *w4, int *rx_count,
+				      int *tx_count, int *w7, int *w8);
 
 /*
  * FILE-LOCAL in the object, so class1.c defines them `static` and class1.h
@@ -56,15 +56,15 @@ extern int ref__recieve_silence_state(void *ctx, const short *rx, short *tx,
  * unchanged; the test tier links a globalized copy (tools/testvisible.py).
  */
 extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8);
+		       unsigned char *word3, const unsigned char *word4, int *rx_count, int *tx_count,
+		       int *word7, int *word8);
 extern int _send_silence_state(struct fax_class1 *ctx, const short *rx,
-			       short *tx, int word3, int word4,
-			       int *rx_count, int *tx_count, int word7,
+			       short *tx, unsigned char *word3, const unsigned char *word4,
+			       int *rx_count, int *tx_count, int *word7,
 			       int *word8);
 extern int _recieve_silence_state(struct fax_class1 *ctx, const short *rx,
-				  short *tx, int word3, int word4,
-				  int *rx_count, int *tx_count, int word7,
+				  short *tx, unsigned char *word3, const unsigned char *word4,
+				  int *rx_count, int *tx_count, int *word7,
 				  int *word8);
 
 #define TX_MAX	256
@@ -158,11 +158,12 @@ run_idle(void)
 		int ra, rb;
 
 		plant(n, 7, 0, 0);
-		ra = ref__idle_state(&ctx_a, rx_a, tx_a, 0x11111111,
-				     0x22222222, &rxc_a, &txc_a, 0x33333333,
+		ra = ref__idle_state(&ctx_a, rx_a, tx_a, (unsigned char *)(long)0x11111111,
+				     (const unsigned char *)(long)0x22222222, &rxc_a, &txc_a, (int *)(long)0x33333333,
 				     &w8_a);
-		rb = _idle_state(&ctx_b, rx_b, tx_b, 0x11111111, 0x22222222,
-				 &rxc_b, &txc_b, 0x33333333, &w8_b);
+		rb = _idle_state(&ctx_b, rx_b, tx_b, (unsigned char *)(long)0x11111111,
+		(const unsigned char *)(long)0x22222222,
+				 &rxc_b, &txc_b, (int *)(long)0x33333333, &w8_b);
 		diff_eq_int("_idle_state return (%ld)", rb, ra, (long)n);
 		compare("_idle_state", (long)n);
 
@@ -191,12 +192,12 @@ run_send_silence(void)
 		int ra, rb;
 
 		plant(160, cd, 0, 0);
-		ra = ref__send_silence_state(&ctx_a, rx_a, tx_a, 0x44444444,
-					     0x55555555, &rxc_a, &txc_a,
-					     0x66666666, &w8_a);
-		rb = _send_silence_state(&ctx_b, rx_b, tx_b, 0x44444444,
-					 0x55555555, &rxc_b, &txc_b,
-					 0x66666666, &w8_b);
+		ra = ref__send_silence_state(&ctx_a, rx_a, tx_a, (unsigned char *)(long)0x44444444,
+					     (const unsigned char *)(long)0x55555555, &rxc_a, &txc_a,
+					     (int *)(long)0x66666666, &w8_a);
+		rb = _send_silence_state(&ctx_b, rx_b, tx_b, (unsigned char *)(long)0x44444444,
+					 (const unsigned char *)(long)0x55555555, &rxc_b, &txc_b,
+					 (int *)(long)0x66666666, &w8_b);
 		diff_eq_int("_send_silence_state return (%ld)", rb, ra,
 			    (long)cd);
 		compare("_send_silence_state", (long)cd);
@@ -250,13 +251,13 @@ run_recv_silence(void)
 			ref_dsplibs_debug_level = level;
 
 			ra = ref__recieve_silence_state(&ctx_a, rx_a, tx_a,
-							0x77777777, (int)0x88888888,
+							(unsigned char *)(long)0x77777777, (const unsigned char *)(long)0x88888888,
 							&rxc_a, &txc_a,
-							(int)0x99999999, &w8_a);
+							(int *)(long)0x99999999, &w8_a);
 			rb = _recieve_silence_state(&ctx_b, rx_b, tx_b,
-						    0x77777777, (int)0x88888888,
+						    (unsigned char *)(long)0x77777777, (const unsigned char *)(long)0x88888888,
 						    &rxc_b, &txc_b,
-						    (int)0x99999999, &w8_b);
+						    (int *)(long)0x99999999, &w8_b);
 			diff_eq_int("_recieve_silence_state return (%ld)", rb,
 				    ra, tag);
 			compare("_recieve_silence_state", tag);

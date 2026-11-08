@@ -1,10 +1,7 @@
 # The modern (portability) tier's compiler, pinned so verdicts reproduce.
 #
-# WHY THIS EXISTS.  A mutation verdict is a property of the SOURCE, the TEST
-# and the COMPILER that built them, but `mutsnap.py`'s key covers only the
-# source.  So a re-record made under a different GCC is not comparable with
-# one made under another, and the tree wants ONE modern compiler rather than
-# whatever the host happens to ship.
+# Pin the modern portability compiler so its results are reproducible across
+# hosts. This tier is secondary to the period compiler's differential gate.
 #
 # THE ONE IS GCC 13.  `docs/method/compilers.md` ("Moving from GCC 13 to GCC
 # 3.4.2") and every entry in `tools/gccdiverge.json` are written against GCC

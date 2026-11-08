@@ -511,6 +511,82 @@ t_ansam_standard(void)
 	return rc;
 }
 
+
+/*
+ * Signed-word quotient/negation fidelity at an initialized component boundary.
+ * These are synthetic bounded gain/reference histories, not an AGC-produced or
+ * negotiated modem history. All pre-shift differences are nonnegative (0..4),
+ * the shifted numerator and quotient are at most 65536; divisors are 1, 3, 4 or 5.
+ */
+static int
+t_stability_short_delta(void)
+{
+	static const short gains[] = { 3, 4, 5 };
+	static const short timers[] = { 0, 956 };
+	int g, r, s, flag, cases = 0;
+
+	diff_begin("checkSignalStability: synthetic signed-word projections");
+	for (g = 0; g < 3; g++) {
+		for (r = 0; r < 2; r++) {
+			for (s = 0; s < 2; s++) {
+				for (flag = 0; flag < 2; flag++) {
+					int expected_ref = r ? gains[g] : 1;
+					int expected_refresh = r ? 0 : 4;
+					int expected_timer, expected_flag;
+
+					/*
+					 * Without refresh, gains 3/4/5 yield word
+					 * quotients -32768/-16384/0. Word negation
+					 * leaves -32768, gives 16384, or leaves 0:
+					 * only gain 4 exceeds the native tolerance.
+					 * A refresh first captures gain, so q is 0.
+					 */
+					if (!r && gains[g] == 4) {
+						expected_timer = 0;
+						expected_flag = 0;
+					} else {
+						expected_timer = timers[s] + 4;
+						expected_flag = s ? 1 : flag;
+					}
+					memset(&obj_a, 0, sizeof obj_a);
+					obj_a.rx.gain = gains[g];
+					obj_a.rx.gain_ref = 1;
+					obj_a.rx.refresh_timer = timers[r];
+					obj_a.rx.stable_timer = timers[s];
+					obj_a.rx.stable = (short)flag;
+					memcpy(&obj_b, &obj_a, sizeof obj_a);
+					ref_checkSignalStability(&obj_a);
+					checkSignalStability(&obj_b);
+					diff_eq_int("reference gain", obj_a.rx.gain,
+						    gains[g], cases);
+					diff_eq_int("gain", obj_b.rx.gain, gains[g], cases);
+					diff_eq_int("reference refresh", obj_a.rx.refresh_timer,
+						    expected_refresh, cases);
+					diff_eq_int("refresh", obj_b.rx.refresh_timer,
+						    expected_refresh, cases);
+					diff_eq_int("reference captured gain", obj_a.rx.gain_ref,
+						    expected_ref, cases);
+					diff_eq_int("captured gain", obj_b.rx.gain_ref,
+						    expected_ref, cases);
+					diff_eq_int("reference stable timer", obj_a.rx.stable_timer,
+						    expected_timer, cases);
+					diff_eq_int("stable timer", obj_b.rx.stable_timer,
+						    expected_timer, cases);
+					diff_eq_int("reference stable flag", obj_a.rx.stable,
+						    expected_flag, cases);
+					diff_eq_int("stable flag", obj_b.rx.stable,
+						    expected_flag, cases);
+					diff_eq_obj("signed-word complete owner", struct v8,
+						    &obj_b, &obj_a, cases);
+					cases++;
+				}
+			}
+		}
+	}
+	fprintf(stderr, "t_v8sig: %d synthetic initialized short-delta cases\n", cases);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -892,6 +968,64 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/* Initialized component alias history: input is a real short member.
+	 * The API has no disjoint-input contract. This is not modem lifecycle
+	 * coverage. Native code rereads input after updating run; a saved x
+	 * publishes the prior run instead and fails this probe. */
+	diff_begin("v8_phase_rev_detect input alias history");
+	{
+		struct v8_phase_rev pa, pb;
+		memset(&pa, 0, sizeof(pa));
+		memset(&pb, 0, sizeof(pb));
+		ref_v8_phase_rev_init(&pa);
+		v8_phase_rev_init(&pb);
+		for (k = 0; k < 64; k++) {
+			ref_v8_phase_rev_detect(&pa, &pa.run, 1);
+			v8_phase_rev_detect(&pb, &pb.run, 1);
+			diff_eq_int("reference fresh input", pa.window[pa.widx],
+				    pa.run, k);
+			diff_eq_int("reconstruction fresh input", pb.window[pb.widx],
+				    pb.run, k);
+			diff_eq_obj("input alias history", struct v8_phase_rev,
+				    &pb, &pa, k);
+		}
+		diff_eq_int("first-window wrap", pa.widx, 0, 64);
+	}
+	rc |= diff_end();
+
+	/* Caller-configured detector component history, not negotiation coverage.
+	 * Deliberately high-gain API-supplied coefficients expose the first section's
+	 * shift/narrow boundary. Histories start only through detectorinit. */
+	diff_begin("v8_tone_detect shift boundary component history");
+	{
+		static const short coefficients[8] = {
+			32767, 32767, 0, 0, -32768, -32768, 0, 0
+		};
+		unsigned noise = 17;
+		memset(&obj_a, 0, sizeof(obj_a));
+		memset(&obj_b, 0, sizeof(obj_b));
+		ref_v8_detectorinit(&obj_a, &obj_a.detector, coefficients,
+				    0, 100, 50, 1500, 0);
+		v8_detectorinit(&obj_b, &obj_b.detector, coefficients,
+				0, 100, 50, 1500, 0);
+		for (i = 0; i < 128; i++) {
+			short a, b;
+			int ra, rb;
+			noise = noise * 1664525u + 1013904223u;
+			a = (short)(noise >> 16);
+			b = a;
+			obj_a.rx.buf = &a + 1;
+			obj_b.rx.buf = &b + 1;
+			ra = ref_v8_tone_detect(&obj_a, &obj_a.detector, &a);
+			rb = v8_tone_detect(&obj_b, &obj_b.detector, &b);
+			diff_eq_int("verdict %ld", rb, ra, i);
+			diff_eq_int("filtered %ld", b, a, i);
+			diff_eq_obj("detector history", struct v8_detector,
+				    &obj_b.detector, &obj_a.detector, i);
+		}
+	}
+	rc |= diff_end();
+
 	diff_begin("v8_tone_detect");
 	{
 		static short air_a[512], air_b[512];
@@ -1211,6 +1345,7 @@ main(void)
 	}
 	rc |= diff_end();
 
+	rc |= t_stability_short_delta();
 	rc |= t_sig_trace();
 	return rc;
 }

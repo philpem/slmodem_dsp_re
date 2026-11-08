@@ -116,7 +116,7 @@ void V22_MRF_init(struct v22_mrf *state, const struct v22_mrf_cfg *cfg,
 		  int fresh);
 
 /** @brief Release the V.22 receive rate converter's history buffer. @param state The converter state to tear down. */
-void V22_MRF_free(struct v22_mrf *state);
+void V22_MRF_free(struct v22_mrf *state, int unused);
 
 /**
  * @brief Resample `count` input samples through the V.22 9:20 polyphase converter.
@@ -131,7 +131,7 @@ void V22_MRF_free(struct v22_mrf *state);
  * @return The number of outputs written, roughly `count * 9 / 20`.
  */
 /* F11990: full caller slot, signed-word narrowing inside the callee. */
-short V22_MRF_filter(struct v22_mrf *state, const short *in, short *out,
+unsigned short V22_MRF_filter(struct v22_mrf *state, const short *in, short *out,
 		     int count);
 
 /*

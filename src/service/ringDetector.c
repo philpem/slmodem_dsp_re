@@ -39,17 +39,24 @@ RingDetector_Delete(struct ring_detector *s)
  * A negative threshold selects the second mode (lock_debounce/lock_level =
  * 0/200 rather than 2/100) and is used through its absolute value
  * everywhere else.
+ *
+ * Declared `inline` because the object's RingDetector_Create contains this
+ * whole body: at 124 instructions it is far past -O3's automatic inline
+ * budget (130 RTL insns), so only the keyword could have inlined it.  The
+ * header declaration is left plain, which still emits the out-of-line copy
+ * the object also has.
  */
-void
+inline void
 RingDetector_Reset(struct ring_detector *s, struct ring_detector_cfg *c)
 {
 	int thr = c->threshold;
 	int athr = thr < 0 ? -thr : thr;
+	int fs = c->fs;
 
 	s->ring_active = 0;
-	s->idle_debounce = (short)(athr / (c->fs / 80));
-	s->fs = c->fs;
-	s->guard_limit = (short)(3 * c->fs / (4 * c->min_freq));
+	s->idle_debounce = (short)(athr / (fs / 80));
+	s->fs = fs;
+	s->guard_limit = (short)(3 * fs / (4 * c->min_freq));
 	s->min_freq = c->min_freq;
 	s->max_freq = c->max_freq;
 	s->min_on_dur = c->min_on_dur;
