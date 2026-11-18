@@ -210,7 +210,15 @@ decide_bit(short mark, short space)
 
 	if (space_hi == mark_hi)
 		return mark <= space;
-	return space_hi;
+	/*
+	 * The object materialises this arm too -- `test %dx,%dx; setne
+	 * %al; movzbl %al,%edx` at .text+0x87774 -- rather than reusing
+	 * the register the `setg` left the 0/1 in.  Returning the value
+	 * through an explicit `!= 0` is what makes that comparison exist;
+	 * returning `space_hi` directly lets the `and $0x1` mask stand in
+	 * for it and the `setne` never appears.  F12167.
+	 */
+	return space_hi != 0;
 }
 
 /*
@@ -265,7 +273,7 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 
 		bw->status = BWCH_WAITING;
 		if (bw->carrier_blocks <= BWCH_CARRIER_BLOCKS)
-			return bw->status;
+			goto bwch_done;
 		/* Carrier just came up: demodulate this block after all. */
 	}
 
@@ -328,6 +336,7 @@ BwChDem_Progress(struct bwchdem *bw, short *samples, short count, int *bits,
 	}
 
 	bw->status = BWCH_DEMODULATED;
+bwch_done:
 	return bw->status;
 }
 

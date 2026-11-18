@@ -2222,9 +2222,16 @@ V90Phase3Demodulator::exitDIL()
 {
 	if (state == 12 || state == 16 || state == 10 || state == 11 ||
 	    state == 13 || state == 14 || state == 15) {
+		V90Phase3Modulator *mod = &phase3Modulator;
 		edprintf("V90Phase3Demodulator: exit DIL\r\n");
-		phase3Modulator.exitDIL();
-		P3D_CHECK_TERMINATED();
+		mod->exitDIL();
+		if (mod->eventCode == 6) {
+			edprintf("V90Phase3Demodulator: Phase3 Terminated @ %d\r\n",
+			    samplesInState);
+			state = (Phase3DemodulatorState)0x13;
+			samplesInState = 0;
+			eventCode = 0x14;
+		}
 	}
 }
 

@@ -296,17 +296,13 @@ V90PreFilter::setFilter(PreFilterCoefType type, unsigned int gain)
 {
 	this->gain = (int)gain;
 
-	switch ((int)type) {
-	case 2:
+	if (type == 2) {
 		setCoefficients(bank2((int)gain), 20);
-		break;
-	case 3:
+	} else if (type == 3) {
 		setCoefficients(bank3((int)gain), 40);
 		this->gain = (int)gain - 20;
-		break;
-	default:
+	} else {
 		setCoefficients(bank1((int)gain), 20);
-		break;
 	}
 }
 
@@ -618,32 +614,26 @@ V90PreFilter::selectFilter()
 		return;
 	} else {
 		int force = p->PRE_FILTER_COEF_TYPE;
-		int wide;
 
 		if (force == 1) {
 			edprintf("V90PreFilter: Force coeff type array 1\r\n");
 			type = 1;
-			wide = 0;
 		} else if (force == 2) {
 			edprintf("V90PreFilter: Force coeff type array 2\r\n");
 			type = 2;
-			wide = 0;
 		} else if (force == 3) {
 			edprintf("V90PreFilter: Force coeff type array 3\r\n");
 			type = 3;
-			wide = 1;
 		} else if (force == -1) {
 			type = dataBase[codecType].loops[0].coefType;
 			edprintf("V90PreFilter: Using coeff type array "
 				 "according to codec type\r\n");
-			wide = (type == 3);
 		} else {
 			type = 1;
-			wide = 0;
 		}
 
 		p = params;
-		if (wide) {
+		if (type == 3) {
 			int v = p->PRE_FILTER_GAIN;
 
 			g = (v > 49) ? 50 : ((v > 19) ? v : 20);

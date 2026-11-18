@@ -152,6 +152,7 @@ FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 	short wideband = state->wideband;
 	short tone;
 	short out_of_band;
+	short result;
 	int threshold;
 
 	/*
@@ -197,10 +198,25 @@ FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count)
 	 * Detected when the energy outside the tone is a small enough fraction
 	 * of the total.  The second test is unreachable -- out_of_band is
 	 * clamped at or below wideband -- but is reproduced.
+	 *
+	 * The object keeps these as BRANCHES (`jle`/`jge`, no `setcc`), so the
+	 * tail is a chain of assignments to one value and not a `?:` -- a
+	 * ternary over two constants is a single `COND_EXPR` and reaches the
+	 * i386 `movcc` path, which emits a `setcc` the object does not have.
+	 * A three-arm chain with ABSENT last still leaves one `setcc`: GCC
+	 * if-converts the second test (`setl`) where the object branches.
+	 * Defaulting to ABSENT and setting PRESENT from either test keeps BOTH
+	 * tests as branches and matches the object's empty `setcc` multiset.
+	 * Measured: ternary delta +6 / run 53 of 94; three-arm chain delta +2 /
+	 * run 57 / `setcc` 1; this form delta +8 / run 57 / `setcc` 0 (the
+	 * object's; lane-free difference 0).  Three spellings of this form are
+	 * byte-identical.  F12168, F12182.
 	 */
 	threshold = ((int)state->cfg.ratio * wideband) >> 15;
+	result = FPM_MTD_ABSENT;
 	if (out_of_band <= threshold)
-		return FPM_MTD_PRESENT;
-
-	return (wideband >= out_of_band) ? FPM_MTD_ABSENT : FPM_MTD_PRESENT;
+		result = FPM_MTD_PRESENT;
+	else if (wideband < out_of_band)
+		result = FPM_MTD_PRESENT;
+	return result;
 }

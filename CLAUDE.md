@@ -77,13 +77,46 @@ prompt to start. Honour the owner's current priorities and delivery permission.
    checks appropriate to the claim. Submit and merge ready PRs when authorised.
    At the boundary, report closures, partials, negatives, costs and next steps.
 
+### Derive before enumerating
+
+The easy wins are gone; the residue is compiler-internal. Enumerating spellings is
+no longer an acceptable method — a sweep is evidence that the target is un-derived.
+Every target's first deliverable is a **mechanism statement**, not a variant table:
+
+- **Locate the pass** that produces the difference, and quote its decision predicate
+  and the inputs it reads (`file:line` in the extracted tree), or record that you
+  cannot and why.
+- **Derive the forced shape**: which source forms can and cannot produce the observed
+  bytes, from that predicate.
+- **State the impulse, then the inert directions.** Which predicate inputs a source
+  change can actually move, and which are invariants. `allocno_compare`'s priority
+  reads `(n_refs, freq, live_length, size)` and `floor_log2(n_refs)` is a step
+  function, so a change that does not cross a threshold moves nothing — say so and
+  do not sample it.
+- **Predict the consequence and name the falsifier** before compiling.
+
+Then confirm with **at most three** variants of the derived shape. Acceptance is a
+confirmed prediction, not an improved metric: a narrowing byte delta with no named
+mechanism is an unattributed change, recorded as one and kept only if a mechanism
+also supports it.
+
+Where the quantity you need is not printed, **build the instrument** — a dump
+reader, an allocno-order computation, a pass diff — rather than sampling around it.
+
+**Type every negative:** excluded by a derived predicate (a real domain, with its
+scope), sampled and inert (no information), or mechanism unnamed (parked, with the
+missing measurement or compiler fact named). Never present the second or third as
+the first.
+
 Read [experiment design](docs/method/experiment-design.md) before source/profile
-experiments and the relevant [Playbook](docs/method/refinement.md) section. A
-negative result excludes its tested domain under its controls, not all equivalent
-source. Reopen it only with a named new discriminator. Two batches without a new
-explanatory observation require a hypothesis/scope review, not more synonyms.
-A closed spelling family does not explain an emitter: trace the first pass that
-changes the unexplained operation before declaring that no discriminator remains.
+experiments and the relevant [Playbook](docs/method/refinement.md) section — levers
+28-43 there are worked derivations from `ifcvt.c`, `i386.c`, `fold-const.c`,
+`global.c` and `predict.c`; follow that form. A negative result excludes its tested
+domain under its controls, not all equivalent source. Reopen it only with a named
+new discriminator. Two batches without a new explanatory observation require a
+hypothesis/scope review, not more synonyms. A closed spelling family does not
+explain an emitter: trace the first pass that changes the unexplained operation
+before declaring that no discriminator remains.
 
 ### Experimental compiles and integration checks
 
@@ -93,6 +126,15 @@ then use local native comparisons and affected-TU checks to investigate variants
 Rebuild linked proof inputs only when the local comparison needs them. A failed
 or discarded experiment does not trigger `make phase`, a global `byteident.py`
 census, whole-tree object parity, a full partial link or a remote CI run.
+
+Use `tools/toolchain/variant_run.py` for source/profile/flag sweeps (build N
+variants of one TU out of tree and in parallel; it reads the real per-TU flags,
+refuses a variant whose edit did not apply, and prints a baseline-reproduced
+control), and `tools/toolchain/verify_report.py` to re-derive a delegated batch's
+numbers from the workers' JSON reports — it recomputes rather than trusts, and
+prints `git status` so an edit with no claim is visible. A harness that cannot
+fail is not a control: demonstrate a detector firing on a known positive and
+rejecting a known negative before relying on it.
 
 Before committing reconstruction source, require the relevant period differential
 to pass. Review the complete affected TUs and decide which supported partials to

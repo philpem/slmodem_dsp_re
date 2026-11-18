@@ -65,7 +65,8 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 
 			remaining -= need;
 			rd++;
-			rd = (short)((rd < size) ? rd : 0);
+			if (rd >= size)
+				rd = 0;
 
 			widx++;
 			if (widx > V22_PPS_HISTORY - 1) {

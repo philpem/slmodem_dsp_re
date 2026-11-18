@@ -175,7 +175,6 @@ RxNextStateV27(void *modem)
 {
 	struct v27_rx_shared *sh = ((struct v27_rx *)modem)->shared;
 	struct v27_rx_block *rx;
-	unsigned short blocks;
 	unsigned char flags;
 	int state = sh->rx_state;
 
@@ -204,14 +203,13 @@ RxNextStateV27(void *modem)
 		 * cannot be confused for one another.
 		 */
 		if (sh->train_long == 0)
-			blocks = sh->rate == V27SH_RATE_4800
+			sh->countdown = sh->rate == V27SH_RATE_4800
 			       ? V27SH_PROTOCOL_SHORT_4800
 			       : V27SH_PROTOCOL_SHORT_2400;
 		else
-			blocks = sh->rate == V27SH_RATE_4800
+			sh->countdown = sh->rate == V27SH_RATE_4800
 			       ? V27SH_PROTOCOL_LONG_4800
 			       : V27SH_PROTOCOL_LONG_2400;
-		sh->countdown = blocks;
 
 		rx = ((struct v27_rx *)modem)->rx;
 		sh->handler = RxHdxPrtcolV27;

@@ -74,9 +74,18 @@ GetFP_Value(short a, short b)
 	int remaining = va << 14;
 	short count = 0;
 
+	/*
+	 * The sign mask of b is taken BEFORE the loop guard: the object emits
+	 * `sar $0x1f,%ecx` at 0x7e16c, ahead of the `jle` at 0x7e174, with only
+	 * the xor/sub left in the preheader.  `-abs((int)b)` alone expands with
+	 * the whole magnitude in one block, so the negation is spelled as the
+	 * branchless `sb - (sb ^ b)` over this hoisted mask.
+	 */
+	int sb = (int)b >> 31;
+
 	/* The original counts subtraction steps in a wrapping short. */
 	if (remaining > 0) {
-		int step = -abs((int)b);
+		int step = sb - (sb ^ (int)b);
 
 		do {
 			remaining += step;

@@ -368,21 +368,18 @@ V34GiveINFO0dBits(void *objp, const short *bits)
 	struct v34_object *obj = (struct v34_object *)objp;
 	const void *sess = obj->p3548;
 	int *v = obj->info0_bits;
-	int variant;
 	int remote_v92, remote_short;
 	short i;
 
 	if (obj->v90_receiver == 0)
 		return;
 
-	variant = session_int(sess, SESSION_VARIANT);
-
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main, giveINFO0%cBits\n",
-				     variant == 0 ? 'd' : 'a');
+				     session_int(sess, SESSION_VARIANT) == 0 ? 'd' : 'a');
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main, rxinfo0%c = ",
-				     variant == 0 ? 'd' : 'a');
+				     session_int(sess, SESSION_VARIANT) == 0 ? 'd' : 'a');
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",
@@ -407,7 +404,7 @@ V34GiveINFO0dBits(void *objp, const short *bits)
 	 * The two bits swap with the variant, and the object's own debug
 	 * string is what names them: "remoteV92" and "remoteShort".
 	 */
-	if (variant != 0) {
+	if (session_int(sess, SESSION_VARIANT) != 0) {
 		remote_v92 = v[27];
 		remote_short = v[26];
 	} else {
@@ -422,9 +419,16 @@ V34GiveINFO0dBits(void *objp, const short *bits)
 	 * bits and the fourth as 32; the values are 0 or 1 either way, so it
 	 * is written as the conjunction it is.
 	 */
-	obj->is_short = (obj->local_v92 != 0 && obj->remote_v92 != 0
-			 && obj->local_short != 0 && remote_short != 0)
-			? 1 : 0;
+	{
+		int ok = 0;
+
+		if (obj->local_v92 != 0)
+			if (obj->remote_v92 != 0)
+				if (obj->local_short != 0)
+					if (remote_short != 0)
+						ok = 1;
+		obj->is_short = ok;
+	}
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -564,7 +568,7 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 	 */
 	uinfo = bitreverse((unsigned short)
 			   ((((unsigned short)bits[1] & 7) << 4)
-			    + (((unsigned short)bits[2] & 0xf0) >> 4)), 7);
+			    + (((unsigned short)bits[2] & 0xf0u) >> 4)), 7);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("VPcmV34Main: Uinfo is %d\r\n",

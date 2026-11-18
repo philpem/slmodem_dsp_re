@@ -147,14 +147,19 @@ emit_extension_words(struct v8_tx_sequence *jm, int *n,
 static int
 emit_extension(struct v8_tx_sequence *seq, int *n, const unsigned char *ext)
 {
-	int k = 0;
+	unsigned int k = 0;
 
-	while (ext[k] != 0) {
+	/*
+	 * The object materialises the loop test as a value and compares the
+	 * counter unsigned -- `cmp $0x3,%k; setbe`, not the `setle` the same
+	 * test gives in this file's other loops.  Both the `&&` and the bound
+	 * therefore have to look like this, and the counter has to be
+	 * unsigned.  F12157.
+	 */
+	while (ext[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
 		seq->word[*n] = ext_word(ext[k]);
 		(*n)++;
 		k++;
-		if (k > V8_CM_EXT_MAX - 1)
-			break;
 	}
 	return k;
 }
@@ -660,16 +665,14 @@ rebuildJMSequence(struct v8 *v)
 void
 evaluateRxJMSequence(struct v8 *v)
 {
-	struct v8_tx_sequence *seq = &v->seq[2];
-	struct v8_cm *cm = v->cm;
 	int matched;
 	int i;
 
 	v->fn_matched = 0;
 
 	/* The call function, and the first extension if one was declared. */
-	for (i = 0; i < (short)seq->wordidx; i++) {
-		unsigned short w = (unsigned short)seq->word[i];
+	for (i = 0; i < (short)v->seq[2].wordidx; i++) {
+		unsigned short w = (unsigned short)v->seq[2].word[i];
 
 		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
 			continue;
@@ -683,7 +686,7 @@ evaluateRxJMSequence(struct v8 *v)
 
 			while (v->cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
 				int expected = (charFlip(v->cm->ext1[k]) << 1) | 1;
-				unsigned short got = (unsigned short)seq->word[i];
+				unsigned short got = (unsigned short)v->seq[2].word[i];
 
 				if (got == expected) {
 					v->fn_word = (short)got;
@@ -702,7 +705,7 @@ evaluateRxJMSequence(struct v8 *v)
 			v->fn_word = 0;
 			v->fn_matched = 0;
 		} else {
-			unsigned short currentword = (unsigned short)seq->word[i];
+			unsigned short currentword = (unsigned short)v->seq[2].word[i];
 			/*
 			 * No extension: the function word itself has to be
 			 * one the menu asked for.  Each of the four announces
@@ -732,7 +735,7 @@ evaluateRxJMSequence(struct v8 *v)
 			}
 
 			if (v->fn_matched != 0)
-				v->fn_word = seq->word[i];
+				v->fn_word = v->seq[2].word[i];
 		}
 	}
 
@@ -742,8 +745,8 @@ evaluateRxJMSequence(struct v8 *v)
 	 * stands if nothing matches.
 	 */
 	matched = 0;
-	for (i = 0; i < (short)seq->wordidx; i++) {
-		unsigned short w = (unsigned short)seq->word[i];
+	for (i = 0; i < (short)v->seq[2].wordidx; i++) {
+		unsigned short w = (unsigned short)v->seq[2].word[i];
 
 		if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
 			continue;
@@ -758,7 +761,7 @@ evaluateRxJMSequence(struct v8 *v)
 
 			while (v->cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
 				int expected = (charFlip(v->cm->ext2[k]) << 1) | 1;
-				unsigned short got = (unsigned short)seq->word[i];
+				unsigned short got = (unsigned short)v->seq[2].word[i];
 
 				if (got == expected) {
 					v->ext2_word = (short)got;

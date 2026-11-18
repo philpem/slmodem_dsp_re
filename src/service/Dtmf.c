@@ -178,10 +178,10 @@ dtmf_test(const float *e, float total, short mode)
 	pair = elo + ehi;
 
 	ok = (elo * 7.94f >= ehi)
-	    && (ehi * 2.82f >= elo)
-	    && (max_lo * 0.96f >= elo)
-	    && (max_hi * 0.96f >= ehi)
-	    && (rest * 1.36f >= pair);
+	    & (ehi * 2.82f >= elo)
+	    & (max_lo * 0.96f >= elo)
+	    & (max_hi * 0.96f >= ehi)
+	    & (rest * 1.36f >= pair);
 
 	if (rest * 0.79f > pair)
 		return DTMF_NO_DIGIT;

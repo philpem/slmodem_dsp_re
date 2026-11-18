@@ -296,15 +296,19 @@ vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
 	s->params->qcFlags &= (unsigned char)0xdf;
 
 	/* See the file comment: the mask survives when the bit is CLEAR. */
-	s->mute = (((s->params->qcFlags >> 4) & 1) < 1) ? VPCM_MUTE_SAMPLES : 0;
+	{
+		unsigned int v92bit = (s->params->qcFlags >> 4) & 1;
+
+		s->mute = (v92bit < 1) ? VPCM_MUTE_SAMPLES : 0;
+	}
 
 	hwDelay = modem_get_param(modem, MDMPRM_IODELAY) + 4;
 	if (VPCM_DELAY_CAP - hwDelay < 0) {
 		int excess;
+		int dcap = VPCM_DELAY_CAP - hwDelay;
 
-		modem_set_param(modem, MDMPRM_UPDATE_DELAY,
-				VPCM_DELAY_CAP - hwDelay);
-		excess = -(VPCM_DELAY_CAP - hwDelay);
+		modem_set_param(modem, MDMPRM_UPDATE_DELAY, dcap);
+		excess = -dcap;
 		if (excess < VPCM_EXTRADELAY_MIN)
 			excess = VPCM_EXTRADELAY_MIN;
 		s->extradelay = excess;
@@ -679,12 +683,17 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 					 * read out of the object and are not
 					 * covered by any test here.
 					 */
-					if (dpid == VPCM_DP_V90)
+					switch (dpid) {
+					case VPCM_DP_V90:
 						s->dp.id = VPCM_DP_V90;
-					else if (dpid == VPCM_DP_V92)
+						break;
+					case VPCM_DP_V92:
 						s->dp.id = VPCM_DP_V92;
-					else
+						break;
+					default:
 						s->dp.id = VPCM_DP_V34;
+						break;
+					}
 
 					/*
 					 * `s->dp.modem` and not `dp->modem`:
@@ -706,11 +715,12 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 			}
 			s->mode = mode;
 
-			if (nbits == 0 && mode == VPCM_MODE_CONNECTED) {
-				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-						"vpcm: No symbols " "Requested!!!\n");
-			}
+			if (nbits == 0)
+				if (mode == VPCM_MODE_CONNECTED) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+							"vpcm: No symbols " "Requested!!!\n");
+				}
 
 			if (newstat != DPSTAT_OK)
 				status = newstat;

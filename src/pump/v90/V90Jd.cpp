@@ -131,6 +131,17 @@ V90Jd::setRatesMask(int mask)
  * The store order below is the object's.  GCC is free to reorder it and does
  * (CLAUDE.md's rule for reading a codegen difference); what is not free is
  * which byte gets which value.
+ *
+ * THE C1 CLONE IS THE ONE THING STILL INEXACT, AND ONLY VIA THE PEEPHOLE2
+ * SCRATCH CURSOR.  C2 is emitted first and is byte-exact; its `unpackWord = 0`
+ * split takes edx and leaves the persistent scratch cursor at 2, from which
+ * C1's byte-identical split takes ebx, and -frename-registers then renames the
+ * two copies' lanes apart.  Forcing the cursor on entry to C1 to 0, 1, 13, 14
+ * or 48..52 makes C1 byte-exact (capture build/v90jd-c1-cursor/capture; sweep
+ * scratch/v90jd/); the natural value 2 is in the failing set, and swapping the
+ * `look` and `unpackWord = 0` statements does not move it -- GCC normalises
+ * the RTL order -- so the fix is a constructor-RTL difference not yet found.
+ * C1's instruction text and extent are already exact (119 bytes, 40/40).
  * ===========================================================================
  */
 V90Jd::V90Jd(V90Parameters *params)

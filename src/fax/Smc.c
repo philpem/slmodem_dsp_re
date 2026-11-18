@@ -159,13 +159,24 @@ SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg)
 }
 
 /* SMCv17 definitions moved from v17.c; reference order. */
-/* (widx + 1) mod len, exactly as the object spells it -- see v32smc.c. */
+/*
+ * (widx + 1) mod len, exactly as the object spells it -- see v32smc.c.
+ *
+ * The clear is an `if`, NOT `next < len ? next : 0`.  A conditional
+ * expression reaches the backend through a temporary, so if_info->x is not
+ * the same RTL object as either arm and if-conversion leaves the branch in
+ * place; assigning the variable in a plain `if` lets the else arm BE the
+ * variable and the object's branchless `cmp; setl; neg; and` appears.  The
+ * object carries that setl at every inlining site (F12153).
+ */
 static short
 smc_ring_advance(short widx, short len)
 {
 	short next = (short)(widx + 1);
 
-	return (short)((next < len) ? next : 0);
+	if (next >= len)
+		next = 0;
+	return next;
 }
 
 /*

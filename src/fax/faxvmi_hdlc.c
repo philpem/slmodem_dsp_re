@@ -93,7 +93,9 @@ faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 		while (i != (unsigned int)vmi->framer->wr) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf("%02X,", vmi->framer->fifo[i]);
-			i = ((int)vmi->framer->fifo_size > (int)(i + 1)) ? i + 1 : 0;
+			i = i + 1;
+			if ((int)vmi->framer->fifo_size <= (int)i)
+				i = 0;
 		}
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("\n");
@@ -106,8 +108,9 @@ faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 			i = (unsigned int)vmi->framer->rd + 1;
 			for (k = 0; k <= 2; k++) {
 				hdr[k] = (unsigned char)vmi->framer->fifo[i];
-				i = ((int)vmi->framer->fifo_size > (int)(i + 1))
-				    ? i + 1 : 0;
+				i = i + 1;
+				if ((int)vmi->framer->fifo_size <= (int)i)
+					i = 0;
 			}
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
@@ -260,7 +263,7 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 		}
 
 		/* ones == 6: a flag, 0111 1110, and `b` is its closing zero */
-		if (b == 0 && vmi->framer->flags_wanted != 0) {
+		if ((b == 0) & (vmi->framer->flags_wanted != 0)) {
 			vmi->framer->flags_wanted =
 			    (unsigned short)(vmi->framer->flags_wanted - 1);
 			goto close_flag;

@@ -893,8 +893,10 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 		 * 104 bytes rather than 84.  Both are cleared to exactly the
 		 * filter's length by the switch below, not here.
 		 */
-		dsp->bpf_hist = sysdep_malloc(
-			fp->cfg.call_type == B103_CALL_ANSWER ? 0x68 : 0x54);
+		if (fp->cfg.call_type == B103_CALL_ANSWER)
+			dsp->bpf_hist = sysdep_malloc(0x68);
+		else
+			dsp->bpf_hist = sysdep_malloc(0x54);
 		/* Only the transmit staging buffer is cleared, not both. */
 		sysdep_memset(dsp->scratch, 0, 0x144);
 		dsp->mtd = NULL;

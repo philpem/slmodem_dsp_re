@@ -486,7 +486,7 @@ int
 V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 {
 	struct v8_tx_sequence *seq = v->side != 0 ? &v->seq[0] : &v->seq[2];
-	int v90_mod = 0, digital_connection = 0, pcm_indication = 0;
+	short v90_mod = 0, digital_connection = 0, pcm_indication = 0;
 	short i;
 
 	out->b2 = (unsigned char)((out->b2 & 0xef)
@@ -517,7 +517,7 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 	out->b1 &= 0x3f;
 
 	if (v->fn_matched != 0) {
-		short fn = v->fn_word;
+		int fn = v->fn_word;
 
 		if (fn == 0x107) {
 			out->b1 |= 0x40;

@@ -118,6 +118,7 @@ VTB_decoder(struct vtb *state, short i, short q, short *out)
 	short pt[4], bm[4];		/* this group's points and metrics*/
 	int slot, ri, rq, ci, cq, lim, grid, idx, base;
 	int j, best, m, d, sym, sh;
+	int sel, quad;
 
 	slot = (state->ring + 1) & 0xf;
 	state->ring = (unsigned short)slot;
@@ -161,15 +162,19 @@ VTB_decoder(struct vtb *state, short i, short q, short *out)
 	 * quadrature coordinate is the larger -- which is the reflection
 	 * about the diagonal that the constellation's own symmetry allows.
 	 */
-	idx = (short)(cq + (cq > ci ? grid : 0));
+	sel = (cq > ci);
+	idx = (short)(cq + sel * grid);
 	idx = (short)(ci + grid * idx);
 	base = state->region[idx];
 
 	/* And then the quadrant, which the region table does not carry. */
-	if ((short)ri > 0)
-		base += ((short)rq > 0) ? 0x00 : 0x18;
-	else
-		base += ((short)rq > 0) ? 0x08 : 0x10;
+	if ((short)ri > 0) {
+		quad = ((short)rq > 0) ? 0x00 : 0x18;
+		base += quad;
+	} else {
+		quad = ((short)rq > 0) ? 0x08 : 0x10;
+		base += quad;
+	}
 	base = (short)base;
 
 	/* Even states: the first group of four subsets. */

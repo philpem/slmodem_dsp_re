@@ -117,8 +117,12 @@ FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src, short *out,
 			}
 
 			count = (unsigned short)(count - need);
-			ridx = (short)(ridx + 1 < len ? ridx + 1 : 0);
-			widx = (short)(widx + 1 < taps ? widx + 1 : 0);
+			ridx = (short)(ridx + 1);
+			if (ridx >= len)
+				ridx = 0;
+			widx = (short)(widx + 1);
+			if (widx >= taps)
+				widx = 0;
 			hist_i[widx] = si;
 			hist_q[widx] = sq;
 		}

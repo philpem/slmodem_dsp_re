@@ -100,13 +100,21 @@ unsigned short SMCv32_MOD[8] = {
 	0x2534, 0x3425, 0x1706, 0x0617
 };
 
-/* (widx + 1) mod limit, exactly as the object spells it. */
+/*
+ * (widx + 1) mod limit.  The clear is an `if`, NOT `next < limit ? next : 0`.
+ * A conditional expression is lowered through a temporary, so the destination
+ * of the assignment is not one of the arms, `noce_try_store_flag_mask` cannot
+ * fire and a branch is emitted -- while the object holds the branchless mask
+ * `cmp %bp,%cx ; setl %al ; neg %eax ; and`.  F12153.
+ */
 static short
 ring_advance(short widx, short limit)
 {
 	short next = (short)(widx + 1);
 
-	return (short)((next < limit) ? next : 0);
+	if (next >= limit)
+		next = 0;
+	return next;
 }
 
 void

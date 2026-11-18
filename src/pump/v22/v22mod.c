@@ -696,13 +696,16 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		mtd = FPM_MTD_detect(fp->hdx->mtd_s1, fp->dsp->rx_scratch,
 				     fp->dsp->rx_count);
-		if (*rxcount != 0 && mtd == FPM_MTD_ABSENT)
-			fp->hdx->r08 += V22_HDX_TICK_MS;
+		if (*rxcount != 0)
+			if (mtd == FPM_MTD_ABSENT)
+				fp->hdx->r08 += V22_HDX_TICK_MS;
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
-		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_S1)
-			fp->hdx->connect_substate =
-				(short)(3 + (V22_HDX_R38(fp->hdx) != 1));
+		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_S1) {
+			int r38 = (V22_HDX_R38(fp->hdx) != 1);
+
+			fp->hdx->connect_substate = (short)(3 + r38);
+		}
 		break;
 
 	case 3:

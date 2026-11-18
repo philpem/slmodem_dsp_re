@@ -110,5 +110,7 @@ CID_MTD_detect(const short *samples, short count, struct cid *cid)
 	}
 
 	/* Both comparisons are unsigned in the object.  0 means detected. */
-	return (short)!(wide > 150 && wide / 2 > narrow);
+	int ok = (wide / 2 > narrow) & (wide > 150);
+
+	return (short)!ok;
 }

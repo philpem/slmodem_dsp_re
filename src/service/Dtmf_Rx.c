@@ -391,8 +391,9 @@ dtmf_modem(const short *samples, unsigned short count, struct dtmf_rx *rx)
 	state = (short)(unsigned short)rx->state;
 
 	if (state == 1) {
-		if (rx->nsamples > 3 * rate && ndigits_in > 0)
-			result = -1;
+		if (rx->nsamples > 3 * rate)
+			if (ndigits_in > 0)
+				result = -1;
 
 		half = (short)((unsigned short)count >> 1);
 		first = (short)band_pass(buf, half, rx);

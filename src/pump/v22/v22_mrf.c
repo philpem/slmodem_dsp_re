@@ -101,6 +101,7 @@ V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, int count)
 		int acc;
 		short k;
 		short r;
+		short *hk, *ck;
 
 		/*
 		 * Not enough input left to complete an output.  Take what
@@ -133,14 +134,16 @@ V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, int count)
 		remaining = (short)(remaining - need);
 
 		acc = 0;
+		ck = coeff + phase * hlen;
 		if (widx < hlen) {
 			/* Startup: the window has not filled yet. */
+			hk = history;
 			for (k = 0; k < V22_MRF_TAPS; k++)
-				acc += history[k] * coeff[phase * hlen + k];
+				acc += hk[k] * ck[k];
 		} else {
+			hk = history + widx - hlen;
 			for (k = 0; k < V22_MRF_TAPS; k++)
-				acc += history[widx - hlen + k] *
-				       coeff[phase * hlen + k];
+				acc += hk[k] * ck[k];
 		}
 		r = (short)(acc >> 15);
 

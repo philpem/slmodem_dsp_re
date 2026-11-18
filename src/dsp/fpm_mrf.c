@@ -55,7 +55,12 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 
 
 
-/* Branchless circular increment, as the original writes it. */
+/*
+ * Branchless circular increment, as the original writes it.  The clear is an
+ * `if`, not `next < len ? next : 0`: a conditional expression reaches the
+ * backend through a temporary, so if-conversion leaves the branch in place
+ * (F12153).
+ */
 #ifdef DSPLIB_REPRODUCE_BUGS
 static short
 advance(short idx, short len)
@@ -70,7 +75,9 @@ advance(int idx, int len)
 	int next = idx + 1;
 #endif
 
-	return (next < len) ? next : 0;
+	if (next >= len)
+		next = 0;
+	return next;
 }
 
 unsigned short

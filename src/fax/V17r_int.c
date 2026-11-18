@@ -287,11 +287,13 @@ QualityDetectV17(void *modem)
 	short r;
 	short err;
 	short n;
+	short sig;
 
 	rx = RXSTATE(modem);
 
 	/* +0xd0 is read 16-bit HERE and 32-bit in CarrierDetectV17. */
-	r = (short)(rx->agc.narrow.signal & rx->sre.active);
+	sig = rx->agc.narrow.signal;
+	r = (short)(sig & rx->sre.active);
 
 	/*
 	 * Read BEFORE the diagnostic, because the object reads it before the

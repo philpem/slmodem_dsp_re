@@ -821,15 +821,65 @@ V90Modulator::initiateFPE()
  * passes every test.  test/unit/t_v90modprog.cpp drives them apart on
  * purpose.
  *
- * THE RATE ITSELF is `0.5f + (float)(8000 * bitsPerFrame) * (1.0f / 6.0f)`
+ * THE RATE ITSELF is `0.5 + (float)(8000 * bitsPerFrame) * (1.0f / 6.0f)`
  * truncated to `unsigned int`: six symbols to a frame at 8 kHz, and the 0.5
- * makes the truncation a round.  Every part of that spelling is forced.
- * `imul $0x1f40` then `push $0 ; push %esi ; fildll` is an INTEGER product
- * widened as UNSIGNED, so the multiply by 8000 is integer and the operand is
- * unsigned; `fmuls` against 0x3e2aaaab is a multiply by the float nearest 1/6
- * and not a divide by 6.0f, which GCC cannot introduce; and `fistpll` into
- * eight bytes with the low word taken is float -> `unsigned int`, where a
- * cast to `int` emits `fistpl`.
+ * makes the truncation a round.  The HALF OFFSET IS A DOUBLE LITERAL and that
+ * is what separates the two shapes: `0.5` makes GCC load it once into st(0)
+ * (`fld DWORD ds:...`) and finish with `faddp st(1),st`, while `0.5f` folds
+ * it into the add as a memory operand (`fadd DWORD ds:...`).  The sibling
+ * `enterDataPhase`, already byte-exact, has the same message and the same
+ * early `fld`+`faddp`, and its source already spells `0.5`.  `imul $0x1f40`
+ * then `push $0 ; push %esi ; fildll` is an INTEGER product widened as
+ * UNSIGNED, so the multiply by 8000 is integer and the operand is unsigned;
+ * `fmul` against 0x3e2aaaab is a multiply by the float nearest 1/6 and not a
+ * divide by 6.0f, which GCC cannot introduce; and `fistpll` into eight bytes
+ * with the low word taken is float -> `unsigned int`, where a cast to `int`
+ * emits `fistpl`.
+ *
+ * THE THREE CALL RESULTS ARE CAPTURED IN CONSUMED LOCALS.  Native's three
+ * `generateSymbol` loops load `symbolBuf` (+0x68) AFTER the call, not before
+ * -- the buffer pointer is re-materialised post-call in %ecx/%edx, never
+ * hoisted across it.  Writing each result into a `short` and storing that is
+ * the source that produces it, and it must be done in ALL THREE arms: each
+ * arm alone leaves the native load group and the `this` binding unchanged
+ * (longest run stays at 29/209), and only the combination moves `this` to
+ * %ebx and reproduces the three post-call loads (run 110/209).  Three
+ * spellings -- per-arm `short sym`, function-scope `short sym`, and `int sym`
+ * -- emit identical code, so the object fixes the consumed-local structure,
+ * not one lexeme.
+ *
+ * THE CASE ARMS ARE ORDERED 1, 0, 2, 3 IN THE SOURCE.  The physical order of
+ * the emitted arms is 1, 2, 0, 3 whatever the source order, but which two of
+ * the three identical `nofBits = 0` break blocks the CFG merges -- and
+ * therefore the branch direction at 0x1a995 and whether `case 0`'s own tail
+ * is a fall-through -- follows the source order.  With `case 0` before
+ * `case 1` the object shares case 0's and case 2's tails (delta -7 bytes);
+ * with `case 1` first it shares case 1's and case 2's, exactly as native does
+ * (delta 0 bytes).  The arms have distinct selectors and no fall-through, so
+ * the reorder changes nothing behavioural.
+ *
+ * WHAT REMAINS is a scratch-register allocation difference: the instruction
+ * sequence, operand widths and memory references are identical instruction
+ * for instruction and the extent is exact (780/780), but the allocator picks
+ * different eax/ecx/edx/esi lanes in several arms (54 of 209 rows), so the
+ * consistent-renaming proof in alpha_equal refuses at row 100 (a USE
+ * CONFLICT).  The divergence is already present at pass 29.ce3, before
+ * `-frename-registers`: there the phase-3 arm holds symbolBuf in %edx and
+ * the phase-3 pointer in %eax, where native's final code holds %edx/%ecx, so
+ * rnreg only reshuffles what global-alloc chose.  Measured, and all without
+ * moving the lanes: twenty-four switch orders; `short`/`int`/`unsigned
+ * short` spellings of `sym`, per-arm, split and function-scope; one read vs
+ * two reads of the `eventCode` member; and both store-before-check orders.
+ * Every variant that does move the lanes changes the instruction stream.
+ * The persistent peephole2 scratch-search cursor is excluded as the cause:
+ * forcing the cursor on entry to `progress` (cc1plus `search_ofs`) to every
+ * distinct first-search outcome (0-5, 12-14, 48, 52) leaves the object
+ * byte-identical, while the same write to an earlier function does change its
+ * code.  `progress`'s three peephole2 scratch picks (the 0x498 compare, and
+ * the 0x10/0xc zero stores) are then normalized by rnreg, so the residual is
+ * a global-alloc/rnreg lane choice over progress's own RTL, not TU cursor
+ * coupling.  Byte-identical is not reachable from the recovered source alone;
+ * the tree difference that selects native's lanes is not yet identified.
  *
  * THE PRINTF ARGUMENT IS GUARDED BY A TEST THAT IS ALWAYS TRUE.  `state` was
  * just set to 3 eight instructions earlier, and 0x1a9ea tests it against 3
@@ -856,20 +906,12 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 	eventCode = 0;
 
 	switch (state) {
-	case 0:
-		/*
-		 * Silence.  The whole buffer, not `symbolsBlockSize` of it.
-		 */
-		for (i = 0; i < n; i++)
-			symbolBuf[i] = 0;
-		nofBits = 0;
-		break;
-
 	case 1:
 		for (i = 0; i < n; i++) {
 			if (state == 1) {
-				symbolBuf[i] =
+				short sym =
 				    (short)phase3Modulator->generateSymbol();
+				symbolBuf[i] = sym;
 
 				if (phase3Modulator->eventCode != 0)
 					eventCode = phase3Modulator->eventCode;
@@ -889,8 +931,9 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 					eventCode = 0;
 				}
 			} else {
-				symbolBuf[i] =
+				short sym =
 				    (short)phase4Modulator->generateSymbol();
+				symbolBuf[i] = sym;
 
 				if (phase4Modulator->eventCode != 0)
 					eventCode = phase4Modulator->eventCode;
@@ -899,10 +942,20 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 		nofBits = 0;
 		break;
 
+	case 0:
+		/*
+		 * Silence.  The whole buffer, not `symbolsBlockSize` of it.
+		 */
+		for (i = 0; i < n; i++)
+			symbolBuf[i] = 0;
+		nofBits = 0;
+		break;
+
 	case 2:
 		for (i = 0; i < n; i++) {
-			symbolBuf[i] =
+			short sym =
 			    (short)phase4Modulator->generateSymbol();
+			symbolBuf[i] = sym;
 
 			if (phase4Modulator->eventCode != 0)
 				eventCode = phase4Modulator->eventCode;
@@ -927,7 +980,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 				dsplibs_debug_printf(
 				    "V90Modulator: enter Data Phase, " "Rate = %d [bps]\r\n",
 				    state == 3
-					? (unsigned int)(0.5f +
+					? (unsigned int)(0.5 +
 					      (8000 *
 					       bitsToSymbol->mapper->
 						   bitsPerFrame) *

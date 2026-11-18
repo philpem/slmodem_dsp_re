@@ -924,13 +924,12 @@ V92CP::evaluateInfo()
 		 * heaviest weight at the HIGHEST index, so reading forwards
 		 * takes the table backwards.
 		 */
-		f = 0.0f;
+		flt_10 = 0.0f;
 		for (i = 0; i <= 15; i++) {
 			if (bits[word_124] != 0)
-				f += fltTable_2[15 - i];
+				flt_10 += fltTable_2[15 - i];
 			word_124++;
 		}
-		flt_10 = f;
 
 		word_124++;		/* the framing position at 68 */
 
@@ -959,14 +958,11 @@ V92CP::evaluateInfo()
 					f += fltTable_1[6 - i];
 				word_124++;
 			}
-			if (bits[word_124] != 0)
-				f = -f;
-			word_124++;
-
 			if (m == 0)
-				shaperA1 = f;
+				shaperA1 = bits[word_124] != 0 ? -f : f;
 			else
-				shaperA2 = f;
+				shaperA2 = bits[word_124] != 0 ? -f : f;
+			word_124++;
 		}
 
 		word_124++;		/* the framing position at 85 */
@@ -978,14 +974,11 @@ V92CP::evaluateInfo()
 					f += fltTable_1[6 - i];
 				word_124++;
 			}
-			if (bits[word_124] != 0)
-				f = -f;
-			word_124++;
-
 			if (m == 0)
-				shaperB1 = f;
+				shaperB1 = bits[word_124] != 0 ? -f : f;
 			else
-				shaperB2 = f;
+				shaperB2 = bits[word_124] != 0 ? -f : f;
+			word_124++;
 		}
 
 		word_124++;		/* the framing position at 102 */

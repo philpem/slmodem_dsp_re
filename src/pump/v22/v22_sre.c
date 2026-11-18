@@ -167,13 +167,20 @@ static short
 sre_filter(const struct v22_sre *sre, short fill)
 {
 	const short *c = sre->coeff + sre->branch * sre->taps;
-	const short *h = (fill < sre->taps) ? sre->hist
-					    : sre->hist + (fill - sre->taps);
 	int acc = 0;
-	short i;
+	int i;
 
-	for (i = V22_SRE_TAPS - 1; i >= 0; i--)
-		acc += *c++ * *h++;
+	if (fill < sre->taps) {
+		const short *h = sre->hist;
+
+		for (i = V22_SRE_TAPS - 1; i >= 0; i--)
+			acc += *c++ * *h++;
+	} else {
+		const short *h = sre->hist + (fill - sre->taps);
+
+		for (i = V22_SRE_TAPS - 1; i >= 0; i--)
+			acc += *c++ * *h++;
+	}
 
 	return (short)(acc >> 15);
 }
@@ -293,23 +300,25 @@ sre_update(struct v22_sre *sre, short yq, short xq)
 		 * error, i.e. of the 16-bit truncation, and `err` reaches
 		 * +-34006 so that is a real distinction.
 		 */
-		int a = iabs((int)(short)err);
+		short a = iabs((int)(short)err);
 
-		if (a > 0x7ff && m == 2) {
-			sre->mode = 1;
-			sre->groups = 3;
-			sre->pll_acc = (short)(sre->pll_acc >> 2);
-			m = 1;
-		}
-		if (a <= 4 && m == 1) {
-			short acc = sre->pll_acc;
+		if (a > 0x7ff)
+			if (m == 2) {
+				sre->mode = 1;
+				sre->groups = 3;
+				sre->pll_acc = (short)(sre->pll_acc >> 2);
+				m = 1;
+			}
+		if (a <= 4)
+			if (m == 1) {
+				short acc = sre->pll_acc;
 
-			sre->mode = 2;
-			sre->groups = 12;
-			sre->acquiring = 0;
-			sre->pll_acc = (short)(acc << 2);
-			m = 2;
-		}
+				sre->mode = 2;
+				sre->groups = 12;
+				sre->acquiring = 0;
+				sre->pll_acc = (short)(acc << 2);
+				m = 2;
+			}
 	} else {
 		/*
 		 * The first 65 updates.  The integrator is held at zero, so
@@ -320,8 +329,13 @@ sre_update(struct v22_sre *sre, short yq, short xq)
 
 		sre->pll_acc = 0;
 		sre->settle = (short)(settle + 1);
-		m = (settle <= 0x3f) ? 0 : 1;
-		sre->mode = m;
+		if (settle <= 0x3f) {
+			m = 0;
+			sre->mode = 0;
+		} else {
+			m = 1;
+			sre->mode = 1;
+		}
 	}
 
 	{

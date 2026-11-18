@@ -623,8 +623,8 @@ putFrame(void *shellp)
 	v34_putbits_fn put = s->put_bits;
 	const short *v = s->frame;
 	int w = s->idx_width;
-	int small = 2;
 	int small_last = 2;
+	int small = 2;
 	int sum;
 	int nb;
 
@@ -644,7 +644,17 @@ putFrame(void *shellp)
 	} else if (nb > 0) {
 		put(s, (unsigned short)v[0], nb);
 	} else {
-		small = 2 - ((unsigned short)s->group_count < 9 ? 1 : 0);
+		/*
+		 * The object computes this as `cmpw $0x8,group_count ;
+		 * setbe %al ; sub %eax,%ecx` -- a materialised 0/1 value.
+		 * `2 - (cond ? 1 : 0)` folds into a two-constant
+		 * conditional expression and reaches the movcc path
+		 * (`cmp $0x9 ; sbb %edx,%edx ; add $0x2`), which has no
+		 * setcc.  F12162.
+		 */
+		int g8 = ((unsigned short)s->group_count < 9);
+
+		small = 2 - g8;
 		small_last = (short)(nb + small);
 	}
 

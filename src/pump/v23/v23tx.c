@@ -199,19 +199,13 @@ v23FP_tx_progress(struct v23tx *tx, short *out, int count, const int *bits,
 	}
 
 	if (tx->remaining != 0) {
-		/* Stopped part way through a bit: carry it. */
 		tx->resume = 1;
 		tx->held = bit;
-	} else {
-		/*
-		 * The block ended exactly on a bit boundary, so the bit is
-		 * finished.  Count it and load the next period -- but do NOT
-		 * advance `bits`, because it is the caller that owns the
-		 * stream and `consumed` is how it is told to move.
-		 */
-		next_period(tx, &done);
+		*consumed = done;
+		return;
 	}
 
+	next_period(tx, &done);
 	*consumed = done;
 }
 

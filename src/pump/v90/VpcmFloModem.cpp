@@ -2854,6 +2854,7 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	  entFilt(5, 5, entFiltDen, entFiltNum, 99)
 {
 	unsigned int i;
+	int analog = (side == V90_MODEM_SIDE_ANALOG);
 
 	sysdep_memset(bitVector, 0, sizeof(bitVector));
 	nofBits = 0;
@@ -2904,7 +2905,7 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	 * The SAME `(side == analog)` the V92Modem got as its first argument,
 	 * computed once at 0xfab7 and kept in %esi across five calls.
 	 */
-	info0Layout = (side == V90_MODEM_SIDE_ANALOG);
+	info0Layout = analog;
 	pcmSessionType = 0;
 	progressState = 0;
 

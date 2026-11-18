@@ -221,8 +221,9 @@ QualityDetectV27(void *modem)
 	short mse = (&rx->fse)->mse;
 	short verdict;
 	unsigned short n;
+	short sig = (&rx->agc)->signal;
 
-	verdict = (short)((&rx->agc)->signal & (&rx->sre)->active);
+	verdict = (short)(sig & (&rx->sre)->active);
 	if (verdict == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27 Dec error too big..." " unreliable data\n");

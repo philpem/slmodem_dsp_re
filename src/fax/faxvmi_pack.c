@@ -39,8 +39,7 @@ faxvmi_simp_pack(struct faxvmi *vmi, unsigned short *src, short count)
 	unsigned short *out;
 	unsigned int word, acc, elem_mask;
 	unsigned short mask, bit, width;
-	short n, nout = 0, left;
-	short real = 1;
+	short n, nout = 0, real = 1, left;
 
 	left = (short)(count - faxvmi_write_fifo(vmi, &src, count));
 
@@ -59,17 +58,17 @@ faxvmi_simp_pack(struct faxvmi *vmi, unsigned short *src, short count)
 		unsigned int b;
 
 		if (mask == 0) {
-			if (fr->count != 0) {
+			if (fr->count == 0) {
+				word = 0;
+				real = 0;
+				vmi->underrun = 1;
+			} else {
 				unsigned short rd = fr->rd++;
 
 				word = fr->fifo[rd];
 				fr->count = (unsigned short)(fr->count - 1);
 				if (fr->rd >= fr->fifo_size)
 					fr->rd = 0;
-			} else {
-				word = 0;
-				real = 0;
-				vmi->underrun = 1;
 			}
 			mask = 0x80;
 		}

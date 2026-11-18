@@ -255,7 +255,9 @@ TxNoCarrierV17(void *modem, const unsigned short *data, short *out,
 			 */
 			ring->sym[widx] = (short)prm->no_carrier_sym;
 			next = (short)(widx + 1);
-			widx = (short)(next < len ? next : 0);
+			if (next >= len)
+				next = 0;
+			widx = next;
 		}
 	}
 

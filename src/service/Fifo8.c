@@ -66,8 +66,8 @@ FIFO8_create(struct fifo8 *f, const struct fifo8_cfg *cfg)
 short
 FIFO8_read(struct fifo8 *f, unsigned char *dst, unsigned short n)
 {
-	unsigned short size = f->cfg.size;
 	unsigned short cnt = f->count > n ? n : f->count;
+	unsigned short size = f->cfg.size;
 	unsigned short pad = n - cnt;
 	unsigned short rd = f->rd;
 	unsigned char *buf = f->buf;
@@ -75,10 +75,10 @@ FIFO8_read(struct fifo8 *f, unsigned char *dst, unsigned short n)
 
 	i = cnt;
 	while (i--) {
+		unsigned short next = rd + 1;
+
 		*dst++ = buf[rd];
-		rd++;
-		if (rd >= size)
-			rd = 0;
+		rd = next < size ? next : 0;
 	}
 	i = pad;
 	while (i--)
@@ -105,10 +105,10 @@ FIFO8_write(struct fifo8 *f, const unsigned char *src, unsigned short n)
 
 	i = cnt;
 	while (i--) {
+		unsigned short next = wr + 1;
+
 		buf[wr] = *src++;
-		wr++;
-		if (wr >= size)
-			wr = 0;
+		wr = next < size ? next : 0;
 	}
 
 	f->wr = wr;

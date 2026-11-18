@@ -874,7 +874,7 @@ V90MP::bitsToInfo(int bit)
 	int k;
 	int rc = 0;
 	unsigned char x, sum, n, next;
-	char str[76];
+	char str[44];
 
 	if (bit != 0) {
 		onesRun++;
@@ -1036,32 +1036,7 @@ V90MP::bitsToInfo(int bit)
 		onesRun = 0;
 		zerosRun = 0;
 
-		if (CPack == 0) {
-			nofRecievedMp++;
-			rc = 1;
-			if (nofRecievedMp <= 2) {
-
-				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90MP: MP detect"
-					    "ed. Type%d,Rate%d,Trellis%d,NonLi" "n%d,Shaping%d,CPack%d\r\n",
-					    Type, Rate * 2400, Trellis, NonLin,
-					    Shaping, CPack);
-
-				PrintBase2(str, (unsigned long)rateMask, 14);
-
-				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: Rate Mask" " - %s\r\n", str);
-				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: h1 real =" " %d, imag = %d\r" "\n", h1Real,
-							     h1Imag);
-				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: h2 real =" " %d, imag = %d\r" "\n", h2Real,
-							     h2Imag);
-				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: h3 real =" " %d, imag = %d\r" "\n", h3Real,
-							     h3Imag);
-			}
-		} else {
+		if (CPack != 0) {
 			nofRecievedMpNot++;
 			rc = 2;
 			if (nofRecievedMpNot <= 2) {
@@ -1083,6 +1058,31 @@ V90MP::bitsToInfo(int bit)
 					dsplibs_debug_printf("V90MP: h2 real =" " %d, imag = %d\r" "\n", h2Real,
 							     h2Imag);
 				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("V90MP: h3 real =" " %d, imag = %d\r" "\n", h3Real,
+							     h3Imag);
+			}
+		} else {
+			nofRecievedMp++;
+			rc = 1;
+			if (nofRecievedMp <= 2) {
+
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("V90MP: MP detect"
+					    "ed. Type%d,Rate%d,Trellis%d,NonLi" "n%d,Shaping%d,CPack%d\r\n",
+					    Type, Rate * 2400, Trellis, NonLin,
+					    Shaping, CPack);
+
+				PrintBase2(str, (unsigned long)rateMask, 14);
+
+				if (DSPLIB_DEBUG_VERBOSE())
+					dsplibs_debug_printf("V90MP: Rate Mask" " - %s\r\n", str);
+				if (DSPLIB_DEBUG_VERBOSE())
+					dsplibs_debug_printf("V90MP: h1 real =" " %d, imag = %d\r" "\n", h1Real,
+							     h1Imag);
+				if (DSPLIB_DEBUG_VERBOSE())
+					dsplibs_debug_printf("V90MP: h2 real =" " %d, imag = %d\r" "\n", h2Real,
+							     h2Imag);
+				if (DSPLIB_DEBUG_VERBOSE())
 					dsplibs_debug_printf("V90MP: h3 real =" " %d, imag = %d\r" "\n", h3Real,
 							     h3Imag);
 			}

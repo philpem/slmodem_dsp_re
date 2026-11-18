@@ -275,10 +275,19 @@ static void
 setConstellationMaskInline(V90MappingParams *params, int which,
 			   const short *mask)
 {
-	unsigned int c = (unsigned int)which;
-	if (which >= 6) c = 0;
-	unsigned char *table = params->constellation[c];
-	unsigned int *size = &params->constellationSize[c];
+	/*
+	 * The clamp ASSIGNS THE PARAMETER and not a copy of it.  That is
+	 * forced, not stylistic: with no ELSE arm ifcvt takes the value to
+	 * keep from the instruction immediately before the compare
+	 * (`noce_process_if_block`, ifcvt.c), so `c = which; if (which >= 6)
+	 * c = 0;` gives it b != x and it declines -- ours branched, and the
+	 * object's `cmp $0x6,%ebp ; setl %al ; neg %eax ; and %ebp,%eax` is
+	 * the mask only `if (which >= 6) which = 0;` produces.  F12164.
+	 */
+	if (which >= 6)
+		which = 0;
+	unsigned char *table = params->constellation[which];
+	unsigned int *size = &params->constellationSize[which];
 	int j, k;
 
 	*size = 0;
@@ -312,10 +321,11 @@ static void
 setCodecConstellationMaskInline(V90MappingParams *params, int which,
 				const short *mask)
 {
-	unsigned int c = (unsigned int)which;
-	if (which >= 6) c = 0;
-	unsigned char *table = params->codecConstellation[c];
-	unsigned int *size = &params->constellationSize[c];
+	/* The clamp assigns the parameter; see the note in the first one. */
+	if (which >= 6)
+		which = 0;
+	unsigned char *table = params->codecConstellation[which];
+	unsigned int *size = &params->constellationSize[which];
 	int j, k;
 
 	*size = 0;

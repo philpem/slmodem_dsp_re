@@ -358,8 +358,14 @@ toneiir_progress(struct toneiir *st, short sample)
 		st->total = 0;
 	}
 
-	result = (st->total > st->need && present)
-		 ? TONEIIR_PRESENT : TONEIIR_ABSENT;
+	if (st->total > st->need) {
+		if (present)
+			result = TONEIIR_PRESENT;
+		else
+			result = TONEIIR_ABSENT;
+	} else {
+		result = TONEIIR_ABSENT;
+	}
 
 	{
 		unsigned short prev = st->env_band;

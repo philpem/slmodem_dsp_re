@@ -99,31 +99,16 @@ FDSP_DP_Create(struct fdsp_kernel *k, short sRxSamplesDelay,
 			k->chan_a = 0;
 			k->buffers = 0;
 		}
-		if (ok) {
-			k->buffers = (struct fdsp_buffers *)
-				     sysdep_malloc(sizeof(*k->buffers));
-			ok = k->buffers != 0;
-		}
-		if (ok) {
-			k->chan_b = (struct fdsp_channel *)
-				    sysdep_malloc(sizeof(*k->chan_b));
-			ok = k->chan_b != 0;
-		}
-		if (ok) {
-			k->chan_a = (struct fdsp_channel *)
-				    sysdep_malloc(sizeof(*k->chan_a));
-			ok = k->chan_a != 0;
-		}
-		if (ok) {
-			k->chan_b->coef = (float *)
-					  sysdep_malloc(240 * sizeof(float));
-			ok = k->chan_b->coef != 0;
-		}
-		if (ok) {
-			k->chan_a->coef = (float *)
-					  sysdep_malloc(240 * sizeof(float));
-			ok = k->chan_a->coef != 0;
-		}
+		ok = ok && (k->buffers = (struct fdsp_buffers *)
+			    sysdep_malloc(sizeof(*k->buffers))) != 0;
+		ok = ok && (k->chan_b = (struct fdsp_channel *)
+			    sysdep_malloc(sizeof(*k->chan_b))) != 0;
+		ok = ok && (k->chan_a = (struct fdsp_channel *)
+			    sysdep_malloc(sizeof(*k->chan_a))) != 0;
+		ok = ok && (k->chan_b->coef = (float *)
+			    sysdep_malloc(240 * sizeof(float))) != 0;
+		ok = ok && (k->chan_a->coef = (float *)
+			    sysdep_malloc(240 * sizeof(float))) != 0;
 		k->chan_a->offset = sRxSamplesDelay;
 		k->chan_b->offset = sTxSamplesDelay;
 		if (!ok) {

@@ -199,7 +199,14 @@ V92ModulusEncoder::reset(V92MappingParams *params)
 			field_3c * field_40 * field_44);
 
 	n = 0;
-	while (v92me_mul(a, b >> n) > 0 && n <= 7)
+	/*
+	 * The object materialises BOTH loop-test operands and combines
+	 * them (`cmpl $0x7,%n; setle %bl` beside the sign of the
+	 * product, then `test %al,%bl`), so the test is a bitwise `&`,
+	 * not the short-circuit `&&`.  Both operands are pure here.
+	 * F12165.
+	 */
+	while ((v92me_mul(a, b >> n) > 0) & (n <= 7))
 		n++;
 
 	if (n == 8) {
@@ -295,7 +302,14 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 		hh = a / 2;
 		ll = v92me_add(v92me_shl(a % 2, 62), v92me_sub(b, 1) / 2);
 
-		over = (hi > hh) || (hi == hh && lo >= ll);
+		if (hi < hh)
+			over = 0;
+		else if (hi > hh)
+			over = 1;
+		else if (lo < ll)
+			over = 0;
+		else
+			over = 1;
 
 		d = hi;
 		c = lo;

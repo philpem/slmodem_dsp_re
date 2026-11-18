@@ -641,21 +641,21 @@ rx_iir(struct v34_receiver *rx, int store_prev)
 	static const short bpcoeff2 = -0x3eba;	/* -16058 */
 	static const short edelay = 104;
 	int acc;
-	short prev;
+	unsigned short prev;
 
-	prev = rx->f208;
-	acc = (((int)rx->demod_i << 10) + (int)prev * bpcoeff1
+	prev = *(unsigned short *)&rx->f208;
+	acc = (((int)rx->demod_i << 10) + (int)(short)prev * bpcoeff1
 	       + (int)rx->dp.iir2.i * bpcoeff2) >> 14;
-	rx->dp.iir2.i = prev;
+	rx->dp.iir2.i = (short)prev;
 	rx->demod_i = (short)acc;
 	rx->f208 = (short)acc;
 	if (store_prev)
 		rx->demod_i_prev = (short)acc;
 
-	prev = rx->f20a;
-	acc = (((int)rx->demod_q << 10) + (int)prev * bpcoeff1
+	prev = *(unsigned short *)&rx->f20a;
+	acc = (((int)rx->demod_q << 10) + (int)(short)prev * bpcoeff1
 	       + (int)rx->dp.iir2.q * bpcoeff2) >> 14;
-	rx->dp.iir2.q = prev;
+	rx->dp.iir2.q = (short)prev;
 	rx->demod_q = (short)acc;
 	rx->f20a = (short)acc;
 	if (store_prev)
@@ -1465,15 +1465,19 @@ receiver(void *objp)
 		if (rx->flags & V34_RX_FLAG_LATE_TRN)
 			n = (short)(n + 0x120);
 
-		if (!(rx->flags & V34_RX_FLAG_LATE_TRN) && n <= 0x132) {
-			/* Phase 3: the PP sequence, known and generated. */
-			int k = (short)rx->vectpp_idx;
+		if (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {
+			if (n <= 0x132) {
+				/* Phase 3: the PP sequence, known and generated. */
+				int k = (short)rx->vectpp_idx;
 
-			rx->dp.iir2.i = (short)(vectpp[k * 2] >> 1);
-			rx->dp.iir2.q = (short)(vectpp[k * 2 + 1] >> 1);
-			k = (unsigned short)rx->vectpp_idx + 1;
-			rx->vectpp_idx = (short)((short)k <= 0x2f ? k : 0);
-		} else if (n > 0x332) {
+				rx->dp.iir2.i = (short)(vectpp[k * 2] >> 1);
+				rx->dp.iir2.q = (short)(vectpp[k * 2 + 1] >> 1);
+				k = (unsigned short)rx->vectpp_idx + 1;
+				rx->vectpp_idx = (short)((short)k <= 0x2f ? k : 0);
+				goto rx_dispatch_done;
+			}
+		}
+		if (n > 0x332) {
 			/* Past TRN: the real decoder. */
 			decoderv34(obj);
 		} else {
@@ -1532,6 +1536,7 @@ receiver(void *objp)
 
 			}
 		}
+	rx_dispatch_done: ;
 	} else if (rx->pllcnt > 1) {
 		/*
 		 * The handshake's reference generator.  Two of the four
@@ -1555,7 +1560,10 @@ receiver(void *objp)
 			rx->dp.point = rxvect4[0];
 			e0 = rx_slice_err(rx);
 
-			rx->rx_blocks = (short)((short)e0 <= (short)e3 ? 2 : 1);
+			if ((short)e0 <= (short)e3)
+				rx->rx_blocks = 2;
+			else
+				rx->rx_blocks = 1;
 		}
 
 		rx->dp.point = (rx->rx_blocks & 1) ? rxvect4[3] : rxvect4[0];

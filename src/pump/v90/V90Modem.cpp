@@ -453,12 +453,9 @@ V90Modem::reset(unsigned int qcFlag)
 
 	printTitle();
 
-	switch (side) {
-	case V90_MODEM_SIDE_DIGITAL:
+	if (side == V90_MODEM_SIDE_DIGITAL) {
 		modulator->reset();
-		break;
-
-	case V90_MODEM_SIDE_ANALOG:
+	} else if (side == V90_MODEM_SIDE_ANALOG) {
 		if (params->PROBING_MODE) {
 			edprintf("due to probe mode quick connect is " "masked !!!\r\n");
 			qcFlag = 0;
@@ -471,12 +468,9 @@ V90Modem::reset(unsigned int qcFlag)
 
 		setDilDescriptor(dil, dilType);
 		demodulator->reset(qcFlag);
-		break;
-
-	default:
+	} else {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Modem Reset: Illegal " "modemSide\r\n");
-		break;
 	}
 }
 

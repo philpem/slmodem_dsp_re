@@ -188,33 +188,37 @@ cid_value(struct cid_modem *ctx, int v)
 void *
 cid_create(struct cid_modem *ctx, int cid_val, int mode)
 {
-	if (!ctx) {
-		ctx = sysdep_malloc(sizeof(*ctx));
-		if (!ctx)
+	struct cid_modem *ret;
+
+	if (ctx == 0) {
+		ret = sysdep_malloc(sizeof(*ret));
+		if (ret == 0)
 			return 0;
 
-		ctx->mode = mode;
-		ctx->fsk = 0;
-		ctx->dtmf = 0;
-		ctx->samples_fill = 0;
+		ret->mode = mode;
+		ret->fsk = 0;
+		ret->dtmf = 0;
+		ret->samples_fill = 0;
 
 		if (mode > 1) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "\n AUTOMATIC MODULATION MODE \n");
-			ctx->mode = CID_MODE_AUTOMATIC;
+			ret->mode = CID_MODE_AUTOMATIC;
 		}
+	} else {
+		ret = ctx;
 	}
 
-	if (ctx->mode != 0)
-		ctx->dtmf = create_cid_dtmf(ctx->dtmf);
-	if (ctx->mode != 1)
-		ctx->fsk = create_cid(ctx->fsk);
-	if (ctx->mode == CID_MODE_AUTOMATIC)
-		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
+	if (ret->mode != 0)
+		ret->dtmf = create_cid_dtmf(ret->dtmf);
+	if (ret->mode != 1)
+		ret->fsk = create_cid(ret->fsk);
+	if (ret->mode == CID_MODE_AUTOMATIC)
+		ret->fsk->mark_conf_step = CID_MARK_CONF_STEP;
 
-	ctx->cid_val = cid_val;
-	return ctx;
+	ret->cid_val = cid_val;
+	return ret;
 }
 
 /*

@@ -275,13 +275,17 @@ V32FP_modem(struct v32_modem *modem, const int *txbits, short *out, const short 
 	nsamples = (short)*nout;
 	rxcount = (unsigned short)*nin;
 
-	fp = FP(modem);
-	if (*nin > 0) {
-		short *clean = (short *)fp->clean_buf;
+	/*
+	 * The clean-buffer fill reads FP(modem) directly: the object's taken
+	 * path loads the owner once into the loop preheader and reuses it for
+	 * `clean_n` below, while the zero-trip path loads it separately at the
+	 * join.  The guard is the loop's own preheader test (`cmp $0x0,%ecx`),
+	 * not an `if (*nin > 0)` around it.
+	 */
+	for (i = 0; i < *nin; i++)
+		((short *)FP(modem)->clean_buf)[i] = in[i];
 
-		for (i = 0; i < *nin; i++)
-			clean[i] = in[i];
-	}
+	fp = FP(modem);
 	fp->clean_n = (unsigned short)*nin;
 
 	for (i = 0; i < *nout; i++)

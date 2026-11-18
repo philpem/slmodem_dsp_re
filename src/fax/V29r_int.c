@@ -286,7 +286,8 @@ QualityDetectV29(void *modem)
 {
 	struct v29_rx_block *rx = ((struct v29_rx *)modem)->rx;
 	int err = rx->fse.mse;
-	int verdict = (short)(rx->sre.active & rx->agc.signal);
+	short sig = rx->agc.signal;
+	int verdict = (short)(rx->sre.active & sig);
 	short n;
 
 	if (verdict == 0) {

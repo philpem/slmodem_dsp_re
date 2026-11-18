@@ -626,14 +626,14 @@ V90AutoDigitalImpDetector::isThereAnyAltRbsPhase()
 int
 V90AutoDigitalImpDetector::isAltRbs(short phase, short code, float v)
 {
-	int d;
+	int result = 0;
 
-	if (altRbsFlag[phase] == 0)
-		return 0;
+	if (altRbsFlag[phase] != 0) {
+		if (adid_abs(adid_abs((int)v) - linMapp[phase][code]) > altRbsDistanceThresh)
+			result = 1;
+	}
 
-	d = adid_abs(adid_abs((int)v) - linMapp[phase][code]);
-
-	return d > altRbsDistanceThresh ? 1 : 0;
+	return result;
 }
 
 /*
@@ -723,7 +723,6 @@ void
 V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 {
 	float inv;
-	short v;
 	short phase;
 
 	if (qc == 0) {
@@ -771,15 +770,13 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 
 	altRbsDistanceThresh = (short)(inv * 50.0f + 0.5f);
 
-	v = (short)(inv * 2777.7778f + 0.5f);
-	if (v > 2500)
-		v = 2500;
-	neighborUcodeMinDistance = v;
+	neighborUcodeMinDistance = (short)(inv * 2777.7778f + 0.5f);
+	if (neighborUcodeMinDistance > 2500)
+		neighborUcodeMinDistance = 2500;
 
-	v = (short)(inv * 6666.667f + 0.5f);
-	if (v > 6000)
-		v = 6000;
-	neighborUcodeMaxDistance = v;
+	neighborUcodeMaxDistance = (short)(inv * 6666.667f + 0.5f);
+	if (neighborUcodeMaxDistance > 6000)
+		neighborUcodeMaxDistance = 6000;
 
 	if (float_a950 != 0.0f) {
 		short seed = (short)(ucodeLevel * inv + 0.5f);
@@ -3050,9 +3047,9 @@ V90AutoDigitalImpDetector::setQcLinearMapping()
  * is copied out before any of it is written back, which is what makes this a
  * rotation rather than a shift that overwrites its own source.
  *
- * The wrap is `phase + 1 == 6 ? 0 : phase + 1` and not a modulus, so an
- * `offset` outside 0..5 walks straight out of the table rather than folding
- * back into it.  docs/deviations.md D258.
+ * The wrap increments the phase and clears it at 6 rather than taking a
+ * modulus, so an `offset` outside 0..5 walks straight out of the table rather
+ * than folding back into it.  docs/deviations.md D258.
  */
 void
 V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset(short offset)
@@ -3060,11 +3057,22 @@ V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset(short offset)
 	short saved[V90ADID_PHASES];
 	short phase = offset;
 	short i;
+	short n = 0;
 
+	/*
+	 * The read loop keeps a separate index for `saved` from the loop
+	 * counter, and increments the phase in two statements rather than as a
+	 * ternary.  The object seeds two counters separately in the prologue
+	 * (`xor %edx,%edx` feeding the index slot at 0xc(%esp), and a separate
+	 * `xor %esi,%esi`), and wraps with a branchless clear
+	 * (`cmp $0x6,%dx ; setne %bl ; neg %ebx ; and %edx,%ebx`) which only
+	 * `x = x+1; if (x == 6) x = 0;` produces.  F12152.
+	 */
 	for (i = 0; i < V90ADID_PHASES; i++) {
-		saved[i] = linMapp[phase][ucode];
-		phase = (short)(phase + 1) == V90ADID_PHASES
-			    ? 0 : (short)(phase + 1);
+		saved[n++] = linMapp[phase][ucode];
+		phase = (short)(phase + 1);
+		if (phase == V90ADID_PHASES)
+			phase = 0;
 	}
 
 	for (i = 0; i < V90ADID_PHASES; i++)

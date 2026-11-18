@@ -145,7 +145,9 @@ TxNoCarrierV29(void *modem, const unsigned short *data, short *out,
 		ring->i[widx] = 0;
 		ring->q[widx] = 0;
 		next = (short)(widx + 1);
-		widx = (short)(next < len ? next : 0);
+		if (next >= len)
+			next = 0;
+		widx = next;
 	}
 
 	produced = FPM_PPS_filter(&fp->pps, ring, out, count);

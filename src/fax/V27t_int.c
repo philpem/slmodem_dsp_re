@@ -131,7 +131,9 @@ TxNoCarrierV27(void *modem, unsigned short *in, short *out,
 		short rate = prm->rate;
 
 		sym[widx] = V27TX_NOCARR_SYMBOL[rate];
-		widx = (short)((widx + 1 < len) ? widx + 1 : 0);
+		widx = (short)(widx + 1);
+		if (widx >= len)
+			widx = 0;
 	}
 
 	r = (short)FPM_PPS_filter(

@@ -105,7 +105,13 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 		cfg = &TONE_CFG;
 	memcpy(t, cfg, sizeof(*cfg));
 
-	if (allocated && t->fir_len > 0) {
+	/*
+	 * Bitwise, and with the short promoted explicitly: the object
+	 * materialises both halves (`setne %al` for `allocated`, `setg` for
+	 * the length) and combines them with `test`, which a short-circuit
+	 * `&&` never produces.  F12159.
+	 */
+	if ((allocated != 0) & (t->fir_len > 0)) {
 		t->fir_coef = sysdep_malloc(t->fir_len * 4);
 		t->fir_dly = sysdep_malloc(t->fir_len * 4);
 		t->ptr_01b4 = sysdep_malloc(20);

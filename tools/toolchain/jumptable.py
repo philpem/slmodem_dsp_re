@@ -90,8 +90,12 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
     adjacent dispatch guard independently bounds its selector. Direct
     relocated calls obey the i386 callee-save/stack-return ABI. A private
     frame address requires the independent private_frame_effects proof for
-    its extent, call contract, masked reads and capability cleanup. No other
-    frame address may escape. CWTL modifies only EAX.
+    its extent, call contract, masked reads and capability cleanup. A frame
+    local disjoint from every saved slot may instead have its address escape
+    as an ordinary out-parameter buffer: the addressed word counts as
+    initialized (the callee may write it) and no capability is claimed for it.
+    No other frame address may escape. A frame local may be read at 8-, 16- or
+    32-bit width (MOV/MOVSWL/MOVZWL/MOVSBL/MOVZBL). CWTL modifies only EAX.
     """
     first = rows[0]
     frame_match = re.fullmatch(r'\$0x([0-9a-f]+),%esp', first[3])
@@ -120,7 +124,7 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
     # Frame words outside the save protocol retain every store site for the
     # private-record alias proof and their offset for scratch initialization.
     outgoing = {}
-    local_reads = set(); predispatch_writes = set()
+    local_reads = set(); predispatch_writes = set(); addressed = set()
     for address, raw, mnemonic, operands in rows:
         original_mnemonic = mnemonic
         mnemonic = base(mnemonic)
@@ -155,10 +159,35 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
                     'reallocated fixed frame')
             stack_ops[address] = ('allocate' if mnemonic == 'sub' else 'release',)
             continue
-        if context is not None and (mnemonic=='lea' or original_mnemonic=='testb'):
+        # A `lea disp(%esp),reg` addresses a frame word.  The record-shaped
+        # corridor (word-aligned into eax/ecx/edx) is validated by the private
+        # proof below.  Any other address-of-frame-local is an ordinary
+        # out-parameter buffer: a callee may write that word and a later read
+        # observes it.  Admit it as an escaped local, provided the addressed
+        # word is disjoint from every saved slot, so the save/restore proof is
+        # unaffected; the address itself carries no proven capability, so the
+        # private machinery is deliberately not claimed for it.
+        record = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(eax|ecx|edx)', operands)
+        if (context is not None and mnemonic == 'lea' and record is not None
+                and int(record[1] or '0', 16) % 4 == 0):
             # Exact decoding, bounds, dominance and capability cleanup are
             # checked by private_frame_effects before this frame can pass.
             stack_ops[address] = ('private',)
+            continue
+        if context is not None and original_mnemonic == 'testb':
+            stack_ops[address] = ('private',)
+            continue
+        local_address = re.fullmatch(
+            r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', operands)
+        if mnemonic == 'lea' and local_address is not None:
+            offset = int(local_address[1] or '0', 16)
+            require(offset % 2 == 0 and offset + 2 <= frame,
+                    'fixed-frame local address extent/alignment')
+            require(all(not (offset < owner + 4 and owner < offset + 2)
+                        for owner in slots),
+                    'fixed-frame local address overlaps a save slot')
+            addressed.add(offset)
+            stack_ops[address] = ('local-address', offset)
             continue
         store = re.fullmatch(r'%(ebx|esi|edi|ebp),(?:(0x[0-9a-f]+))?\(%esp\)', operands)
         if store and address < dispatch and store[1] not in saved and store[1] not in written:
@@ -180,27 +209,30 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
             stack_ops[address] = ('outgoing', offset)
             continue
         load = re.fullmatch(r'(?:(0x[0-9a-f]+))?\(%esp\),%(e(?:ax|bx|cx|dx|si|di|bp))', operands)
-        require(load is not None and mnemonic == 'mov', 'unsupported fixed-frame stack access')
+        width = {'mov': 4, 'movswl': 2, 'movzwl': 2,
+                 'movsbl': 1, 'movzbl': 1}.get(mnemonic)
+        require(load is not None and width is not None, 'unsupported fixed-frame stack access')
         offset = int(load[1] or '0', 16); register = load[2]
         if offset < frame:
-            require(offset % 4 == 0 and offset + 4 <= frame,
+            require(offset % width == 0 and offset + width <= frame,
                     'fixed-frame local extent/alignment')
             if offset in slots:
-                require(slots[offset] == register, 'saved slot wrong-owner read')
+                require(width == 4 and slots[offset] == register, 'saved slot wrong-owner read')
                 stack_ops[address] = ('restore', offset, register)
             else:
                 local_reads.add(offset)
                 stack_ops[address] = ('local', offset, register)
                 if register in callee: written.add(register)
         else:
-            require(offset >= frame + 4 and offset % 4 == 0,
+            require(offset >= frame + 4 and offset % width == 0,
                     'return address/unaligned argument read')
             stack_ops[address] = ('argument', register)
             if register in callee: written.add(register)
     require(saved, 'fixed frame without supported saved registers')
     require(not set(outgoing).intersection(slots), 'fixed-frame outgoing/save overlap')
     require(not local_reads.intersection(slots), 'fixed-frame local/save overlap')
-    require(local_reads <= predispatch_writes, 'fixed-frame local without predispatch write')
+    require(local_reads <= (predispatch_writes | addressed),
+            'fixed-frame local without predispatch write')
     require(written <= saved, 'unsaved fixed-frame callee-register write')
     by_address = {row[0]: i for i, row in enumerate(rows)}
     private = None
@@ -254,7 +286,11 @@ def prove_fixed_stack_frame(rows, dispatch, destinations, calls=frozenset(), con
                 elif kind == 'outgoing':
                     if operation[1] in local_reads: initialized.add(operation[1])
                 elif kind == 'local':
-                    require(operation[1] in initialized, 'uninitialized fixed-frame local read')
+                    # An addressed local is initialized by the callee that
+                    # received its address (see the classification above); it
+                    # carries no per-path state so joins stay consistent.
+                    require(operation[1] in initialized or operation[1] in addressed,
+                            'uninitialized fixed-frame local read')
                     restored.discard(operation[2])
                     pristine.discard(operation[2])
         else:

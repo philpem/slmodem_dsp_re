@@ -186,24 +186,28 @@ SetTxModeV32(struct v32_modem *modem, short mode)
 	struct v32_fp *fp;
 	struct v32_sdm *sdm;
 	unsigned int mask;
-	short sel;
 	int shift;
 
 	switch (mode) {
 	case V32_MODE_ABS4:
 	case V32_MODE_DIF4:
 		/*
-		 * One arm for both: the object tests `mode` a second time
-		 * inside it and the only thing that differs is the encoder,
+		 * The two share a jump-table slot and the object tests `mode` a
+		 * second time inside it: the arms differ only in the encoder,
 		 * absolute against differential.  `smc->pad02` takes the same
-		 * value as the selector, which is the first evidence anywhere
-		 * that anything writes that field at all -- v32smc.h has it as
-		 * "not read by any encoder", which stays true.  Finding F8216.
+		 * value as the encoder selector, which is the first evidence
+		 * anywhere that anything writes that field at all -- v32smc.h
+		 * has it as "not read by any encoder", which stays true.
+		 * Finding F8216.
 		 */
 		fp = FP(modem);
-		sel = (short)(mode == V32_MODE_ABS4 ? 1 : 0);
-		SMC(fp)->pad02 = sel;
-		fp->encoder_sel = sel;
+		if (mode == V32_MODE_DIF4) {
+			SMC(fp)->pad02 = 0;
+			fp->encoder_sel = 0;
+		} else {
+			SMC(fp)->pad02 = 1;
+			fp->encoder_sel = 1;
+		}
 		SDM_TX(fp)->group = 2;
 		SMC(fp)->mode = 0;
 		SMC(fp)->shift = 0;
@@ -516,11 +520,22 @@ DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned s
 	FPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n, 1);
 
 	fp = owner->fp;
-	owner->flags =
-		(unsigned char)((owner->flags
-				 & (unsigned char)~V32_FLAG_SILENCE)
-				| (AGC_OF(fp)->signal == 0
-				   ? V32_FLAG_SILENCE : 0));
+	{
+		/*
+		 * The object builds the flag as `sete %al ; shl $0x6,%al` --
+		 * the 0/1 result of the comparison shifted into place, not a
+		 * `? V32_FLAG_SILENCE : 0` ternary (which the movcc path would
+		 * lower to sbb/and/add, and which this file's build lowers to a
+		 * branch).  The named local is what keeps the comparison's VALUE
+		 * alive instead of letting it become a branch again.  F12160.
+		 */
+		int silent = (AGC_OF(fp)->signal == 0);
+
+		owner->flags =
+			(unsigned char)((owner->flags
+					 & (unsigned char)~V32_FLAG_SILENCE)
+					| (silent << 6));
+	}
 
 	enables = AGC_OF(fp)->f18;
 	SRE_OF(fp)->adapt = fp->int_04 & enables;
@@ -564,7 +579,10 @@ DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned s
  * V32_ADAPTEQ_MU0 and _MU1 both switch adaptation on and differ only in which
  * of `fpm_fse_cfg::mu[]` the LMS update takes its step size from.  Any other
  * value does nothing at all -- not even the switch-off.
- * The MU1, OFF, MU0 case order recovers the period emission (F10227).
+ * The OFF, MU0, MU1 source order is the one that reproduces the period body
+ * byte for byte; it selects the fp/mu_sel lane assignment (measured: the six
+ * permutations give EXACT only for OFF, MU0, MU1, REGALLOC for MU0, MU1, OFF,
+ * and either a mirrored lane or a different extent for the rest).
  */
 void
 SetAdaptEqV32(struct v32_modem *modem, unsigned short mode)
@@ -572,11 +590,6 @@ SetAdaptEqV32(struct v32_modem *modem, unsigned short mode)
 	struct v32_fp *fp;
 
 	switch (mode) {
-	case V32_ADAPTEQ_MU1:
-		fp = FP(modem);
-		fp->eq_adapt = 1;
-		FSE(fp)->mu_sel = 1;
-		break;
 	case V32_ADAPTEQ_OFF:
 		fp = FP(modem);
 		fp->eq_adapt = 0;
@@ -585,6 +598,11 @@ SetAdaptEqV32(struct v32_modem *modem, unsigned short mode)
 		fp = FP(modem);
 		fp->eq_adapt = 1;
 		FSE(fp)->mu_sel = 0;
+		break;
+	case V32_ADAPTEQ_MU1:
+		fp = FP(modem);
+		fp->eq_adapt = 1;
+		FSE(fp)->mu_sel = 1;
 		break;
 	default:
 		break;
@@ -607,6 +625,12 @@ SetAdaptEqV32(struct v32_modem *modem, unsigned short mode)
  * $0x66666667`, `sar $2` on the high half, less the sign -- and the shift is
  * what says ten rather than five: 0x66666667 / 2^32 is 0.4, and the extra two
  * places take it to 0.1.  Both readings compile; only one agrees.
+ *
+ * The cases are written in header (ascending selector) order, RESET, OFF, ON,
+ * SLOW.  The order is load-bearing for the register lanes: measured over all
+ * twenty-four permutations, only RESET-OFF-ON-SLOW is byte-exact, and the
+ * previous OFF-ON-SLOW-RESET order differed from it only in which register
+ * each arm's `fp` landed in.
  */
 void
 SetAdaptEcV32(struct v32_modem *modem, unsigned short mode)
@@ -615,6 +639,17 @@ SetAdaptEcV32(struct v32_modem *modem, unsigned short mode)
 	short i;
 
 	switch (mode) {
+	case V32_ADAPTEC_RESET:
+		fp = FP(modem);
+		fp->ecc.near_delay = (short)modem->params.ec_near_delay;
+		fp->ecc.far_delay = 0x30;
+		FPM_ECC_init(&fp->ecc, &fp->ecc.cfg, 0);
+		fp = FP(modem);
+		fp->ecc.line_len = 0x30;
+		fp->ecc.near_rd = 0;
+		fp->ecc.far_rd = 0;
+		break;
+
 	case V32_ADAPTEC_OFF:
 		fp = FP(modem);
 		fp->ecc.adapt_near = 0;
@@ -637,17 +672,6 @@ SetAdaptEcV32(struct v32_modem *modem, unsigned short mode)
 	case V32_ADAPTEC_SLOW:
 		fp = FP(modem);
 		fp->ecc.mu = (short)(fp->ecc.mu / 10);
-		break;
-
-	case V32_ADAPTEC_RESET:
-		fp = FP(modem);
-		fp->ecc.near_delay = (short)modem->params.ec_near_delay;
-		fp->ecc.far_delay = 0x30;
-		FPM_ECC_init(&fp->ecc, &fp->ecc.cfg, 0);
-		fp = FP(modem);
-		fp->ecc.line_len = 0x30;
-		fp->ecc.near_rd = 0;
-		fp->ecc.far_rd = 0;
 		break;
 
 	default:
@@ -910,7 +934,9 @@ TxNoCarrierV32(struct v32_modem *modem, const short *data, short *out,
 		ring->buf[widx] = V32_SYMBOL_NOCARRIER;
 		next = (short)(widx + 1);
 		quad = (short)((quad + 3) & 3);
-		widx = (short)(next < limit ? next : 0);
+		if (next >= limit)
+			next = 0;
+		widx = next;
 	}
 
 	/* BOTH write-backs precede the shaper here, unlike V.17 and V.29. */

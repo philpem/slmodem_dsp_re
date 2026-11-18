@@ -2326,8 +2326,12 @@ probeselect(void *objp)
 
 	if (v34hshak_flag_test(m[0xa97e], 0x80) == 0)
 		goto not_asking;
-	if (!(rx->agc_gain <= 0xfff && req != 0))
-		goto not_asking;
+	{
+		int ok = (rx->agc_gain <= 0xfff) & (req != 0);
+
+		if (!ok)
+			goto not_asking;
+	}
 
 	if (req > 7)
 		req = 7;
@@ -2553,10 +2557,14 @@ rate_3000_body:
 
 		if (e <= 5 && bins[2].shift <= 5)
 			mp_or(msg, 5, 0x80);
-		if (e <= 7)
-			mp_or(msg, 5, (unsigned)((e <= 6) ? 1u : 2u));
-		else
+		if (e <= 7) {
+			if (e <= 6)
+				mp_or(msg, 5, 1);
+			else
+				mp_or(msg, 5, 2);
+		} else {
 			mp_or(msg, 5, 4);
+		}
 		mp_or(msg, 6, 0x80);
 
 		idx = probe_preemp(bins, 19, 0x656f, 0xbb8);
@@ -11209,16 +11217,18 @@ TimingV34(void *objp)
 	}
 
 	/* Dwell: advance a state once dwell_count reaches dwell_limit, which -1 disables. */
-	if ((unsigned short)rx->dwell_limit != 0xffff && state != 0) {
-		int next = (unsigned short)(rx->dwell_count + 1);
+	if ((unsigned short)rx->dwell_limit != 0xffff) {
+		if (state != 0) {
+			int next = (unsigned short)(rx->dwell_count + 1);
 
-		if (next == (int)(short)rx->dwell_limit) {
-			rx->dwell_count = 0;
-			rx->pllcnt = (short)(state + 1);
-			setTimingStateParameters(obj);
-			state = (unsigned short)rx->pllcnt;
-		} else {
-			rx->dwell_count = (short)next;
+			if (next == (int)(short)rx->dwell_limit) {
+				rx->dwell_count = 0;
+				rx->pllcnt = (short)(state + 1);
+				setTimingStateParameters(obj);
+				state = (unsigned short)rx->pllcnt;
+			} else {
+				rx->dwell_count = (short)next;
+			}
 		}
 	}
 
@@ -11254,14 +11264,12 @@ TimingV34(void *objp)
 			 * after leaves the shift one short and the error
 			 * term exactly twice too large.
 			 */
-			for (;;) {
+			do {
 				m >>= 1;
 				sh = (short)(sh + 1);
 				if ((unsigned)a & m)
 					break;
-				if (((unsigned)b & m) != 0 || sh > 15)
-					break;
-			}
+			} while (((unsigned)b & m) == 0 && sh <= 15);
 		}
 
 		a = (unsigned short)((a >> ((16 - sh) & 31)));

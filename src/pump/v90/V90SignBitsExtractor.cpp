@@ -253,19 +253,18 @@ V90SignBitsExtractor::process(unsigned char *in, unsigned char *out)
 		state = (unsigned int)action;
 	} else if (state == 1) {
 		/*
-		 * Two independent computations of the same predicate in the
-		 * object -- `cmp $0x1,%dl; sbb; not; lea 0x3(%ebx)` for the
-		 * action and `test %dl,%dl; sete %cl` for the state.  A source
-		 * that wrote `action = state + 2` would have given one `lea`
-		 * off the other.
+		 * Two independent computations of the same predicate, and
+		 * both are VALUES, not branches: the object materialises
+		 * `cmp $0x1,%dl; sbb %ebx,%ebx; not %ebx; lea 0x3(%ebx),%edi`
+		 * for the action and `test %dl,%dl; sete %cl` for the state,
+		 * then stores the latter (`mov %ecx,0x10(%esi)`).  An
+		 * if/else over the two assignments branches instead and
+		 * loses both `setcc`s; the action's two constants go through
+		 * the i386 `movcc` `sbb` path, which a ternary reaches and an
+		 * if statement does not.  F12166.
 		 */
-		if (in[0] == 0) {
-			action = V90SBE_INVERT_ODD;
-			state = 1;
-		} else {
-			action = V90SBE_INVERT_EVEN;
-			state = 0;
-		}
+		action = (in[0] == 0) ? V90SBE_INVERT_ODD : V90SBE_INVERT_EVEN;
+		state = (in[0] == 0);
 	}
 
 	applyFrameAction(action, in, bits);

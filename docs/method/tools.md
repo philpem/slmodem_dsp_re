@@ -11,6 +11,33 @@ cover reusable tools and their host assumptions.
 
 ## Current tools
 
+[`tools/toolchain/variant_run.py`](refinement.md) is the standard harness for
+period-compiler source experiments. It builds N source variants of one
+translation unit **out of tree and in parallel**, grades each on the symbols you
+name, and prints one table (grade, byte delta, instruction count, contiguous
+run, `setcc` reference/ours plus a lane-free `dmn` column, canonical symmetric
+difference, object hash). Use it instead of patching the tree per target.
+
+    python3 tools/toolchain/variant_run.py --spec SPEC.json [--jobs N]
+    python3 tools/toolchain/variant_run.py --self-test
+
+The spec names `source`, one or more `symbols`, optional `base` and
+`extra_flags`, and a list of variants; a variant holds a name, a list of
+`[find, replace]` edits (first occurrence unless the third element is `"all"`),
+and optional per-variant `extra_flags`. Its scope of conclusion is exactly the
+comparison table: a row is a measurement of that build, not a grade, and a
+retained source change still needs the period differential, the native witness
+and a whole-TU neighbour check.
+
+It is safe because it never writes to the tree (variants live in their own
+temporary directories), it does not guess the compiler command (it reads the
+real per-TU line from `make -n`, so the C/C++ split and the per-TU flag sets
+come along), it marks a variant whose `find` string is absent as INVALID rather
+than silently measuring the base, and it prints a control line asserting the
+out-of-tree baseline reproduces the in-tree object byte for byte — a run whose
+control fails must not be used for any verdict. `--self-test` asserts those
+three invariants and exits non-zero on failure.
+
 [`tools/toolchain/diffvector.py`](metric-vector.md) reports per-function
 difference axes for explicit ELF copies. Its read-only JSON/human output keeps
 unknowns and existing grades separate; `make diffvector-selftest` runs its
@@ -19,6 +46,30 @@ maintained controls.
 The mutation runner, snapshot manager, anchor checker and reanchoring tool
 described in older revisions were removed. Their archived measurements are
 retained in the method history, but they are not part of the current workflow.
+
+`tools/toolchain/verify_report.py` verifies a delegated batch from the
+workers' JSON reports in ONE call.  The failure mode it closes is the one this
+project actually hits: a subagent's result message is lost or blank while its
+edits are already in the tree.  Each worker writes a small JSON report; the tool
+re-derives every numeric claim -- rebuild (with `rm` first), grade, `setcc`
+multiset both lane-sensitive and lane-free, canonical symmetric difference --
+and prints a PASS/FAIL table, then `git status`, so an edit with **no** claim is
+visible too.
+
+    python3 tools/toolchain/verify_report.py REPORT.json [REPORT2.json ...]
+
+Report schema (a list, one object per claim; a `null` field is not checked):
+`symbol`, `object`, `source`, `md5`, `delta`, `candidate_bytes`, `insns`,
+`run` ("N/M"), `symdiff`, `setcc_ref`, `setcc_our`, `retained`, `fixtures`,
+`note`.  Exit status 0 only when every non-null claim matches.  It prints the
+`symdiff` MULTIPLICITY form (the same definition `variant_run.py` uses), which
+is deliberately not the distinct-key count -- see F12184.
+
+The control is that it recomputes rather than trusts: a report can be wrong, and
+the tool says so (in the first batch it caught a one-character typo in a worker's
+`md5` and clarified a genuine metric mismatch).  A worker's table and this
+verifier agreeing on `delta`/`insns`/`run`/`symdiff`/`setcc` is what makes the
+batch's numbers citable.
 
 ## `tools/refcheck.py` — hold the tree to its own cross-references
 

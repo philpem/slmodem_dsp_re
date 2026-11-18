@@ -495,7 +495,13 @@ v8_getbit(struct v8_tx_sequence *s)
 		s->wordidx = (short)(s->wordidx + 1);
 	s->bitpos = (short)(pos + loaded);
 
-	if (s->crc_enable != 0 && loaded != 0) {
+	/*
+	 * Nested, not `&&`: the object branches on `crc_enable` and then
+	 * on `loaded` and holds no setcc in this function, while a `&&`
+	 * is if-converted into a materialised AND.  F12171.
+	 */
+	if (s->crc_enable != 0)
+		if (loaded != 0) {
 		int c = loaded;
 
 		do {
@@ -510,7 +516,7 @@ v8_getbit(struct v8_tx_sequence *s)
 				crc ^= 0x1021;
 			s->crc = (short)crc;
 		} while (c != 0);
-	}
+		}
 
 emit:
 	s->nleft = (short)(s->nleft - 1);

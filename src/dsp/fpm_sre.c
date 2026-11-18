@@ -101,7 +101,7 @@ sre_filter(const struct fpm_sre *sre, short taps, short fill)
 	const short *h = sre->hist + fill;
 	const short *c = sre->coeff + sre->branch;
 	int acc = 0;
-	short i;
+	int i;
 
 	for (i = fill; i >= 0; i--) {
 		acc += *h * *c;
@@ -110,7 +110,7 @@ sre_filter(const struct fpm_sre *sre, short taps, short fill)
 	}
 
 	h = sre->hist + taps - 1;
-	for (i = (short)(taps - 1); i > fill; i--) {
+	for (i = taps - 1; i > fill; i--) {
 		acc += *h * *c;
 		h--;
 		c += FPM_SRE_BRANCHES;
@@ -218,30 +218,32 @@ sre_update(struct fpm_sre *sre, short yq, short xq)
 	if (sre->adapt == 0)
 		return;
 
-	m = sre->mode;
 	if (sre->settle > sre->cfg.settle) {
 		/*
 		 * Gear shift.  The magnitude is of the STORED error, i.e. of
 		 * the 16-bit truncation, and both thresholds are compared
 		 * after a further `>> 3`.
 		 */
-		int a = iabs((int)sre->err_avg);
+		short a = iabs((int)sre->err_avg);
 
-		if ((sre->cfg.err_hi >> 3) <= a && m == 2) {
-			sre->mode = 1;
-			sre->groups = sre->cfg.groups_acq;
-			sre->pll_acc = (short)
-				((sre->cfg.acc_down * sre->pll_acc) >> 15);
-			m = 1;
-		}
-		if ((sre->cfg.err_lo >> 3) >= a && m == 1) {
-			sre->mode = 2;
-			sre->groups = sre->cfg.groups_trk;
-			sre->acquiring = 0;
-			sre->pll_acc = (short)
-				((sre->cfg.acc_up * sre->pll_acc) >> 12);
-			m = 2;
-		}
+		m = sre->mode;
+		if ((sre->cfg.err_hi >> 3) <= a)
+			if (m == 2) {
+				sre->mode = 1;
+				sre->groups = sre->cfg.groups_acq;
+				sre->pll_acc = (short)
+					((sre->cfg.acc_down * sre->pll_acc) >> 15);
+				m = 1;
+			}
+		if ((sre->cfg.err_lo >> 3) >= a)
+			if (m == 1) {
+				sre->mode = 2;
+				sre->groups = sre->cfg.groups_trk;
+				sre->acquiring = 0;
+				sre->pll_acc = (short)
+					((sre->cfg.acc_up * sre->pll_acc) >> 12);
+				m = 2;
+			}
 	} else {
 		/*
 		 * Settling.  The integrator is held at zero throughout, so the
@@ -251,8 +253,13 @@ sre_update(struct fpm_sre *sre, short yq, short xq)
 
 		sre->pll_acc = 0;
 		sre->settle = (short)(settle + 1);
-		m = (short)(settle < sre->cfg.settle ? 0 : 1);
-		sre->mode = m;
+		if (settle < sre->cfg.settle) {
+			m = 0;
+			sre->mode = 0;
+		} else {
+			m = 1;
+			sre->mode = 1;
+		}
 	}
 
 	{

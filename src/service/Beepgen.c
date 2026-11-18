@@ -567,7 +567,7 @@ bSearchEnergy(short *new1, short *new2, short *buf1, short *buf2,
 	unsigned int keep = total - fresh, i;
 	unsigned int sum = 0;
 	int mean, ret = 0;
-	float acc = 0.0f;
+	float acc;
 
 	for (i = 0; i < keep; i++)
 		buf1[i] = buf1[i + fresh];
@@ -576,9 +576,14 @@ bSearchEnergy(short *new1, short *new2, short *buf1, short *buf2,
 	sysdep_memcpy(buf1 + keep, new1, 2 * fresh);
 	sysdep_memcpy(buf2 + keep, new2, 2 * fresh);
 
-	for (i = 0; i < 1000; i++)
-		sum += buf1[1000 + i];
-	mean = (int)(sum / 1000);
+	{
+		unsigned int n = 1000;
+
+		for (i = 0; i < 1000; i++)
+			sum += buf1[1000 + i];
+		mean = (int)(sum / n);
+	}
+	acc = 0.0f;
 	for (i = 0; i < 1000; i++) {
 		float d = (float)(buf1[1000 + i] - mean);
 

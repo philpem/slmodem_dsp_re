@@ -85,26 +85,22 @@ FIFO_create(struct fax_fifo *f, const struct fifo_cfg *cfg)
 int
 FIFO_read(struct fax_fifo *f, unsigned short *dst, unsigned short count)
 {
+	unsigned short take = f->count > count ? count : f->count;
 	unsigned short size = f->size;
-	unsigned short take = f->count;
-	unsigned short pad;
-	unsigned short rd;
+	unsigned short pad = count - take;
+	unsigned short rd = f->rd;
+	unsigned short *buf = f->buf;
 	unsigned short i;
-	unsigned short *buf;
 
-	if (take > count)
-		take = count;
-	rd = f->rd;
-	pad = count - take;
-	buf = f->buf;
+	i = take;
+	while (i--) {
+		unsigned short next = rd + 1;
 
-	for (i = take; i != 0; i--) {
 		*dst++ = buf[rd];
-		rd++;
-		if (rd >= size)
-			rd = 0;
+		rd = next < size ? next : 0;
 	}
-	for (i = pad; i != 0; i--)
+	i = pad;
+	while (i--)
 		*dst++ = f->fill;
 
 	f->rd = rd;
@@ -139,21 +135,21 @@ FIFO_write(struct fax_fifo *f, unsigned short *src, unsigned short count)
 {
 	unsigned short size = f->size;
 	unsigned short avail = size - f->count;
-	unsigned short put = count;
+	unsigned short put;
 	unsigned short wr;
 	unsigned short i;
 	unsigned short *buf;
 
-	if (put > avail)
-		put = avail;
+	put = count > avail ? avail : count;
 	buf = f->buf;
 	wr = f->wr;
 
-	for (i = put; i != 0; i--) {
+	i = put;
+	while (i--) {
+		unsigned short next = wr + 1;
+
 		buf[wr] = *src++;
-		wr++;
-		if (wr >= size)
-			wr = 0;
+		wr = next < size ? next : 0;
 	}
 
 	f->wr = wr;

@@ -292,6 +292,7 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 	int status;
 	int result;
 	int i;
+	unsigned char *b;
 
 	if (self->tx_bits_wanted != 0) {
 		/*
@@ -299,19 +300,19 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 		 * as ints, then widen backwards from n-1.
 		 */
 		tx_len = self->tx_bits_wanted;
+		b = (unsigned char *)self->tx_bits;
 		tx_len = modem_get_bits(dp->modem, self->bits_per_word,
-					(unsigned char *)self->tx_bits,
-					tx_len);
+					b, tx_len);
 		for (i = tx_len - 1; i >= 0; i--)
-			self->tx_bits[i] =
-				((unsigned char *)self->tx_bits)[i];
+			self->tx_bits[i] = b[i];
 	} else {
 		tx_len = V22_WORDS_PER_BLOCK;
 	}
 
 	rx_len = count;
+	b = (unsigned char *)self->rx_bits;
 	result = V22FP_modem(self->fp, self->tx_bits, (short *)out,
-			     (const short *)in, self->rx_bits,
+			     (const short *)in, (int *)b,
 			     &tx_len, &rx_len);
 
 	/*
@@ -335,8 +336,7 @@ v22_process(void *dp_arg, void *in, void *out, int count)
 
 	/* Hand recovered words back, narrowing ints to bytes in place. */
 	for (i = 0; i < rx_len; i++)
-		((unsigned char *)self->rx_bits)[i] =
-			(unsigned char)(self->rx_bits[i]
+		b[i] = (unsigned char)(self->rx_bits[i]
 					& ((1 << self->bits_per_word) - 1));
 
 	modem_put_bits(dp->modem, self->bits_per_word,

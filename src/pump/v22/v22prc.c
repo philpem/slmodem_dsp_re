@@ -143,9 +143,8 @@ RxTrained2400(const short *symbols, const unsigned short *count)
 		run = (short)(run + 1);
 		if ((int)run >= (int)n)
 			break;
-		if (symbols[i] != V22_TRAINED_2400_SYMBOL)
+		if (symbols[i--] != V22_TRAINED_2400_SYMBOL)
 			break;
-		i = (short)(i - 1);
 	}
 
 	return run > V22_TRAINED_2400_RUN;

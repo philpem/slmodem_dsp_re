@@ -42,12 +42,22 @@ q_next(struct v34_queue *q, int *p, unsigned end)
 	return p;
 }
 
-/* The bulk ring's wrap: reset to zero, not subtract.  See finding F116. */
+/*
+ * The bulk ring's wrap: reset to zero, not subtract.  See finding F116.
+ *
+ * The wrap is an `if` statement, not a hand-written mask.  The object holds
+ * `cmp; seta %al; neg %eax; and %eax,%idx`, which if-conversion emits only for
+ * a conditional ASSIGNMENT whose target is one of the arms; spelled as
+ * `idx & -(cond)` the mask is a value and the comparison stays a `ja` branch.
+ * F12159.
+ */
 static int
 bulk_next(int idx, int len)
 {
 	idx++;
-	return idx & -(int)((unsigned)len > (unsigned)idx);
+	if ((unsigned)len <= (unsigned)idx)
+		idx = 0;
+	return idx;
 }
 
 void
@@ -173,7 +183,12 @@ txmit(void *objp)
 	int sym;
 	short n, i;
 
-	sym = (int)(((unsigned)(unsigned short)tx->txpoint.c[1] << 16)
+	/*
+	 * Reassembled exactly as the header documents it: the imaginary half
+	 * keeps its sign (`movswl`), only the real half is zero-extended.  The
+	 * shift discards the sign extension, so the two spellings agree.
+	 */
+	sym = (int)((tx->txpoint.c[1] << 16)
 		    | (unsigned short)tx->txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
 		v34_object_modulator(obj), sym, local);

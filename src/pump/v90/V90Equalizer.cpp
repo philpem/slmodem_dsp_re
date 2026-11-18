@@ -277,7 +277,7 @@ one_shifted_by(int n)
  * from the bytes either way.
  */
 static inline void
-edprint_stat(const char *fmt, float v, long double scale)
+edprint_stat(const char *fmt, float v, double scale)
 {
 	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
 		 (int)fabsl((long double)v),
@@ -1405,9 +1405,10 @@ int
 V90Equalizer::enterDataPhase()
 {
 	float sum, absSum;
+	int rv = 0;
 
 	if (state == V90EQU_STATE_DATA)
-		return 0;
+		return rv;
 
 	edprintf("V90Equalizer: enter Data Phase\r\n");
 	state = V90EQU_STATE_DATA;
@@ -1415,7 +1416,7 @@ V90Equalizer::enterDataPhase()
 	phase4Demod->resetRRNDetector();
 
 	if (mmxMode != 0)
-		return 0;
+		return rv;
 
 	summarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,
 			&minLeCoefValue, &sum, &absSum);
@@ -1444,9 +1445,9 @@ V90Equalizer::enterDataPhase()
 	convertEqualizerToMmx();
 
 	if (mmxMode != 0)
-		return 1;
+		rv = 1;
 
-	return 0;
+	return rv;
 }
 
 /* =============================================== the mean-error diagnostic */
@@ -1815,22 +1816,23 @@ void
 V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		      float *outFloat, unsigned int &nOut)
 {
-	short *cur;
 	unsigned int j;
+	short *cur;
+	int softInt;
 	int updateCoefs;
 	int decision;
-	int softInt;
-	int leSum;
-	int dfeSum;
+	float soft;
 	float y;
 	float d;
-	float soft;
+	int leSum;
+	int dfeSum;
 
 	/*
 	 * `stateCount` is cleared before anything else and then set by
 	 * whichever arm has news; `updateCoefs` is planted at 0x38d81, before
 	 * the mode test, so it is live from the first symbol.
 	 */
+	updateCoefs = 1;
 	stateCount = 0;
 	cur = block_b4 + 1;
 
@@ -1864,7 +1866,6 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		n++;
 	}
 
-	updateCoefs = 1;
 	j = 0;
 	/*
 	 * LOGICAL, on an unsigned, so it stays a shift: docs/cleanup.md §2 and
@@ -2345,7 +2346,6 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					setLinearEquBeta(0.0f);
 					setDfeBeta(0.0f);
 					edprintf("V90Equalizer: DemodDilInitialErrorRelaxation => freeze LE & DFE\r\n");
-					enterPhase4();
 					break;
 
 				case 15:
@@ -2404,13 +2404,21 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				    == phase3Samples)
 					setDfeBeta(params->DFE_DATA_BETA);
 			}
-			if (phase3Demod->state == 5 || phase3Demod->state == 10
-			    || phase3Demod->state == 11
-			    || phase3Demod->state == 12
-			    || phase3Demod->state == 16
-			    || phase3Demod->state == 13
-			    || phase3Demod->state == 14
-			    || phase3Demod->state == 15)
+			if (phase3Demod->state == 5)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 10)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 11)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 12)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 16)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 13)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 14)
+				updateCoefs = (int)phase3Demod->word_408;
+			else if (phase3Demod->state == 15)
 				updateCoefs = (int)phase3Demod->word_408;
 			if (phase3Demod->state == 17)
 				updateCoefs = (int)phase3Demod->word_408;
@@ -2418,8 +2426,9 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				 && params->NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3
 				    == phase3Samples)
 				meanErrorRecordEnable = 1;
-			if (phase3Demod->state == 10
-			    || phase3Demod->state == 13)
+			if (phase3Demod->state == 10)
+				meanErrorRecordEnable = 0;
+			else if (phase3Demod->state == 13)
 				meanErrorRecordEnable = 0;
 			break;
 		}

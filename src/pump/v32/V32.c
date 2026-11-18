@@ -486,7 +486,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 		fp->tx_rate_index = V32_RATE_12000;
 	else if (rate == V32_BPS_9600)
 		fp->tx_rate_index =
-			(short)(V32_RATE_9600 - (p->trellis == 0));
+			(short)(p->trellis ? V32_RATE_9600 : V32_RATE_9600 - 1);
 	else if (rate == V32_BPS_7200)
 		fp->tx_rate_index = V32_RATE_7200;
 	else
@@ -499,7 +499,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 		fp->rx_rate_index = V32_RATE_12000;
 	else if (rate == V32_BPS_9600)
 		fp->rx_rate_index =
-			(short)(V32_RATE_9600 - (p->trellis == 0));
+			(short)(p->trellis ? V32_RATE_9600 : V32_RATE_9600 - 1);
 	else if (rate == V32_BPS_7200)
 		fp->rx_rate_index = V32_RATE_7200;
 	else
@@ -508,11 +508,8 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	/* Protocol 0, 1, or anything else -- three half-duplex modes. */
 	hdx = HDX(modem);
 	prot = (unsigned short)p->protocol;
-	if (prot == V32_PROTOCOL_0)
-		hdx->mode = 0;
-	else if (prot == V32_PROTOCOL_1)
-		hdx->mode = 1;
-	else
+	hdx->mode = (short)prot;
+	if (prot > V32_PROTOCOL_1)
 		hdx->mode = 2;
 
 	/*

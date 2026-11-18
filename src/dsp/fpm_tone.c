@@ -470,7 +470,9 @@ FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 		 * does this branchlessly (setl/neg/and), which is GCC 3.4.2
 		 * rendering exactly this conditional.
 		 */
-		idx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;
+		idx = (short)(idx + 1);
+		if (idx >= taps)
+			idx = 0;
 		hist[idx] = *samples++;
 
 		/*
@@ -530,8 +532,15 @@ FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 
 	if ((short)total < min_level)
 		return FPM_TONE_NOSIGNAL;
-	return (out_of_band <= ((ratio * (short)total) >> 15))
-		? FPM_TONE_OTHER : FPM_TONE_PRESENT;
+	{
+		/* The object compares out_of_band against a NAMED threshold value:
+		 * `cmp %edi,%ebp ; setle`, i.e. the local on the right, so
+		 * tree_swap_operands_p leaves the order alone.  Inlined, the shift
+		 * is not a DECL and GCC swaps to `>=`, emitting `setge`.  F12161. */
+		int thr = (ratio * (short)total) >> 15;
+
+		return (out_of_band <= thr) ? FPM_TONE_OTHER : FPM_TONE_PRESENT;
+	}
 }
 
 /*
@@ -609,6 +618,14 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 	short energy_s = state->rev_energy;
 	short period = 0;
 	short n;
+	/*
+	 * The object compares `idx` against a NAMED wrap value
+	 * (`cmp 0x1c(%esp),%eax ; setl` -- the local on the right).
+	 * Spelled as `2 * lag` the product is not a DECL, so
+	 * tree_swap_operands_p swaps and GCC emits `setg` with the
+	 * operands the other way round.  F12161.
+	 */
+	int wrap = 2 * lag;
 
 	FPM_iir_filt_II(samples, state->rev_block, state->rev_acc, 1, count);
 
@@ -621,7 +638,9 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		 * Both are 16-bit, and the wrap of the second is a single
 		 * add rather than a modulo because it can only underflow once.
 		 */
-		idx = ((short)(idx + 1) < 2 * lag) ? (short)(idx + 1) : 0;
+		idx = (short)(idx + 1);
+		if (idx >= wrap)
+			idx = 0;
 		j = (idx - lag);
 		if (j < 0)
 			j = (j + 2 * lag);

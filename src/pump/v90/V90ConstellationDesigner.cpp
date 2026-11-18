@@ -1495,7 +1495,9 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 						a = alt[k][i];
 						if (a < phaseDmin[k] * 0.5f)
 							break;
-						if (u > thresh || a > thresh)
+						if (u > thresh)
+							continue;
+						if (a > thresh)
 							continue;
 						mappingParams
 						    ->constellation[k][count] =

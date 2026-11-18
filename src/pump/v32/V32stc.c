@@ -322,38 +322,37 @@ V32FP_status(struct v32_modem *modem, struct v32_status *st)
 	st->r18 = fp->sre.active;
 	st->r1c = (fp->agc.signal != 1);
 
-	if (SnrToRetrainTable[rate_idx] <= (short)snr) {
-		modem->params.snr_drops = 0;
-		return 1;
-	}
+	if (SnrToRetrainTable[rate_idx] > (short)snr) {
+		ctl = V32_CTL;
+		if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf("V32STC - SNR drop observed, "
+					     "SNR = %d < threshold = %d\n",
+					     snr, SnrToRetrainTable[rate_idx]);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("Dec error = %d (*64)\n",
+						     FP(modem)->decision_error);
+		}
 
-	ctl = V32_CTL;
-	if (DSPLIB_DEBUG_ON()) {
-		dsplibs_debug_printf("V32STC - SNR drop observed, "
-				     "SNR = %d < threshold = %d\n",
-				     snr, SnrToRetrainTable[rate_idx]);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Dec error = %d (*64)\n",
-					     FP(modem)->decision_error);
-	}
+		if (modem->params.snr_drops > V32_SNR_DROPS_LIMIT) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("%d coseq SNR drops detected "
+						     "local retrain is initiated\n",
+						     V32_SNR_DROPS_LIMIT);
+			ctl.ctl1 |= V32_CTL1_RETRAIN;
+			modem->params.snr_drops = 0;
+			modem->params.snr_settle_blocks = 0;
+			FP(modem)->rate_fallback = 1;
+		} else {
+			modem->params.snr_drops = (unsigned short)
+				(modem->params.snr_drops + 1);
+		}
 
-	if (modem->params.snr_drops > V32_SNR_DROPS_LIMIT) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("%d coseq SNR drops detected "
-					     "local retrain is initiated\n",
-					     V32_SNR_DROPS_LIMIT);
-		ctl.ctl1 |= V32_CTL1_RETRAIN;
-		modem->params.snr_drops = 0;
-		modem->params.snr_settle_blocks = 0;
-		FP(modem)->rate_fallback = 1;
+		ctl.ctl0 = (unsigned char)
+			(((((ctl.ctl0 & 0xfc) | (st->flags & 1)
+			    | (st->flags & 2)) & 0xfb) | (st->flags & 4)) | 0x80);
+		V32FP_control(modem, &ctl);
 	} else {
-		modem->params.snr_drops = (unsigned short)
-			(modem->params.snr_drops + 1);
+		modem->params.snr_drops = 0;
 	}
-
-	ctl.ctl0 = (unsigned char)
-		(((((ctl.ctl0 & 0xfc) | (st->flags & 1)
-		    | (st->flags & 2)) & 0xfb) | (st->flags & 4)) | 0x80);
-	V32FP_control(modem, &ctl);
 	return 1;
 }

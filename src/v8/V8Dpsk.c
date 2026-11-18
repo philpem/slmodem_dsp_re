@@ -82,13 +82,15 @@ push_bits(struct v8_v21_params *p, int n, short bit)
  * being thrown away at 300 baud.
  */
 static int
-drain_run(struct v8_v21_params *p, int run, short bit)
+drain_run(struct v8_v21_params *p, unsigned run, short bit)
 {
-	int whole = run >> 2;
-	int rem = run & 3;
+	unsigned whole = run >> 2;
+	unsigned rem = run & 3;
 	int need = 4 - (whole > 2 ? 3 : whole + 1);
-	int n = whole + 1 - (rem < need);
+	int n = whole;
 
+	if (rem >= need)
+		n++;
 	if (n != 0)
 		push_bits(p, n, bit);
 	return rem;
@@ -96,7 +98,7 @@ drain_run(struct v8_v21_params *p, int run, short bit)
 
 /* At the end of a block a leftover run is truncated, not rounded. */
 static int
-flush_run(struct v8_v21_params *p, int run, short bit)
+flush_run(struct v8_v21_params *p, unsigned run, short bit)
 {
 	int whole = run >> 2;
 

@@ -2197,18 +2197,24 @@ retrainDetector(tag_retrainReqDet *det, short *in, int nSamples)
 		det->nsamples = cnt;
 
 		if (cnt == 64) {
-			if ((energyInp >> NOTCH_IN_OUT_RATIO_SHIFT) > energyOut
-			    && energyInp > 150000
-			    && energyOut < 2250000) {
-				det->notchDetectSigCnt++;
-				if (dsplibs_debug_level > 1)
-					dsplibs_debug_printf(
-					    "********** retrainDetector() " "notchDetectSigCnt = %d "
-					    "energyInp>>NOTCH_IN_OUT_RATIO_" "SHIFT = %d energyOut = %d\r\n",
-					    det->notchDetectSigCnt,
-					    energyInp
-					    >> NOTCH_IN_OUT_RATIO_SHIFT,
-					    energyOut);
+			if ((energyInp >> NOTCH_IN_OUT_RATIO_SHIFT) > energyOut) {
+				if (energyInp > 150000) {
+					if (energyOut < 2250000) {
+						det->notchDetectSigCnt++;
+						if (dsplibs_debug_level > 1)
+							dsplibs_debug_printf(
+							    "********** retrainDetector() " "notchDetectSigCnt = %d "
+							    "energyInp>>NOTCH_IN_OUT_RATIO_" "SHIFT = %d energyOut = %d\r\n",
+							    det->notchDetectSigCnt,
+							    energyInp
+							    >> NOTCH_IN_OUT_RATIO_SHIFT,
+							    energyOut);
+					} else {
+						det->notchDetectSigCnt = 0;
+					}
+				} else {
+					det->notchDetectSigCnt = 0;
+				}
 			} else {
 				det->notchDetectSigCnt = 0;
 			}
@@ -5072,8 +5078,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		}
 		/* 0xc91b, requestOutputSampleClear. */
-		if (obj->backward_clear != 0
-		    && (unsigned int)n > 0x30u) {
+		if (obj->backward_clear != 0)
+			if ((unsigned int)n > 0x30u) {
 			int want = n * 2;
 
 			if (DSPLIB_DEBUG_ON())
@@ -5357,14 +5363,19 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if (obj->status == 7) {
 				int held = obj->moh_timer;
 
-				if (obj->ansam_late != 0
-				    && held <= 0xbb7f) {
+				if (obj->ansam_late != 0) {
+				  if (held <= 0xbb7f) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
 						    "VPcmV34Main: ANSam " "detected on out going "
 						    "call (later case, after " "%d smp) ! assuming no "
 						    "3-way call...\r\n", held);
 					obj->short_abe2 = 2;
+				  } else if (DSPLIB_DEBUG_ON()) {
+					dsplibs_debug_printf(
+					    "VPcmV34Main: ANSam detected on " "hold ! requesting Reconnect..."
+					    "\r\n");
+				  }
 				} else if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "VPcmV34Main: ANSam detected on " "hold ! requesting Reconnect..."
@@ -5488,18 +5499,18 @@ done:
 	 * input above 150,000, counts once; six counts in a row is a retrain.
 	 */
 	if ((unsigned int)(ret - 3) <= 3) {
+		struct tag_retrainReqDet *det = &obj->retrainReqDet;
 		const short *hist = obj->hist_2f58;
 		int limit = obj->hist2_idx;
-		int k0 = obj->retrainReqDet.b1_q14;
-		int k1 = obj->retrainReqDet.a1_q14;
-		int k2 = obj->retrainReqDet.a2_q14;
+		int k0 = det->b1_q14;
+		int k1 = det->a1_q14;
+		int k2 = det->a2_q14;
 		int retrain = 0;
 
 		for (i = 0; i < limit; i++) {
-			int t1 = (obj->retrainReqDet.y2 * k2 + 0x2000)
-				 >> 14;
+			int t1 = (det->y2 * k2 + 0x2000) >> 14;
 			int x = *hist++;
-			int s0 = obj->retrainReqDet.y1;
+			int s0 = det->y1;
 			int t2;
 			int s2;
 			int t3;
@@ -5508,50 +5519,55 @@ done:
 			int eout;
 			int blk;
 
-			obj->retrainReqDet.y2 = (short)s0;
+			det->y2 = (short)s0;
 			t2 = (s0 * k1 + 0x2000) >> 14;
-			s2 = obj->retrainReqDet.x1;
-			obj->retrainReqDet.x1 = (short)x;
+			s2 = det->x1;
+			det->x1 = (short)x;
 			t3 = (s2 * k0 + 0x2000) >> 14;
 			y = (short)(x + (short)t2 - (short)t1 - (short)t3
-				    + PROG_U16(obj, O_NOTCH_S3));
-			obj->retrainReqDet.x2 = (short)s2;
-			obj->retrainReqDet.y1 = (short)y;
+				    + det->x2);
+			det->x2 = (short)s2;
+			det->y1 = (short)y;
 
-			ein = obj->retrainReqDet.energyInp + ((x * x + 0x20) >> 6);
-			eout = obj->retrainReqDet.energyOut
-			       + ((y * y + 0x20) >> 6);
-			blk = obj->retrainReqDet.nsamples + 1;
+			ein = det->energyInp + ((x * x + 0x20) >> 6);
+			eout = det->energyOut + ((y * y + 0x20) >> 6);
+			blk = det->nsamples + 1;
 			if (blk == NOTCH_BLOCK) {
 				int ratio = ein >> 2;
 
-				if (ratio > eout && ein > NOTCH_EIN_MIN
-				    && eout <= NOTCH_EOUT_MAX) {
-					int cnt;
+				if (ratio > eout) {
+					if (ein > NOTCH_EIN_MIN) {
+					    if (eout <= NOTCH_EOUT_MAX) {
+						int cnt;
 
-					obj->retrainReqDet.energyInp = ein;
-					cnt = obj->retrainReqDet.notchDetectSigCnt;
-					obj->retrainReqDet.energyOut = eout;
-					obj->retrainReqDet.nsamples =
-					    NOTCH_BLOCK;
-					obj->retrainReqDet.notchDetectSigCnt = ++cnt;
-					if (DSPLIB_DEBUG_ON())
-						dsplibs_debug_printf(
-						    "********** " "retrainDetector() " "notchDetectSigCnt = %d "
-						    "energyInp>>NOTCH_IN_OUT_" "RATIO_SHIFT = %d " "energyOut = %d\r\n",
-						    cnt, ratio, eout);
+						det->energyInp = ein;
+						cnt = det->notchDetectSigCnt;
+						det->energyOut = eout;
+						det->nsamples = NOTCH_BLOCK;
+						det->notchDetectSigCnt = ++cnt;
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "********** " "retrainDetector() " "notchDetectSigCnt = %d "
+							    "energyInp>>NOTCH_IN_OUT_" "RATIO_SHIFT = %d " "energyOut = %d\r\n",
+							    cnt, ratio, eout);
+					    } else {
+						det->notchDetectSigCnt = 0;
+					    }
+					} else {
+						det->notchDetectSigCnt = 0;
+					}
 				} else {
-					obj->retrainReqDet.notchDetectSigCnt = 0;
+					det->notchDetectSigCnt = 0;
 				}
-				obj->retrainReqDet.energyInp = 0;
-				obj->retrainReqDet.energyOut = 0;
-				obj->retrainReqDet.nsamples = 0;
+				det->energyInp = 0;
+				det->energyOut = 0;
+				det->nsamples = 0;
 			} else {
-				obj->retrainReqDet.nsamples = blk;
-				obj->retrainReqDet.energyOut = eout;
-				obj->retrainReqDet.energyInp = ein;
+				det->nsamples = blk;
+				det->energyOut = eout;
+				det->energyInp = ein;
 			}
-			if (obj->retrainReqDet.notchDetectSigCnt > NOTCH_SIGCNT_MAX) {
+			if (det->notchDetectSigCnt > NOTCH_SIGCNT_MAX) {
 				retrain = 1;
 				break;
 			}

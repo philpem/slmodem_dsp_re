@@ -215,38 +215,46 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 				 + v8_mpyint(d->integrator, 0x3ccd));
 	}
 
-	if (d->lo_rule != 0) {
-		if ((short)d->integrator < d->lo_thresh)
-			d->counter = (short)(d->counter + 1);
-		if ((short)d->integrator > d->hi_thresh)
-			d->counter = 0;
-		return d->counter > d->count_limit;
-	}
+	{
+		int result;
 
-	if (d->armed != 0) {
-		if ((short)d->integrator > d->hi_thresh)
-			d->counter = (short)(d->counter + 1);
-		else
-			d->counter = 0;
-		return d->counter > d->count_limit;
+		if (d->lo_rule != 0) {
+			if ((short)d->integrator < d->lo_thresh)
+				d->counter = (short)(d->counter + 1);
+			if ((short)d->integrator > d->hi_thresh)
+				d->counter = 0;
+			result = 1;
+			if (d->counter <= d->count_limit)
+				result = 0;
+		} else if (d->armed != 0) {
+			if ((short)d->integrator > d->hi_thresh)
+				d->counter = (short)(d->counter + 1);
+			else
+				d->counter = 0;
+			result = 1;
+			if (d->counter <= d->count_limit)
+				result = 0;
+		} else {
+			/*
+			 * Not armed yet: wait for the level to stay up for
+			 * 0x33 blocks, then switch to the second rule and
+			 * take the detector out of the receiver's flag word.
+			 */
+			if ((short)d->integrator <= 0x30) {
+				d->warmup = 0;
+			} else {
+				d->warmup = (short)(d->warmup + 1);
+				if (d->warmup == 0x33) {
+					d->armed = 1;
+					v->rx.flags &=
+					    (unsigned short)~V8_RX_DETECTOR_ARMED;
+					d->counter = 0;
+				}
+			}
+			result = 0;
+		}
+		return result;
 	}
-
-	/*
-	 * Not armed yet: wait for the level to stay up for 0x33 blocks, then
-	 * switch to the second rule and take the detector out of the
-	 * receiver's flag word.
-	 */
-	if ((short)d->integrator <= 0x30) {
-		d->warmup = 0;
-		return 0;
-	}
-	d->warmup = (short)(d->warmup + 1);
-	if (d->warmup == 0x33) {
-		d->armed = 1;
-		v->rx.flags &= (unsigned short)~V8_RX_DETECTOR_ARMED;
-		d->counter = 0;
-	}
-	return 0;
 }
 
 /*

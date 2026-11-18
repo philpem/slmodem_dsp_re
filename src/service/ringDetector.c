@@ -143,11 +143,13 @@ rd_measure(struct ring_detector *s, int half, int min_freq)
 {
 	int f = s->fs / half;
 
-	if (f < s->max_freq + 1 && f >= min_freq) {
-		int n = s->freq_n;
+	if (f < s->max_freq + 1) {
+		if (f >= min_freq) {
+			int n = s->freq_n;
 
-		s->freq_n = n + 1;
-		s->freq_avg = (short)((s->freq_avg * n + f) / (n + 1));
+			s->freq_n = n + 1;
+			s->freq_avg = (short)((s->freq_avg * n + f) / (n + 1));
+		}
 	}
 	s->cycles++;
 	s->half_samples = 0;

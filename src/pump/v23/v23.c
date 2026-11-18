@@ -207,7 +207,7 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 	int n_tx = self->tx_bits_wanted;
 	int n_rx = 0;
 	int status;
-	int modem_status;
+	int ret;
 	int i;
 
 	if (self->connected != 0 && n_tx > 0) {
@@ -228,8 +228,6 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 	status = V23ModemMain(self->modem, self->tx_bits, &n_tx, (short *)out,
 			      count, (short *)in, count, self->rx_bits, &n_rx);
 
-	modem_status = status;
-
 	if (self->connected != 0 && n_rx > 0) {
 		for (i = 0; i < n_rx; i++)
 			((unsigned char *)self->rx_bits)[i] =
@@ -239,38 +237,40 @@ v23_process(void *dp_arg, void *in, void *out, int count)
 	}
 
 	self->tx_bits_wanted = n_tx;
+	ret = DPSTAT_OK;
 
-	if (status == 0 && self->connected == 0) {
-		/*
-		 * The edge into carrier.  Report the line rates and let the
-		 * next block start fetching data.
-		 *
-		 * BOTH DIRECTIONS ARE TOLD THE SAME RATE, which for an
-		 * asymmetric modem cannot be right in both -- see D24.  The
-		 * `self->dp.modem` here rather than `dp->modem` is the
-		 * original's too; the two are the same pointer.
-		 */
-		int rate = (self->caller == 0) ? V23_RATE_BACKWARD
-					       : V23_RATE_FORWARD;
-
-		self->connected = 1;
-		modem_set_param(self->dp.modem, MDMPRM_TX_RATE, rate);
-		modem_set_param(self->dp.modem, MDMPRM_RX_RATE, rate);
-		status = DPSTAT_CONNECT;
-	} else if (status == 0) {
-		status = DPSTAT_OK;
-	} else if (status == 1) {
-		self->connected = 0;
-		status = DPSTAT_OK;
+	if (status != 0) {
+		if (status == 1) {
+			self->connected = 0;
+		} else {
+			self->connected = 0;
+			ret = DPSTAT_ERROR;
+		}
 	} else {
-		self->connected = 0;
-		status = DPSTAT_ERROR;
+		if (self->connected == 0) {
+			/*
+			 * The edge into carrier.  Report the line rates and let the
+			 * next block start fetching data.
+			 *
+			 * BOTH DIRECTIONS ARE TOLD THE SAME RATE, which for an
+			 * asymmetric modem cannot be right in both -- see D24.  The
+			 * `self->dp.modem` here rather than `dp->modem` is the
+			 * original's too; the two are the same pointer.
+			 */
+			int rate = (self->caller == 0) ? V23_RATE_BACKWARD
+						       : V23_RATE_FORWARD;
+
+			self->connected = 1;
+			modem_set_param(self->dp.modem, MDMPRM_TX_RATE, rate);
+			modem_set_param(self->dp.modem, MDMPRM_RX_RATE, rate);
+			ret = DPSTAT_CONNECT;
+		}
 	}
 
-	if (dp->status != (unsigned)status && DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("v23: V23STAT: --> %d\n", modem_status);
-	dp->status = (unsigned)status;
-	return status;
+	if (dp->status != (unsigned)ret && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("v23: V23STAT: --> %d\n", status);
+	dp->status = (unsigned)ret;
+	return ret;
 }
 
 int

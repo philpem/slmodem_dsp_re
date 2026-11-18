@@ -41,31 +41,6 @@
 
 #include "dsplib/v34det.h"
 
-/*
- * One second-order section, accumulating into `acc`.
- *
- * `b` and `a` are two entries each and are NOT adjacent in the coefficient
- * block: the eight shorts are grouped by role, so section 2's feed-forward
- * pair sits between section 1's two pairs.  See v34det.h.
- *
- * The original spells this out twice rather than calling anything, and
- * interleaves the two terms within each tap.  Both orders sum the same
- * values, because every term is truncated to 16 bits before it is added and
- * the additions themselves are plain 32-bit ones.
- */
-static int
-det_section(int acc, const short *b, const short *a, const short *x,
-	    const short *y)
-{
-	int k;
-
-	for (k = 0; k < 2; k++) {
-		acc += (short)((x[k] * b[k]) >> 14);
-		acc -= (short)((y[k] * a[k]) >> 14);
-	}
-	return acc;
-}
-
 void
 detectorinit(struct v34_detector *d, const short *coeff, short polarity,
 	     short limit, short warmup, short thresh_lo, short thresh_hi)
@@ -94,17 +69,24 @@ int
 tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *start,
 	    const short *end)
 {
-	const short *p;
+	int k;
 
-	for (p = start; p < end; p++) {
-		int x = *p;
+	for (; start < end; start++) {
+		int x = *start;
 		int acc;
-		short old;
-		short mid;
+		unsigned short old;
+		int mid;
 
 		/* --- section 1, input pre-scaled by 1/16 --- */
-		acc = det_section(x >> 4, &d->coeff[0], &d->coeff[4],
-				  d->x[0], d->y[0]);
+		acc = x >> 4;
+		for (k = 0; k < 2; k++) {
+			acc += (short)((d->x[0][k] * d->coeff[k]) >> 14);
+			acc -= (short)((d->y[0][k] * d->coeff[4 + k]) >> 14);
+		}
+
+		old = d->y[0][0];
+		d->y[0][0] = (short)acc;
+		d->y[0][1] = old;
 
 		/*
 		 * Shift the 32-bit accumulator, THEN truncate.  Section 2
@@ -112,16 +94,16 @@ tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *start,
 		 */
 		mid = (short)(acc >> 4);
 
-		old = d->y[0][0];
-		d->y[0][0] = (short)acc;
-		d->y[0][1] = old;
 		old = d->x[0][0];
 		d->x[0][0] = (short)(x >> 4);
 		d->x[0][1] = old;
 
 		/* --- section 2 --- */
-		acc = det_section(mid, &d->coeff[2], &d->coeff[6],
-				  d->x[1], d->y[1]);
+		acc = mid;
+		for (k = 0; k < 2; k++) {
+			acc += (short)((d->x[1][k] * d->coeff[2 + k]) >> 14);
+			acc -= (short)((d->y[1][k] * d->coeff[6 + k]) >> 14);
+		}
 
 		old = d->x[1][0];
 		d->x[1][0] = mid;

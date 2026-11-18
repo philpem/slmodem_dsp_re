@@ -56,6 +56,36 @@ MAKEFLAGS += --no-builtin-rules --no-builtin-variables
 #
 TC_OUT   ?= $(CURDIR)/build/tc_out
 
+# A RELATIVE OBJECT PATH ON THE COMMAND LINE IS A SILENT NO-OP, AND THIS IS
+# THE PLACE IT IS STOPPED.  Every rule below is generated against `$(TC_OUT)`,
+# an ABSOLUTE path, so
+#
+#     make -f tools/toolchain/period.mk build/tc_out/src_x.c.o     # WRONG
+#
+# matches no rule.  The file already exists under that relative spelling, make
+# calls it up to date, the command prints nothing and EXITS 0 -- and the caller
+# then grades the object that was already there and reads a clean, plausible,
+# WRONG number.  That is the failure shape of F2400 and F3100, and it bit this
+# file's own users: a verification run was scored off the previous object and
+# reported NONMATCH for source that compiles EXACT.
+#
+# The remedy is a REFUSAL, not a silent rewrite: the only goals that can be
+# affected are `*.o` paths that are not absolute, and this file never legitimately
+# offers one (the default `tc` goal and `$(TC_OBJ)` are both absolute).  The
+# `$(filter /%,$(TC_OUT))` test keeps this a no-op when someone deliberately
+# points TC_OUT at a relative path, in which case the relative goal is correct.
+#
+ifeq ($(filter /%,$(TC_OUT)),$(TC_OUT))
+TC_REL_OBJ_GOALS := $(filter %.o,$(filter-out /%,$(MAKECMDGOALS)))
+ifneq ($(strip $(TC_REL_OBJ_GOALS)),)
+$(error object paths on the period-make command line must be ABSOLUTE: pass \
+        '$(abspath $(firstword $(TC_REL_OBJ_GOALS)))', not \
+        '$(firstword $(TC_REL_OBJ_GOALS))'.  A relative path matches no rule, \
+        names an already-existing file, and would exit 0 having compiled \
+        nothing -- findings F2400, F3100)
+endif
+endif
+
 # TWO KNOBS, BOTH FOR A/B MEASUREMENT AND NEITHER A WAY TO CHANGE THE BUILD.
 #
 #   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4, kept

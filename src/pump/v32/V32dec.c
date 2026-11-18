@@ -208,7 +208,7 @@ FSE_decision_trn(struct fpm_fse *state, short *angle, short *mag)
 		}
 	} else {
 		m->count = n;
-		c = (c >> 1) >= 1 ? 3 : 1;
+		c = ((unsigned)c >> 1) >= 1 ? 3 : 1;
 	}
 
 	*angle = DECv32_ANGL1200[c];

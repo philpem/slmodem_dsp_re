@@ -2198,7 +2198,15 @@ getbit(struct v34_bitsource *b)
 			n = left;
 		}
 
-		if (b->crc_on != 0 && folded != 0) {
+		/*
+		 * Nested, not `&&`: the object branches on `crc_on` and then
+		 * on `folded` (two `je`s at 0x5eb65/0x5eb69 and NO setcc
+		 * anywhere in the function), while a `&&` is if-converted
+		 * into a materialised AND (`setne`/`setne`/`test`/`je`).
+		 * F12171.
+		 */
+		if (b->crc_on != 0)
+			if (folded != 0) {
 			acc = (unsigned int)b->acc;
 			do {
 				unsigned int crc = (unsigned short)b->crc;
@@ -2213,7 +2221,7 @@ getbit(struct v34_bitsource *b)
 				b->crc = (short)crc;
 			} while (folded != 0);
 			goto emit;
-		}
+			}
 	}
 
 	acc = (unsigned int)b->acc;

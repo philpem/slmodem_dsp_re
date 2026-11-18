@@ -386,7 +386,7 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		 * `nbits` are left exactly as the caller passed them.
 		 */
 		rx->status = V23RX_WAITING;
-		return rx->status;
+		goto v23rx_done;
 	}
 
 	rx->rx_state = V23RX_RUNNING;
@@ -417,7 +417,7 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		 */
 		rx->status = V23RX_DEMODULATED;
 		*nbits = 0;
-		return rx->status;
+		goto v23rx_done;
 	}
 
 	*nbits = rx->nbits;
@@ -425,6 +425,7 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 		bits[i] = rx->bits[i];
 
 	rx->status = V23RX_DEMODULATED;
+v23rx_done:
 	return rx->status;
 }
 

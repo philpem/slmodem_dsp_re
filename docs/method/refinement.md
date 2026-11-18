@@ -1404,6 +1404,12 @@ investigate, not automatically the cause.
 
 ## Classify the compiler stage before searching register spellings
 
+The [six-step follow-up](../six-step-recovery-wave.md) adds bounded
+entry-memory owner paths and explicit pseudo-register def/use windows. Read
+their supported/unknown denominators: an unchanged immediate definition
+pattern does not prove unchanged input values, and a captured pointer is
+different evidence from a reload after a call or aliasing write.
+
 The [V.34 small-RTL study](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/v34-small-rtl.md) separates several mechanisms
 that can produce similar-looking assembly differences. Use a small control
 and the corresponding GCC dump to identify the stage, then transfer the
@@ -3730,6 +3736,1009 @@ block sequence must keep the cursor advance in EVERY block, and
 `make period T=<test> J=8` on the two fixtures that read the field is a
 95-second check that the full eight-minute gate would only find later.
 
+### Lever 28. A `? :` does NOT if-convert — a conditional assignment must name the variable itself
+
+When the object has a branchless mask
+
+    cmp  %bp,%ax
+    setl %cl
+    neg  %ecx
+    and  %eax,%ecx
+
+and ours has the branch (`cmp; jl; xor`), the residual is not allocation: the
+source form decides whether `if_convert` can fire at all.
+
+`noce_try_store_flag_mask` (`ifcvt.c`, the LAST of the store-flag tries in
+`if_convert`) is entered only when
+
+    (!no_new_pseudos
+     && (BRANCH_COST >= 2 || STORE_FLAG_VALUE == -1)
+     && ((if_info->a == const0_rtx
+          && rtx_equal_p (if_info->b, if_info->x))
+         || ((reversep = reversed_comparison_code (if_info->cond, if_info->insn)) != UNKNOWN
+             && if_info->b == const0_rtx
+             && rtx_equal_p (if_info->a, if_info->x))))
+
+so the conditional assignment's TARGET has to BE one of the two arms. A
+`COND_EXPR` (`c ? a : b`) reaches the backend through a TEMPORARY: `if_info->x`
+is the temporary and neither arm is `rtx_equal_p` with it, so the branch
+survives no matter how the test is spelled. Written as an `if` statement that
+assigns the variable itself, the untouched arm IS `x` and the mask is emitted.
+
+Both senses work, because the two alternatives cover them: `if (c) x = 0;`
+matches the first (`a == const0`, `b == x`), `if (!c) x = 0;` the second (via
+`reversed_comparison_code`). What does NOT work is any `?:` spelling —
+`x = c ? x : 0` and `x = c ? 0 : x` both fail, which is what makes this a test
+of the STATEMENT FORM and not of the comparison's direction.
+
+Measured on one shared helper, `(widx + 1) mod len`, inlined at eleven sites
+across five translation units (F12153). Total canonical multiset symmetric
+difference, baseline -> `if` form:
+
+    SMCv17_encoder_dif    17 -> 15        TxNoCarrierV17   41 -> 19
+    SMCv17_encoder_abs    26 -> 24        TxNoCarrierV29   26 -> 17
+    SMCv17_encoder_tcm    15 -> 11        TxNoCarrierV32   40 -> 35
+    FPM_MRF_filter        61 -> 51        TxNoCarrierV27   23 -> 23  (not a site)
+
+**Fingerprint.** Count the object's `setcc` before theorising:
+`objdump -d --disassemble=SYM ref/slmodemd/dsplibs.o | grep -c 'setl'`. Here the
+object held one `setl` at every inlining site and our build held none anywhere,
+which both localises the difference and proves the direction.
+
+**Screen the whole corpus, and read BOTH directions.**
+`scratch/cd/setcc.py <census.json> [--all]` counts every setcc mnemonic per
+symbol, reference against candidate — the generalisation of the one-line
+`grep`. Its control (all 1237 EXACT rows must agree) has already caught an
+inverted control message in the screen itself, so do not skip `--all`.
+
+79 non-EXACT rows differ, and the SIGN is the diagnosis:
+
+- `ours < reference`: the object masks and we branch.  Our source holds a
+  conditional expression where the original had an `if` statement — this
+  lever.  32 rows.
+- `ours > reference`: we mask and the object branches.  Our source holds an
+  `if` statement where the original must have held a conditional expression
+  (or some other form that does not if-convert).  47 rows, not yet worked.
+  The largest are `V8.c rebuildJMSequence` (48 against 26), `dtmf_test`,
+  `V8.c initTxSequence`, `CALLPROG_Progress`, `VTB_decoder`, `CID_MTD_detect`.
+
+Then find the remaining sites directly in the source rather than in the
+objects: `grep -rn "? next : 0\|? 0 : next\|< limit ?\|< len ?" src/`.  Two
+in-place shapes both if-convert and both match the object, so use whichever
+the source already affords:
+
+    x = (short)(next < lim ? next : 0);     ->  if (next >= lim) next = 0;
+                                                x = next;
+    x = (short)(x + 1 < lim ? x + 1 : 0);   ->  x = (short)(x + 1);
+                                                if (x >= lim) x = 0;
+
+Applied corpus-wide (F12154) this closed five more sites in three files
+(`V32SMC_TX.c`'s `ring_advance` inlined twice, `fpm_pps.c`, and four in
+`fpm_ecc.c`), taking `FPM_PPS_filter` from -15 bytes to 0 and
+`FPM_ECC_cancel`'s symmetric difference from 105 to 98.
+
+**Expect the candidate to grow.** The mask build costs about two instructions
+more than the branch it replaces, so a correct conversion moves the candidate
+AWAY from a smaller object. If the object's total is smaller than even the
+pre-fix candidate, the conversion is still right and there is a further,
+separate source difference in that function: `FPM_MRF_filter` is 167 against
+our 168 before the fix and 172 after, so its size row went 0 -> +7 while its
+symmetric difference fell 61 -> 51. Record that trade; do not undo the
+conversion to protect a byte count.
+
+#### Addendum: when the arm TRANSFORMS the variable, hoist the transform
+
+`noce_try_store_flag_mask` needs `if_info->x` itself to be one of the arms, so
+a conditional expression whose kept arm is a *computation* of the variable
+cannot reach it:
+
+    i = (fifo_size > i + 1) ? i + 1 : 0;     // never a mask -- the arm is `i+1`
+
+Hoist the computation onto the variable and the arm becomes the variable:
+
+    i = i + 1;
+    if ((int)fifo_size <= (int)i)
+	i = 0;                                  // -> xor; cmp; setg; neg; and
+
+Same for the constant form (`small = 2 - (cond ? 1 : 0)`, F12162): the `2 -`
+has to be applied to the materialised 0/1 rather than distributed over the
+ternary.  The tell in the object is `setcc` immediately followed by
+`neg`+`and` whose `and` source is a register computed just before the compare.
+
+### Lever 29. A `&&`/`||` chain of comparisons is CONTROL FLOW; the object's mask chain is a value
+
+The partner of Lever 28, and the same screen.  Count `setcc` per symbol and read
+BOTH directions (`scratch/cd/setcc.py <census.json> [--all]`).  Where we have
+ZERO and the object has some, the original evaluated the predicate **as a
+value** and our source left it as control flow:
+
+| our source | what GCC emits | the object wants |
+|---|---|---|
+| `a && b && c` | short-circuit `jb`/`jae` chain | `setcc` per comparison, ANDed |
+| `x = c ? 1 : 0;` | branch (Lever 28) | `setcc` |
+| `!(a && b)` | short-circuit | `test; sete` |
+
+Two spellings reach the object, and which one is original is not always
+decidable from the bytes:
+
+    /* 1. bitwise: every operand is a value, so every comparison is masked */
+    ok = (a >= b) & (c >= d) & (e >= f);
+
+    /* 2. the flag lives in a variable, so `!` sees a value and cannot
+          short-circuit; `&&` is fine here because the value is needed */
+    int ok = (a >= b) && (c >= d) && (e >= f);
+    return (short)!ok;
+
+Measured: `dtmf_test` (five float comparisons) went from four `jb` branches to
+the object's five `setae` with the same branch sequence once the chain was
+written `&`; `CID_MTD_detect` reproduced the object's `seta`/`seta`/`test`/`sete`
+tail only once the flag was materialised in an `int`.
+
+**`!` is the trap.**  `!(A & B)` never keeps the `&`: `fold` rewrites it to
+`(!A | !B)` and the comparisons come out as `setbe` + `or`.  Measured on
+`CID_MTD_detect`: `!(A & B)` scores WORSE (symmetric difference 16) than the
+untouched baseline (15).  Materialise the flag first (`int ok = A & B;` then
+`return !ok;`) and the `&` survives.
+
+**Operand order is a second, separable lever.**  The object's own evaluation
+order is visible in the mask order and in which comparison is recomputed at the
+end; with `CID_MTD_detect`'s order (`wide / 2 > narrow` first) the symmetric
+difference is 7 against 8 for the other order.
+
+**Two other spellings, both measured, both rejected for `dtmf_test`:** an
+`ok = 1;` followed by `if (!(c)) ok = 0;` chain (`noce_try_store_flag_mask`
+gives the object's `x = x & -(cond)` accumulator, `neg` and all) scores the same
+28 but overshoots the byte count the other way (173 against the object's 170),
+because our build folds the first two comparisons into a plain `and` before
+if-conversion runs.  Both `&` (167) and the `if` chain (173) straddle 170, so
+the accumulator form alone does not decide it.
+
+**A materialised loop test often carries a SIGNEDNESS that the loop's neighbours
+do not.**  `initTxSequence`'s `emit_extension` (`src/v8/V8.c`) inlines twice, and
+each inlining carries the object's
+
+    test %cl,%cl ; setne %dl ; xor %eax,%eax ; cmp $0x3,%k ; setbe %al
+    test %eax,%edx ; jne
+
+while the same `k <= V8_CM_EXT_MAX - 1` bound in that file's other eight loops
+emits `setle` -- signed -- in both the object and our build.  So the counter is
+unsigned *in that helper*, and `setbe` against `$0x3` is what says so.  Measured
+on the complete TU: `int k` gives `setle`; `unsigned int k`, `(unsigned)k <=
+V8_CM_EXT_MAX - 1` and `(unsigned)k < V8_CM_EXT_MAX` all give one identical
+object with `setbe` (GCC canonicalises the last to `k <= 3`).  Read the
+comparison, not the bound expression, when the two disagree across a file.
+`F12157`.
+
+#### Caution: test each chain separately
+
+Four short-circuit chains in the same function are not four instances of the
+same source property.  Measured on `faxvmi_hdlc_unframe` (F12163): converting
+all four dropped the canonical match from 88 to 98; tested one at a time only
+one (line 266) improved it (88 -> 84) and the other three regressed or were
+inert (271 -> 94, 254 -> 90, 245 -> unchanged).  Convert a chain when the
+OBJECT's bytes show a materialised comparison combined by `test`; an `&&`
+adjacent to a converted one is not evidence for itself.
+
+#### Addendum: the loop test, and how to FIND these sites
+
+The same rule applies to a loop condition.  `while (v92me_mul(a, b >> n) > 0
+&& n <= 7)` compiled to a branch; the object's back edge materialises both
+halves (`cmpl $0x7,%n ; setle %bl` beside the product's sign, then
+`test %al,%bl`) -- so the source was `&`.  One operator, 93 bytes and 18
+canonical entries (F12165).
+
+Finding them does not need the object: **`scratch/cd/setcc.py <census.json>`
+lists, per symbol, the `setcc` multiset of the reference against ours, and a
+NEGATIVE difference means the object masks where our build branches.**  Sort by
+that difference and read each symbol's source for a `&&`, a `||` or a `?:`
+whose operands are comparisons.  Then check the object's bytes at the site --
+it will show two `setcc`s and a `test`, which is the confirmation.
+
+Two traps, both measured:
+
+- `bool ok = (a && b);` / `(a || b)` written as a VALUE does not help if the
+  operands fold; and `!(a & b)` NEVER keeps the `&` -- `fold` rewrites it to
+  `(!a | !b)` and the `setcc` names come out inverted (F12155).  Materialise
+  first, then negate.
+- The reverse direction is real too: an object that BRANCHES where we mask
+  means our source has a `&` (or a hand-written mask) the original did not, or
+  a `?:` that should be an `if`.  Both directions are in the same screen; the
+  sign of the difference is the diagnosis.
+
+### Lever 30. A conditional MOVE needs the value MATERIALISED -- `x += c ? A : B` distributes into a branch
+
+Lever 28's counterweight, and the same screen and direction
+(`scratch/cd/setcc.py <census.json>`; here `ours < reference`, usually
+`ours == 0`).  GCC has two unrelated ways to make a conditional assignment
+branchless, and they need opposite source shapes:
+
+- `ifcvt`'s `noce_try_store_flag_mask` -- Lever 28 -- needs the assignment's
+  TARGET to be one of the arms, so it wants an `if` statement.
+- the i386 `mov<mode>cc` pattern, reached whenever a `COND_EXPR` result is a
+  VALUE.  `ix86_expand_int_movcc` (config/i386/i386.c) expands it without cmov
+  when BOTH arms are `CONST_INT`:
+  - sign-bit and carry-flag compares take the `sbb` path;
+  - `diff = ct - cf` in {1, 2, 3, 4, 5, 8, 9} takes the LEA path --
+    `setcc; lea cf(,dest,(diff & ~1)) [; add dest]`;
+  - otherwise the general case -- `xor; cmp; setcc; dec; and (cf-ct) [; add ct]`.
+
+The trap: `base += (rq > 0) ? 0x00 : 0x18;` NEVER reaches the movcc.  The front
+end distributes the `+` into the arms (`(rq>0) ? base+0x00 : base+0x18`), the
+RTL is a diamond, and `noce_try_addcc` cannot fold it (`emit_conditional_add`
+has no i386 pattern and its setcc fallback needs an addend of +-1).  The result
+is a branch.  Materialising the value first keeps the movcc:
+
+    int q = ((short)rq > 0) ? 0x00 : 0x18;
+    base += q;
+
+gives the object's `xor %eax,%eax; test %bx,%bx; setg %al; dec %eax;
+and $0x18,%eax`, and the other arm gives `setle %cl; lea 0x8(,%ecx,8)`.
+
+The same rule applies to a boolean MULTIPLY.  `cq + (cq > ci) * grid` folds to
+`cq + (cq>ci ? grid : 0)` and then distributes into a branch; storing the
+comparison in a variable first keeps the real multiply:
+
+    int sel = (cq > ci);
+    idx = (short)(cq + sel * grid);
+
+emits `xor; cmp; setg; imul; add` -- which no ternary, no if, and no inline
+multiply spelling reproduces (all measured).
+
+Fingerprints to grep for in the object: a `setcc` followed by `dec` and then
+`and $C`, a `setcc` followed by `imul`, and a `setcc` followed by
+`lea C(,dest,scale)`.  Measured on `VTB_decoder` (src/dsp/fpm_vtb.c): our
+baseline held ZERO `setcc` against the object's three (`setg`, `setg`,
+`setle`); after materialising both values our build reproduces all three sites
+instruction for instruction.  Expect the candidate to GROW in bytes while the
+canonical multiset improves -- the same trade as Lever 28, and the reason the
+census `size` row is not the metric to optimise.
+
+### Lever 31. A cached pointer local the object does not have is RESIDUE: it spills and blocks addressing-mode folding
+
+A local that names an address the reference folds is not harmless.  `struct T
+*p = &v->arr[i];` gives the compiler a value it must keep somewhere; if the
+function calls anything, that value spills and every later use becomes a load
+of the pointer followed by a load through it.  The reference, written with the
+expression inline, folds the constant offset into the operand instead.
+
+The fingerprint is a base-pointer RELOAD.  Compare the two objects for
+`mov 0xNN(%esp),%r32` (a spilled pointer) and `mov 0xNN(%r32),%r32` (a pointer
+re-derived from a live root).  `evaluateRxJMSequence` (src/v8/V8.c) held
+`mov 0x20(%esp),%r32` twenty-one times where the reference held NONE -- and the
+same accesses in the reference were single folded operands,
+`movzwl 0xcd4(%r32,%r32,2),%r32`, i.e. `&v->seq[2].word[i]` with the offset as
+a displacement.
+
+Check the declaration list first.  An *unused* local is pure residue: the
+declaration is evidence the original had a name there, but if no statement in
+the function uses it, the accesses elsewhere were meant to be spelled inline.
+`evaluateRxJMSequence` declared `struct v8_tx_sequence *seq = &v->seq[2];` and
+`struct v8_cm *cm = v->cm;` and then used NEITHER -- all seven word accesses
+were `seq->word[...]` and all twelve cm accesses were `v->cm->...`.
+
+Measure the two halves separately, because they are independent:
+
+| spelling | instructions | canonical symmetric difference | byte delta |
+|---|---|---|---|
+| `v->cm->` + `seq->` (baseline) | 256 | 86 | +61 |
+| `cm->` + `seq->` | 246 | 76 | -- |
+| `v->cm->` + `v->seq[2].` | 226 | 40 | -34 |
+| `cm->` + `v->seq[2].` | 222 | 36 | -- |
+
+The last row scores four units better on the aggregate, and it is the WRONG
+answer for this function: it makes the compiler cache `cm` in a register, and
+the object demonstrably re-derives it (`mov 0xa58(%r32),%r32`, the `v->cm`
+field, seven times more than the cached build).  **When two spellings differ,
+decide with the native reload pattern, not with the aggregate score** -- the
+aggregate is a sum over instructions whose weights are not equal.
+
+Adopted: drop both unused locals and spell the accesses inline
+(`v->cm->...`, `v->seq[2].word[i]`).  Result `evaluateRxJMSequence`: candidate
+1039 -> 944 bytes, byte delta +61 -> -34, longest run 15/244 -> 29/244,
+symmetric difference 86 -> 40, exactly one census row moved and no grade
+changed.
+
+### Lever 32. A hand-written mask (`x & -(cond)`) does NOT if-convert — only a conditional ASSIGNMENT does
+
+The corollary of lever 28, and the reason a `?:`-free source can still miss the
+branchless form.  `noce_try_store_flag_mask` (ifcvt.c:1041) is reached through
+`if_convert`'s store analysis, which needs an `if_info` — a conditional
+STORE.  Written as a value:
+
+    return idx & -(int)((unsigned)len > (unsigned)idx);
+
+the mask is a `COND_EXPR` on a temporary, no `if_info` is built, and the
+comparison stays a `ja` branch.  Written as a statement whose target is one of
+the arms, the mask is emitted.  Measured on `bulk_next` (src/pump/v34/V34TX.c,
+inlined 3x into `txmit`), complete-TU, reading the object's `setcc` multiset:
+
+| spelling | setcc emitted |
+|---|---|
+| `idx & -(int)((unsigned)len > (unsigned)idx)` | (none — a `ja` branch) |
+| `if (idx >= len) idx = 0;` | `setl` |
+| `if ((unsigned)idx >= (unsigned)len) idx = 0;` | `setb` |
+| `if (!((unsigned)len > (unsigned)idx)) idx = 0;` | `seta` |
+| `if ((unsigned)len <= (unsigned)idx) idx = 0;` | `seta` (identical object) |
+| `unsigned u = (unsigned)idx; if (u >= (unsigned)len) idx = 0;` | `seta` (identical) |
+
+Two separable facts fall out.  First, the SIGNEDNESS is a second property: the
+object compares UNSIGNED (`seta`), and all three unsigned spellings are
+byte-identical to each other, so the source can be recovered from the object's
+`setcc` alone.  Second, a hand-written mask is a plausible-looking source form
+that is nevertheless wrong — an earlier reconstruction wrote exactly that
+because the object showed the `and`, and it cost a branch.  Before believing a
+mask, check the object for `setcc`; before believing a `setcc`, check its
+signedness against the same comparison elsewhere in the file.
+
+Companion case (same batch, F12159): the `&&` of lever 29 needs its operands
+MATERIALISED, and a bare `short` operand promotes back into the arithmetic
+unless it is compared explicitly — `allocated & (t->fir_len > 0)` emits no
+`setcc`, `(allocated != 0) & (t->fir_len > 0)` emits the object's
+`setne`/`setg` pair.
+
+### Lever 33. `(cond) << K` folds back into a ternary; a named local keeps the `setcc`
+
+The object computed a flag as a shift of a 0/1 comparison -- `sete %al ;
+shl $0x6,%al` -- and the obvious reconstruction (`cond ? K : 0`) produced a
+BRANCH instead.  The reason is a front-end fold, and it defeats the obvious
+attempts to spell the shift too:
+
+| source | result |
+|---|---|
+| `cond ? K : 0` | branch |
+| `(cond) << K` inline | identical object (folds to the ternary) |
+| `(cond) * K` inline | identical object |
+| `(unsigned char)((cond) << K)` inline | identical object |
+| `int b = (cond); ... (b << K)` | **`sete` + `shl`** |
+
+`fold` rewrites `(cond) << K` and `(cond) * K` into `cond ? K : 0`, after which
+the movcc/if-conversion path decides the shape.  A NAMED LOCAL holding the 0/1
+comparison blocks the fold, the shift survives, and the `setcc` is emitted.
+
+Practical consequences.  First, if the object shows `setcc` followed by a shift
+or an imul, the source almost certainly holds the 0/1 in a variable -- an
+inline shift/multiply of the comparison will NOT reproduce it, however many
+times you re-spell it (measured: four distinct inline spellings, one object).
+Second, the local must be a wide integer for the best allocation: an
+`unsigned char` local still emits the `setcc` but scores worse.  Third, a
+`cond ? K : 0` ternary is the WRONG hypothesis at such a site even though it
+looks equivalent -- the i386 movcc for a two-constant `COND_EXPR` emits
+`xor; cmp; setcc; dec; and (cf-ct) [; add ct]`, which contains no `shl` at all,
+so the shift in the object rules the ternary out before you compile anything.
+
+Recorded as F12160 (`DemodDataV32`, src/pump/v32/V32int.c).  The remaining rows
+there are allocation: the object loads the compared field into a register and
+tests it where ours compares memory, and it then shifts the byte where ours
+shifts the word.
+
+#### Addendum: the same fold catches `C - (cond ? 1 : 0)`
+
+`(cond) << K` is not the only cheap fold.  `2 - (cond ? 1 : 0)` folds to
+`cond ? 1 : 2` -- a two-constant `COND_EXPR` -- and that takes the i386
+`movcc` sign-flag path (`cmp; sbb %edx,%edx; add $0x2`), so the comparison's
+VALUE again never survives and there is no `setcc`.  The object wants
+`cmpw $0x8 ; setbe %al ; sub %eax,%ecx`, i.e. a plain subtraction of a
+materialised 0/1.  Named local, again:
+
+    int g8 = ((unsigned short)s->group_count < 9);
+    small = 2 - g8;
+
+Measured on `putFrame` (F12162): setcc none -> `setbe`, canonical symmetric
+difference 31 -> 24, `|byte delta|` 7 -> 3.
+
+**A CAUTION about the conservative run.**  With the local alone the object
+scored *worse* on `byteident`'s longest contiguous run (17 -> 14 of 162), and
+swapping two same-typed local declarations (`int small_last` before
+`int small`, lever 21) restored it to 17 while also improving the symmetric
+difference 25 -> 24.  A run regression that follows a correct source fix is not
+by itself evidence against the fix; check the neighbouring declarations
+before rejecting it.
+
+### Lever 34. The mask needs its LIMIT to be a DECL too — and screen by SHAPE, not by names
+
+Two addenda to levers 28/29/33, both from the same site.
+
+**1. A named limit stops the operand swap.**  Since F12151 we know
+`tree_swap_operands_p` (fold-const.c) swaps a comparison whose right operand is
+not a `DECL_P` when its left one is:
+
+    if (DECL_P (arg1)) return 0;
+    if (DECL_P (arg0)) return 1;
+
+That rule applies to the compare INSIDE a mask or a movcc, not just to one that
+becomes a branch -- and its effect there is not a different branch but a
+different `setcc` NAME for the same predicate:
+
+| source | emitted |
+|---|---|
+| `idx = (short)(idx + 1); if (idx >= 2 * lag) idx = 0;` | `cmp %eax,0x1c(%esp); setg %bl` |
+| `int wrap = 2 * lag;` then `if (idx >= wrap) idx = 0;` | `cmp 0x1c(%esp),%eax; setl %bl` |
+
+Same truth value, both branchless, so **no differential can see the
+difference** -- only the object's `setcc` name can.  When the object's mask
+uses `setl` and yours uses `setg`, the fix is a named local for the right-hand
+side, not a different comparison operator.  (Measured repeatedly this session:
+FPM_TONE_find_rev's wrap, FPM_TONE_detect's tail threshold, and `isAltRbs` in
+F12151.)
+
+**2. Screen by the shape, not by the identifier names.**  The sweep that found
+the first seven sites (F12154) grepped for `limit` and `len` by name:
+
+    grep -rn "? next : 0\|? 0 : next\|< limit ?\|< len ?" src/
+
+and therefore missed `((short)(idx + 1) < taps) ? ... : 0`,
+`< 2 * lag ?`, `(rd < size) ? rd : 0`.  Five more sites, all still spelled as
+`?:` because the author had *seen* the object's `setl/neg/and` and hand-written
+the branchless form -- which is worse than the `if`, not better.  Use
+
+    grep -rnE '\?[^:]*: *0;' src/ --include=*.c --include=*.cpp
+
+and read every hit whose condition is a comparison.  A hand-written
+`x & -(cond)` or a `?:` at such a site is a reconstruction error, not a
+faithful copy.
+
+### Lever 35. With no ELSE, ifcvt takes the kept value from the instruction BEFORE the compare — assign the VARIABLE, not a copy
+
+The third sub-rule of lever 28, and the one that took two symbols to EXACT
+(F12164).  `noce_process_if_block` (ifcvt.c:1804) documents the shape it
+handles as
+
+    (3) if (...) x = a;   // as if with an initial x = x.
+
+With no else block it does not invent that initial assignment -- it reaches
+into the instruction stream (ifcvt.c:1882-1901):
+
+    insn_b = prev_nonnote_insn (if_info.cond_earliest);
+    if (! insn_b || GET_CODE (insn_b) != INSN
+        || (set_b = single_set (insn_b)) == NULL_RTX
+        || ! rtx_equal_p (x, SET_DEST (set_b)) ... )
+      insn_b = set_b = NULL_RTX;
+
+and then (ifcvt.c:1917)
+
+    b = (set_b ? SET_SRC (set_b) : x);
+
+`noce_try_store_flag_mask` wants `a == const0 && rtx_equal_p (b, x)`.  So a
+COPY of the source operand sitting immediately before the compare is fatal:
+
+| source | b | mask? |
+|---|---|---|
+| `unsigned int c = (unsigned int)which; if (which >= 6) c = 0;` | `which` | NO -- a branch |
+| `int c = which; if (c >= 6) c = 0;` | `which` | NO |
+| `if (which >= 6) which = 0;` | `x` itself | **YES** -- `setl %al; neg %eax; and %ebp,%eax` |
+
+The copy is the natural way to write it when the source variable is a
+parameter you do not want to disturb -- and it is exactly the mistake to look
+for.  When the object shows a mask on a variable and the source clamps through
+a local, ask whether the clamp can assign the ORIGINAL variable; parameters are
+locals, so it usually can, and the extra local is the tell.
+
+Recipe at the site: the compare in the object names the variable the mask ANDs
+(`and %ebp,%eax` with `cmp $0x6,%ebp`), so the variable that reaches the mask is
+the one whose value must survive — not a copy initialised from it.
+
+### Lever 36. An if/else that only chooses between constant VALUES is two conditional expressions
+
+When the arms of an if/else assign the SAME variables from the SAME predicate,
+and each assignment chooses between constants, the object will hold no branch
+at all — and the SCREEN is the `setcc` count:
+
+    action = (in[0] == 0) ? V90SBE_INVERT_ODD : V90SBE_INVERT_EVEN;   /* 3 : 2 */
+    state  = (in[0] == 0);
+
+Against
+
+    if (in[0] == 0) { action = V90SBE_INVERT_ODD; state = 1; }
+    else            { action = V90SBE_INVERT_EVEN; state = 0; }
+
+the object has four `setcc` (`cmp $0x1,%dl; sbb %ebx,%ebx; not %ebx;
+lea 0x3(%ebx),%edi` for the action, `test %dl,%dl; sete %cl` for the state) and
+the if/else has three — it branches and loses both.  The two mechanisms are
+already known separately: the action's two constants are lever 30 (a ternary
+reaches `ix86_expand_int_movcc`, an if statement does not), and the state's 0/1
+is the predicate itself, materialised.
+
+**The screen, in order:** (1) `scratch/cd/setcc.py <census.json>` — a NEGATIVE
+difference means the object masks where we branch; (2) in that symbol's source,
+look for an if/else whose two arms assign the same set of variables; (3) if each
+assignment is `x = K1` / `x = K2`, rewrite it as `x = (cond) ? K1 : K2` — or, for
+`1`/`0`, as `x = (cond)`.
+
+**A near-zero byte delta is not evidence the body is right.**  The if/else
+baseline sat one byte from the reference with a canonical symmetric difference of
+22 and a run of 60/142; the correct source moved the delta to -16 while halving
+the symmetric difference (22 -> 7) and lifting the run to 73/142.  Two wrong
+things can cancel in the size.
+
+### Lever 37. The object RE-COMPARES a boolean it already has — the source normalised it
+
+The same family as levers 34/35: the object contains a comparison our source
+could not produce, so the source must be written the way the object's
+instruction names it.  Here the object compares a value it just computed:
+
+    8775f: 0f 9f c2      setg   %dl        ; space_hi
+    ...
+    87774: 66 85 d2      test   %dx,%dx    ; and then compares it AGAIN
+    87777: 0f 95 c0      setne  %al
+
+`space_hi` is `space > 1`, so it is 0/1 and `return space_hi;` is
+behaviour-identical — and GCC keeps the raw `setcc` byte, masks it later with
+`and $0x1`, and no `setne` is emitted.  Writing the normalisation the object
+performs --
+
+    return space_hi != 0;        /* or  space_hi ? 1 : 0  */
+
+-- produces the object's `test %dx,%dx; setne %al`.  Measured on `decide_bit`
+(F12167): the setcc multiset becomes an exact match (`setg,setg,setle,setne`),
+the symmetric difference 46 -> 30 and the byte delta +38 -> +20.  Three
+spellings (`x != 0`, `(int)(x != 0)`, `x ? 1 : 0`) are byte-identical; `x & 1`
+is NOT (it stays a mask and no `setne` appears).
+
+**When to reach for this:** the object has a `setcc` your build lacks, the
+branch is already there, and your value is provably 0/1.  The tell is the
+`and $0x1` (or a `movzbl` of a byte flag) in your build standing where the
+object has a `test`/`cmp` followed by `setcc` -- a redundant-looking
+normalisation in the source is what puts the comparison back.
+
+### Lever 38. The SIGN of the `setcc` difference names the direction
+
+`scratch/cd/setcc.py <census.json>` gives, per symbol, the reference's `setcc`
+multiset against ours.  Read the sign as an instruction about the SOURCE:
+
+| sign | what the object does | what our source should become |
+|---|---|---|
+| ours < reference | the object masks where we branch | our `if` should be a conditional EXPRESSION (levers 28/29/33/36) |
+| ours > reference | the object branches where we mask | our conditional expression should be a control-flow CHAIN (this lever) |
+
+The second direction was untouched for a long time.  `FPM_MTD_detect`'s tail had
+one `setl` we should not have: the object has three branches there and no
+`setcc` anywhere.  `if (c1) return A; return c2 ? B : C;` is a `COND_EXPR` over
+two constants, so it reaches the i386 `movcc` path; the object's branch structure
+comes back with
+
+    if (c1)      result = A;
+    else if (c2) result = B;
+    else         result = C;
+    return result;
+
+Measured: byte delta +6 -> +2, conservative run 53 -> 57 of 94, candidate
+instruction count 95 -> 94 (the reference's).  Three equivalent spellings are
+byte-identical, so the shape is pinned, not the spelling.
+
+**Do not over-claim the converse of lever 36.**  Lever 36 says an if/else that
+merely chooses between constants becomes conditional expressions; this lever
+says the reverse when the object BRANCHES.  Which one applies is decided by the
+object's bytes at the site, not by taste -- and the `setcc` count is how you
+read it off without guessing.
+
+### Lever 39. A single `ret` in the object is a hard constraint — `-O3`'s `-funswitch-loops` duplicates the loop
+
+`-O3` implies `-funswitch-loops`, which hoists a loop-invariant test out of a
+loop and **duplicates the loop**.  Our source can therefore emit two loops (two
+`ret`s, two copies of the body) where the object has one.  Check this FIRST on
+any function whose candidate is much larger than the reference:
+
+    objdump -d --disassemble=SYM ref/slmodemd/dsplibs.o | grep -c $'\tret'
+    objdump -d --disassemble=SYM build/tc_out/<obj>.o   | grep -c $'\tret'
+
+Measured on `FPM_SMC_encoder` (F12170):
+
+| source shape | candidate insns | `ret` | byte delta |
+|---|---|---|---|
+| `word = *data++` before the branch | 160 | 2 | +127 |
+| the load moved into each arm | 160 (byte-identical) | 2 | +127 |
+| load + `q` + `index` in each arm | 160 | 2 | +127 |
+| the WHOLE body duplicated in both arms | 144 | **1** | **+96** |
+
+Three lessons:
+
+1. **The body has to be big for the unswitcher to decline.**  Partial duplication
+   does not survive -- GCC reinstates the shared load (identical object) and
+   still unswitches.  If the object has one loop and yours has two, look for an
+   if/else inside the loop whose whole body was written twice.
+2. **`-fno-unswitch-loops` is a diagnostic, not a fix.**  It gives a single loop
+   here, but at 110 instructions against the reference's 118 -- shorter, so the
+   reference is not simply "our source with the unswitcher off".  Recovering the
+   loop shape does not, by itself, recover the body.
+3. **A much larger candidate is a structural clue, not allocation.**  Two `ret`s
+   where the object has one is a source-structure difference; do not spend time
+   on register allocation until it is resolved.
+
+### Lever 40. A `&&` can be if-converted into a materialised mask — then the source is NESTED `if`s
+
+Lever 29's rule read backwards, and the reason the source cannot be guessed from
+the operator.  GCC 3.4.2's if-conversion turned
+
+    if (b->crc_on != 0 && folded != 0) { ... }
+
+into a materialised mask (`setne %bl; xor %eax,%eax; test %esi,%esi; setne %al;
+test %eax,%ebx; je`) where the object has two plain branches and no `setcc`
+anywhere.  Nested ifs restore it, and are behaviour-identical:
+
+    if (b->crc_on != 0)
+	if (folded != 0) { ... }
+
+Read the object's bytes (lever 38) and pick the spelling:
+
+| our build at the guard | object at the guard | source |
+|---|---|---|
+| branches | `setcc` + `test` mask | `&` (lever 29) |
+| `setcc` + `test` mask | branches | nested `if`s (this lever) |
+
+Measured (F12171, two TUs holding the same algorithm): `getbit` byte delta
++18 -> +3 and `v8_getbit` -70 -> -49, with the two spurious `setne` gone from
+both — the reference holds zero.
+
+**Watch the inlining collateral.**  `getbit` is a `static inline` inlined twice
+inside `v34handshak`, so a header edit moves that function too (-3477 -> -3505,
+a 28-byte cost in a function ~3.5 kB short of the reference).  When the
+corrected body is a header inline, re-grade every function that inlines it
+before keeping the change.
+
+### Lever 41. Where you write the DECREMENT decides whether the loop is rotated
+
+GCC rotates a `for` loop whose increment/decrement is a separate statement --
+the body's first test moves to the bottom and the loop is entered through a
+guard.  The object may keep the body in SOURCE ORDER instead, and the way to
+get that back is to fold the update into the subscript:
+
+    for (i = n - 1; ; ) {
+        ...
+        if (symbols[i] != SYM)          /* our build: rotated -- test first */
+            break;
+        i = (short)(i - 1);
+    }
+
+    for (i = n - 1; ; ) {
+        ...
+        if (symbols[i--] != SYM)        /* the object: run++, test, decrement, compare */
+            break;
+    }
+
+Measured on `RxTrained2400` (src/pump/v22/v22prc.c, F12172): longest contiguous
+run 3/43 -> **7/43**, canonical symmetric difference 30 -> 19, byte delta
+-59 -> **-5**, and the reference's `mov idx,tmp` copy reappears.  The tell is
+the object's loop body reading in the same order as your source statements while
+your build's does not.
+
+Note the interaction with levers 1 and 21: this is an ORDERING lever, so it is
+worth trying before concluding a rotated loop is allocation.  It is also
+behaviour-identical -- the decrement happens at the same point either way.
+
+#### Addendum to lever 8: a 32-bit STORE with a 16-bit zero-extended LOAD names an `unsigned short`
+
+`FPM_FSD_demodulate`'s counter is stored 32-bit but read back `movzwl 0x54(%esp)`
+and incremented `movzwl %ax,%edi` -- zero-extended (F12172).  That combination
+is only reachable from a 16-bit UNSIGNED variable: `int`/`unsigned` give a
+32-bit `inc`/`mov`, and a signed `short` gives `movswl`.  The store width says
+nothing (the compiler widens the slot); the LOAD's extension does.
+
+#### Addendum to lever 31: a cached VALUE the object re-reads is residue too
+
+Lever 31 covers a cached pointer.  The same applies to a cached value:
+`int variant = session_int(sess, SESSION_VARIANT);` used three times becomes one
+load, while the object performs the load at each use (`mov 0x6120(%r32),%r32`
+four times).  Dropping the local improved `V34GiveINFO0dBits`'s run 67/188 ->
+70/188 and its symmetric difference 21 -> 19 (F12172).  A cached value changes
+the register budget for the whole function, so the effect can be larger than the
+one expression.
+
+### Addendum to lever 40: name the EMITTER -- the front end folds `&&`, cse merges `||`
+
+When our build masks where the object branches, it is worth knowing WHICH pass
+made the mask, because the two cases look identical in the final object and the
+fix is the same but the diagnostic is not:
+
+1. **The C front end folds `a && b` into a bitwise `&`** when both operands are
+   comparisons (each yields 0/1).  The mask is then already in `.01.rtl` --
+   `fpm`-era examples show `flags>>3; xor 1; and 1; cmp; setle; and` before any
+   if-conversion -- and `-fno-if-conversion` does not remove it.  This is also
+   why a `&&` can mask with no if-conversion at all.
+2. **cse merges a `||` chain of equality tests.**  `state == 10 || state == 13`
+   becomes `cmp; je L; cmp; je L`, and cse merges the two jumps to the same
+   label into `sete; sete; or; test; jne`.  `-da` confirms the mask first
+   appears at the `cse` dump; `.01.rtl` and `.04.jump` have none.
+
+Both are defeated the same way -- NESTED `if`s or an `else if` chain, never the
+operator.  Two shapes that work in practice:
+
+    if (state == 5) { ... } else if (state == 10) { ... } else if (...) { ... }
+    if (u > thresh) continue;
+    if (a > thresh) continue;
+
+and one warning: a chain whose arms each assign the SAME variable is the safest
+rewrite (it stays behaviour-identical), which is exactly the shape levers 36/40
+already describe.
+
+### Addendum to lever 40: the tell is the `setcc` COUNT, and it usually comes in threes
+
+The SRE pair (F12175) shows the shape of a complete recovery at one of these
+sites.  Our build had **7** `setcc` where the object had **2**, and all three of
+these had to change together -- any one alone leaves a `setcc` the object does
+not have:
+
+1. the `&&` guards -> nested `if`s (lever 40);
+2. the magnitude carrier `int a` -> `short a`, because the object's own compare
+   is 16-bit (`cmp $0x7ff,%dx`) -- the LOAD's width, not the store's;
+3. a `cond ? 0 : 1` assigned to a variable and stored -> an if/else that assigns
+   the variable AND the field in each arm.
+
+Two lessons worth carrying: the count of `setcc` at ONE site can be used as the
+target (get it to match exactly, then stop), and a function whose `setcc` now
+matches but whose instruction COUNT is still short is a lever-2 missing
+statement -- do not keep editing the guards.
+
+### Lever 42. The object's bytes choose the conditional-store form: the mask needs the target to BE an arm
+
+`noce_try_store_flag_mask` (ifcvt.c:1041) builds the branchless mask only when
+
+    (if_info->a == const0_rtx && rtx_equal_p (if_info->b, if_info->x))
+    || (reversed_comparison_code (...) != UNKNOWN
+        && if_info->b == const0_rtx && rtx_equal_p (if_info->a, if_info->x))
+
+so the conditional assignment's TARGET must be one of the two arms.  That single
+fact decides the source form, and the object's bytes tell you which side you are
+on:
+
+| the object | the source must be | example |
+|---|---|---|
+| has the mask (`setcc; neg; and`) | an `if` STATEMENT whose target IS the variable | `cursor++; if (cursor >= size) cursor = 0;` -- F12153, F12161 |
+| has a plain branch (`cmp; jb`) | a `?:` whose kept arm is a DIFFERENT object | `unsigned short next = cursor + 1; cursor = next < size ? next : 0;` -- F12180 |
+
+Lever 28's "a `?:` never if-converts" and "an `if` statement does" are two
+halves of this one fact, so neither is a rule on its own: writing the `if` when
+the object branches (`ours > reference` on the `setcc` screen) is as wrong as
+writing the `?:` when it masks.  Read the direction from the screen first.
+
+Two riders that are separate, separable properties:
+
+- **Truncate explicitly when the object's compare is narrow.**  `cursor + 1` is
+  an `int`, so `cursor + 1 < size` cannot be narrowed to HImode; an explicit
+  `unsigned short` local is what produces the object's 16-bit unsigned `jb`
+  (without it GCC emits a signed 32-bit `jl`, 13 bytes apart).
+- **The counter form is its own lever** (lever 41): the object's countdown
+  (`inc %ax; je`) comes from `while (i--)`, not from
+  `for (i = n; i != 0; i--)`.
+
+### Run variant sweeps with `tools/toolchain/variant_run.py`, not a per-target harness
+
+A lever hunt is a sweep: 4-15 source spellings of ONE property, each a complete
+rebuild, ranked on the same table.  Do not write a new `tryXXX.py` for each
+target -- build the sweep out of tree and in parallel:
+
+    python3 tools/toolchain/variant_run.py --spec SPEC.json [--jobs 8]
+
+The spec names the `source`, the `symbols` to grade, and the variants (a name,
+`[find, replace]` edits, optional per-variant `extra_flags`).  It reads the real
+per-TU compile line from `make -n`, so the C/C++ split and the per-TU flag sets
+are always right, and it builds every variant in seconds.
+
+Three properties make its output usable as evidence, and all three are checked
+by `--self-test`:
+
+- **The baseline must reproduce the in-tree object by md5.**  The runner prints
+  this as a CONTROL line; a failing control means the out-of-tree path is not
+  faithful and NO verdict may be drawn from that run.
+- **A variant whose `find` string is absent is INVALID, never measured.**  The
+  silent version of this bug -- patching the wrong string and re-measuring the
+  unchanged object -- has cost real time twice in this project.
+- **`extra_flags` must actually reach the compiler.**  A flagged variant whose
+  object is byte-identical to the baseline is a runner bug, not a negative.
+
+Read the table's `dmn` column (the lane-free `setcc` multiset) before the
+byte delta: when `dmn` is 0 and `dset` is not, the count and mnemonics match the
+object and only the register lanes differ -- that is allocation, and it is not
+a reason to keep hunting spellings.
+
+### Lever 43. `x + 1 - (a < b)` in an object that holds `sbb $-1` is an UNSIGNED comparison
+
+`sbb $-1` (AT&T: `sbb $0xffffffff,%eax`) computes `dest - (-1) - CF` =
+`dest + 1 - CF`, i.e. `x + 1 - (a < b)` with the borrow as its `CF`.  A SUBTRACT
+with borrow only exists for the **carry flag**, so the comparison must be an
+UNSIGNED one (`jb`/`setb`); with signed operands the compiler emits `setl` and an
+`add`/`sub` instead, or a branch.
+
+Measured on `v8_fskdemodulate`'s `drain_run` (F12183):
+
+| source | emitted |
+|---|---|
+| `int n = whole + 1 - (rem < need);` (signed) | two `setl` -- the object has none |
+| `unsigned run` + `int n = whole; if (rem >= need) n++;` | the object's two `sbb $0xffffffff` |
+
+The tell is the object's own instruction: **if the object holds `sbb $0xffffffff`
+or `sbb $-1`, the surrounding comparison is unsigned** -- the same rule as levers
+34 and 41, read off an instruction instead of a `setcc` name.  (Careful with the
+other direction: `setl`/`setg` in the object says SIGNED, and `jb`/`jbe` says
+unsigned even where no `setcc` survives.)
+
+The full `n = whole; if (rem >= need) n++;` rewrite is also what removes the
+`setl` pair -- writing the increment as a statement rather than a subtracted
+predicate is the shape that lets the branchless form disappear.
+
+### Lever 44. Read the allocator's INPUTS from the dumps before touching a lane target
+
+A register-lane difference is not a spelling problem; it is the output of two
+priority functions whose inputs are printed by `-da`.  Quote them before testing
+anything (F12185):
+
+**Global** -- `global.c:1900` `dump_conflicts` prints the allocnos in
+`allocno_order`, sorted by `allocno_compare` (`global.c:628`):
+
+    pri = ((floor_log2 (n_refs) * freq) / live_length) * (10000/REG_FREQ_MAX) * size;
+
+then `find_reg` (`global.c:1064`) takes the first free, mode-OK, call-OK register
+in `reg_alloc_order`, which for i386 is the IDENTITY
+(`config/i386/i386.h:988`): **eax, ecx, edx, ebx, esi, edi, ebp**.
+
+**Local** -- `local-alloc.c:1198` `block_alloc` sorts the block's qtys by
+`QTY_CMP_PRI` (`local-alloc.c:1672`):
+
+    pri = ((floor_log2 (n_refs) * freq * size) / (death - birth)) * (10000/REG_FREQ_MAX);
+
+and its `find_reg` scans `reg_alloc_order` **reordered by
+`x86_order_regs_for_local_alloc`** (`config/i386/i386.c`): call-clobbered first,
+call-preserved after -- **eax, ecx, edx, ebx, esi, edi, ebp**.  So a block-local
+qty refused eax/ecx/edx lands on **ebx**, a callee-saved register.
+
+**The instrument is already emitted** (no gcc rebuild):
+
+    global.c:1900  ";; N regs to allocate: <allocno_order>"
+                   ";; <reg> conflicts: <pseudos> <hard regs>"
+                   ";; <reg> preferences: <hard regs>"
+    cfg.c:502      "Register N used <REG_N_REFS> times across <REG_LIVE_LENGTH> insns; set ..; pref <class>"
+
+`global.c:470` shows how to combine them: `n_refs += REG_N_REFS(i)`,
+`freq += REG_FREQ(i)`, `live_length = max(REG_LIVE_LENGTH(i))`.  A register printed
+"in block N" is a local-alloc candidate; one without it is global.
+
+**Worked case (F12185).**  `V90Jd::C1` has four global allocnos, dumped as
+`;; 4 regs to allocate: 62 88 61 58`; the ref/live numbers reproduce that order,
+so the model is checkable on a build you already have.  The three differing lanes
+came from ONE local-alloc colour: the block-local byte `look` has `pref Q_REGS`
+and took **eax** (ours) against **ebx** (the object's), and because it lives in eax
+the global constant gets a hard conflict on eax and falls to edx.  **Look for the
+colour that CASCADES, not the lane that differs.**  A `pref` of a restricted class
+(Q_REGS, AREG, CREG, INDEX_REGS) plus "in block N" is the signature.
+
+### Lever 45. A shift takes its SIGNEDNESS from the shifted operand -- and a mask literal sets it
+
+`sar` against `shr` in the object is not a spelling of the shift: it is the TYPE of
+the value being shifted.  An `&` result takes `common_type` of its operands
+(`c-typeck.c:7023`), and a RSHIFT takes the type of the shifted operand
+(`c-typeck.c:6805`), so
+
+    ((unsigned short)x & 0xf0) >> 4      ->  the mask is a SIGNED int    -> sar
+    ((unsigned short)x & 0xf0u) >> 4     ->  the mask is UNSIGNED int    -> shr
+
+Measured on `V34GiveINFO1aBits` (F12188): writing `0xf0u` reproduced the object's
+`shr $0x4,%edx` with delta unchanged and the canonical symmetric difference 4 -> 2.
+
+**The tell:** find the object's `shr`/`div`/`cmp` against `sar`/`idiv` and decide
+the OPERAND's signedness, then look for the mask or constant that set it.  A hex
+literal without `u` is `int`; so is an unmasked `short` after promotion.  The same
+rule covers the object's `sbb $-1` (lever 43) and the mixed-load idioms (an
+`unsigned short` element read `movzwl` and sign-extended only at the multiply --
+F12187's `rxtiming`).
+
+### Triage a `byte_delta == 0` row with the sibling/ablation screen FIRST
+
+A row whose byte delta is 0 and whose contiguous run is high is, by that very
+signature, a same-size same-skeleton row: its residual is a LANE or a scheduling
+ORDER, not a missing statement.  Do not queue it as a "near promotion" on the byte
+delta alone.  Two one-measurement screens classify it:
+
+1. **Sibling screen (F12186/F12188).**  If the symbol has a `C1`/`C2` clone and
+   the sibling is EXACT, dump the TU and compare the two clones' `01.rtl` sections
+   (normalise insn UIDs and pseudo numbers) and their `25.greg` allocno lists.  If
+   both are identical and the clones first diverge at `28.peephole2`, the cause is
+   `peep2_find_free_register`'s cross-function `search_ofs` (`recog.c:2935`,
+   advanced `:3018`) -- TU state, not source.
+2. **Flag ablation.**  One `variant_run.py` spec with `extra_flags` of
+   `-fno-rename-registers`, `-fno-schedule-insns2`, `-fno-peephole2`,
+   `-fno-schedule-insns`, `-fno-reorder-blocks`.  A flag that moves the target
+   while leaving its sibling exact names the pass.  A statement-order variant that
+   changes the bytes but not the contiguous run says the same thing.
+
+The three post-alloc emitters this project keeps meeting, all with a named
+predicate: `peephole2` (`recog.c`), `regrename` (`regrename.c:325` min-tick
+choice), `sched2` (`haifa-sched.c:989` `rank_for_schedule`).  When one of them is
+named, the target is a typed negative -- park it with the TU-state reopening
+condition and change nothing.
+
+### Lever 46. A `ret`-count difference is a TWO-WAY test
+
+Lever 39's rule -- a single `ret` in the object where our build has two means
+`-funswitch-loops` duplicated a loop -- has a converse that costs nothing to
+check and is easy to miss:
+
+    objdump -d --disassemble=SYM ref/slmodemd/dsplibs.o | grep -c $'\tret'
+
+**Two `ret`s in the object where ours has ONE** means the object's two tails
+were NOT identical, so `cfgcleanup`'s cross-jumping could not merge them and
+`bb-reorder` duplicated the epilogue instead.  The thing to look for is the
+register that differs between two otherwise-equivalent stores:
+
+    ours   : mov %ax,0x4f5e(%ecx)   (both paths -- so ce3 cross-jumps them)
+    object : mov %di,0x4f5e(%ecx)   (n == 0 path)   and   mov %ax,... (the other)
+
+with `insns_match_p` (cfgcleanup.c:1011-1013, `rtx_renumbered_equal_p`) the
+predicate that decides it, and `copy_bb_p` (bb-reorder.c:1006) the duplicator.
+`-fno-crossjumping` reproduces the object exactly (2 `ret`s) -- a diagnostic,
+never retained.  Reopen only via a supported change that moves the register.
+
+### Lever 47. A `break` out of a `switch` defeats a sibling call — and bb-reorder then duplicates the epilogue
+
+Two facts that combine into a screen and a fix, both measured corpus-wide
+(F12191; 53 rows have a `ret`-count difference, and the extras have one cause).
+
+**The screen.**  A `ret`-count difference in the *extra* direction is
+`bb-reorder`'s trace-connection duplication.  Its fingerprint is that the
+`.ce3` dump has N `(return)` and the `.31.bbro` dump has more.  Duplicator:
+`copy_bb` from `find_traces_1_round` (bb-reorder.c:970), gated by `copy_bb_p`
+(`bb-reorder.c:1002`).  **The predictor: the number of epilogue copies equals
+the number of PREDECESSORS of the return block** (`bb->pred->pred_next`) --
+`v23FP_tx_progress` has three byte-identical epilogues in the object because
+three source paths return.
+
+    objdump -d --disassemble=SYM ref/slmodemd/dsplibs.o | grep -c $'\tret'
+    objdump -d --disassemble=SYM build/tc_out/<obj>.o      | grep -c $'\tret'
+
+**The trigger, and why a `switch` matters.**  `sibcall.c:679-687` makes a call a
+sibling call only if `call_block->succ->dest == EXIT_BLOCK_PTR` (or the
+alternate exit).  A `break` out of a `switch` leaves the arm's trailing call
+falling into a *shared epilogue* instead of tail-calling -- so that epilogue
+acquires a second predecessor, which is exactly what `copy_bb_p` needs, and
+bb-reorder then duplicates it.  Rewriting the dispatch as an **`if`/`else`
+chain** puts the call back in tail position (`jmp` rather than `call`) and the
+`ret` count returns to the object's.  Measured: `return;` instead of `break;` is
+byte-identical to the baseline, so it is the SHAPE, not the exit statement.
+
+**Do not confuse this with lever 46.**  There, the OBJECT has more `ret`s and
+*our* ce3 cross-jump is what merged them (look for the register that differs
+between two equivalent stores).  Here, *our* build has more and bb-reorder
+duplicated (look for the second predecessor).
+
+### Addendum to lever 47: three ways the epilogue's PREDECESSOR COUNT moves
+
+`copy_bb_p` duplicates the return block once per extra predecessor, so the
+question is always "what gives the return block its second predecessor?".
+Three answers are now measured, and they are independent:
+
+1. **A `break` out of a `switch`** (lever 47 proper): the arm's trailing call
+   leaves tail position (`sibcall.c:679-687`), so it falls into the epilogue.
+   Fix: the `if`/`else` chain.
+2. **Several `return <field>;` statements that CSE can fold separately.**  Each
+   fold makes its own path reach the epilogue.  Fix: ONE labelled shared exit
+   (`goto done;` ... `done: return f->status;`), which puts the load in a single
+   block and collapses the copies to one.  Measured on `v23FP_rx_progress`
+   (delta -15 -> +4, symdiff 24 -> 11) and `BwChDem_Progress` (+20 -> +12,
+   38 -> 24).  The object's own byte is the tell: a single
+   `movswl <off>(%reg),%eax` epilogue entry reached by several jumps.
+3. **A final call that is a SIBLING CALL in the object and a normal call in
+   ours.**  A tail call jumps, so it adds NO predecessor; `call` + `jmp` adds
+   one.  Witness for `findPadGain`: deleting the final debug print gives the
+   reference's 628 instructions and ret 1 -- the trigger is the last call's tail
+   position, not the print.
+4. (Separately, a NEGATIVE axis with the same symptom: `beepgen_sample`'s
+   difference is the `out` PARAMETER's register, and `-fno-crossjumping` does
+   not restore its count -- so check WHICH pass moves the count before ranking
+   spellings.)
+
+### Lever 48. A float negation as a conditional EXPRESSION gives `xor $0x80000000`; as a statement it gives `fchs`
+
+    shaperAx = bits[word_124] != 0 ? -f : f;      ->  xor $0x80000000,%reg
+    if (bits[word_124] != 0) f = -f;              ->  fchs
+
+The object's `xor $0x80000000` is GCC 3.4.2's spelling of the TERNARY, not of a
+hand-written sign-bit flip; the statement form cannot produce it.  Measured on
+`evaluateInfo` (F12193), where switching to the ternary took the delta from -94
+to -54 before the companion member-accumulation fix took it to +2.
+
+The same shape reads the other way too: if the object has `fchs`, the source is
+the statement; if it has `xor $0x80000000`, the source is the ternary.  This is
+lever 36's rule (an if/else over two VALUES is two conditional expressions)
+applied to a float negation, where the two arms differ only in sign.
+
 ### Trade two neighbours, and RECORD the loss: the codegen ratchet needs a review
 
 Moving one function can take an EXACT neighbour with it, because the period
@@ -3923,25 +4932,14 @@ remain. See [the experiment](https://github.com/philpem/slmodem_dsp_re/blob/4169
 ## What does not work
 
 - **Renaming a variable.** Free for the compiler (7002). It changes nothing.
-- **Reordering ONE function** on the strength of lever 3. That is what control
-  4 of 7777 measured and it is right; what 7796 overturned is the conclusion
-  drawn from it, so reorder a whole file's leaf block or nothing. Lever 3b says
-  which files can pay: a file whose functions never store a constant into a
-  field past +0x7f has no scratch to reallocate.
-
-  **RUN THAT AS A FILTER BEFORE PERMUTING ANYTHING -- it is one `objdump` pass
-  and it retires whole directories (F8003).** Count `mov $imm,disp(%reg)` with
-  `disp > 0x7f` in OUR object, per translation unit. Over the 22 files holding
-  one pass's `src/dsp/`, `src/pump/v34/`, `src/v8/`, `src/callprog/` and
-  `src/core/` worklist, **21 of 22 came back ZERO** -- `peep2_find_free_register`
-  never fires, the cursor never advances, and definition order cannot pay
-  anywhere in that span however far out of the blob's order a file sits. It was
-  checked against a real enumeration before being believed:
-  `GenericToneDetector.cpp` is 4 of 7 in the blob's order with no gaps, and four
-  block permutations including the blob's own gave four distinct object
-  emissions with **not one symbol's verdict or byte count moving** -- 9a's null,
-  predicted in advance by the screen. The screen reads OUR objects, which is the
-  right side: the threading is a property of our compilation.
+- **Using the `+0x7f` immediate-store filter to rule out scratch effects.**
+  F8003's screen was disproved independently by F8042 and F8067. Other
+  patterns consume scratch registers, including epilogue stack-release
+  conversions, and counting stores surviving in the final object misses the
+  stores transformed by peephole2. A zero count cannot exclude this mechanism.
+  Use Lever 3b's controlled period builds and actual scratch observations;
+  report unsupported cases explicitly. A single unproductive function swap
+  also excludes only that swap, not definition order throughout the TU.
 - **Getting closer.** See lever 1's stopping rule.
 - **`__attribute__((noinline))`, `volatile`, or a cast added to make the output
   match.** Fitting the compiler. Three such shims were found and removed once
@@ -4269,6 +5267,20 @@ common pointer return. Dual_TONE_create recovers64-byte exactness by guarding
 initialization and returning the allocated pointer for both outcomes; the
 two-cell full-TU domain changes only that function (F11555).
 [Measured record](https://github.com/philpem/slmodem_dsp_re/blob/4169cb3b3108a840a51bca9ebfa086102c4c69c6/docs/dualtone-create-common-return.md).
+**Update (F12174, 2026-11-16): `cid_create` recovers the same way and this tree
+now holds three measured outcomes of the family.**  The deciding evidence is a
+COPY the object performs before the test:
+
+    mov 0x10(%esp),%eax   ; ctx
+    test %eax,%eax
+    mov %eax,%ebx         ; <-- the copy, before the `je` to the malloc arm
+    je  ...
+
+A body that keeps working on the parameter cannot produce it; a separate result
+local with `else { ret = ctx; }` can.  So the rule is not "constructors copy the
+argument" but "read the allocation test: if the object copies, write the result
+local".  `silence_create` (EXACT here) and `Dual_TONE_create` (F11555) are the
+other two members; F11562 closed the family only for the spelling it tested.
 
 Trace x87 stack operands before calling a difference scheduling. Notch's
 saved-state addition occurs before its product-sum in the blob and after it

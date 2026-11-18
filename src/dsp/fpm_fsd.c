@@ -126,7 +126,7 @@ FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
 	int bit_hi = state->cfg.high_bit;
 	int bit_lo = (short)(1 - state->cfg.high_bit);
 	int idx = state->hist_idx;
-	int nbits = 0;
+	unsigned short nbits = 0;
 	int i;
 
 	for (i = (short)((short)count - 1); i != -1; i = (short)(i - 1)) {
@@ -137,7 +137,9 @@ FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
 		int bit_samples, k, d;
 
 		/* --- 1. input FIR ------------------------------------- */
-		idx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;
+		idx = (short)(idx + 1);
+		if (idx >= taps)
+			idx = 0;
 		fir_hist[idx] = *samples++;
 
 		p = &fir_hist[idx];

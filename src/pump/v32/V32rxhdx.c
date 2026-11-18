@@ -420,11 +420,11 @@ RxHdxPhsReversal(struct v32_modem *modem, short *in, unsigned short *out,
 	FPM_TONE_kill(HDX(modem)->tone2, in, (short)*count);
 
 	hdx = HDX(modem);
-	hdx->timer +=
-		(unsigned int)hdx->symbol_len;
 	hdx->short_a8 = (unsigned short)
 		(hdx->short_a8
 		 + hdx->symbol_len);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	if (hdx->int_90 != 0) {
 		int scaled;
