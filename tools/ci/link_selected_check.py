@@ -34,10 +34,24 @@ import argparse
 import re
 import sys
 
+# Re-pinned 2026-11-18 to the value measured on the current tree.  The
+# denominator fell from 32 names / 66 records to 30 / 62 between the original
+# measurement (8c59d7a90) and b41a735a5: the two Scrambler<int, unsigned char>
+# methods
+#     _ZN9ScramblerIihE15copyHistoryTailEv
+#     _ZN9ScramblerIihE7processEPKiPhj
+# were defined by BOTH V90Modulator.cpp.o and V92Modulator.cpp.o at the
+# original measurement and are now emitted by V90Modulator.cpp.o alone --
+# V92Modulator.cpp inlines them, so no second record is written.  The
+# DISAGREEMENT ledger is unchanged (the same three EXACT-selected names, the
+# same negative control), which is the part that carries grade information; the
+# linked view selects the same bodies.  Measured with
+#     make partial-link && TC_OUT=build/tc_repro \
+#       python3 tools/toolchain/byteident.py --link-selected
 EXPECTED = {
-    "names": 32,
-    "records": 66,
-    "resolved": 32,
+    "names": 30,
+    "records": 62,
+    "resolved": 30,
     "unresolved": 0,
     "disagreements": 3,
 }
@@ -233,14 +247,14 @@ FIXTURE = """\
   census, buckets and exit status are unchanged)
     order       : build/tc_repro/tc_link_manifest.txt (300 input(s); 279 ordering candidate(s), 21 retained by source order)
     linked      : build/partial/dsplibs.o  sha256 0000000000000000000000000000000000000000000000000000000000000000
-    denominator : 32 multiply-defined name(s), 66 definition record(s);
-                  32 link-resolved, 0 unresolved
+    denominator : 30 multiply-defined name(s), 62 definition record(s);
+                  30 link-resolved, 0 unresolved
     disagreements: 3 name(s) whose copies get different verdicts
     worst-copy  selected    symbol
     REGALLOC    EXACT       _ZN9ScramblerIhhE5resetEh
     BYTES       EXACT       _ZN9ScramblerIhhEC1Ejjj
     RELOC       EXACT       _ZN9ScramblerIhiE5resetEh
-    selected linked bodies matching an input copy: 30/32
+    selected linked bodies matching an input copy: 30/30
 """
 
 SUMMARY_FIXTURE = """\
@@ -279,14 +293,14 @@ def self_test():
            FIXTURE.split("selected linked bodies")[0], False)
 
     expect("changed name count rejected",
-           FIXTURE.replace("32 multiply-defined name(s)",
-                           "33 multiply-defined name(s)"), False)
+           FIXTURE.replace("30 multiply-defined name(s)",
+                           "31 multiply-defined name(s)"), False)
     expect("changed record count rejected",
-           FIXTURE.replace("66 definition record(s)",
-                           "65 definition record(s)"), False)
+           FIXTURE.replace("62 definition record(s)",
+                           "61 definition record(s)"), False)
     expect("changed resolved count rejected",
-           FIXTURE.replace("32 link-resolved, 0 unresolved",
-                           "31 link-resolved, 1 unresolved"), False)
+           FIXTURE.replace("30 link-resolved, 0 unresolved",
+                           "29 link-resolved, 1 unresolved"), False)
     expect("changed disagreement count rejected",
            FIXTURE.replace("3 name(s) whose copies get different verdicts",
                            "2 name(s) whose copies get different verdicts"),
