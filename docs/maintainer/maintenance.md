@@ -81,7 +81,7 @@ such. A passing differential fixture establishes agreement only over its input
 history and observations.
 
 Mutation suites, anchors and snapshots are retired; see the
-[retirement policy](../method/mutation-policy.md).
+[retirement policy](https://github.com/philpem/slmodem_dsp_re/blob/master/docs/method/mutation-policy.md).
 
 ### Example: detecting a scheduling regression
 
