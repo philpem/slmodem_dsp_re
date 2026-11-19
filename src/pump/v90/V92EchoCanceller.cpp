@@ -535,12 +535,24 @@ V92EchoCanceller::setEchoParams(float beta, float decay,
  * `edprintf` and it runs whatever the debug level is -- `edprintf` self-gates
  * one level down, so at level 0 the formatting and the encoding still happen
  * and only the printing is skipped (see encode.h).
+ *
+ * IT IS A CALL TO `print_echo_coeffs`, INLINED, AND THAT IS WHAT DECIDES THE
+ * PROLOGUE.  The object's arm is `print_echo_coeffs(echoCoeff, filterLength)`
+ * with the callee's two formals bound at the site: `mov 0x20(%ebx),%edi;
+ * mov 0x14(%ebx),%ebp` BEFORE the banner, then the banner, then the loop that
+ * indexes `(%edi,%esi,4)` and bounds on `%ebp` -- and those two callee-saved
+ * registers stay live across every `edprintf` in the loop.  Spelled as the
+ * loop itself, the source re-reads the members through `this` each iteration
+ * (`mov 0x20(%esi),%ecx` inside the body, `cmp %ebx,0x14(%esi)` in the
+ * latch), so `this` alone is enough and the function needs only two
+ * callee-saved registers.  The call is the source form; the inline loop is
+ * not.  Measured: setState's prologue flips PUSH -> MOVSAVE (nregs 2 -> 4,
+ * the save-form step function of F12200 lever 50) and its byte delta -48 ->
+ * -34.  Finding F12018.
  */
 void
 V92EchoCanceller::setState(V92EchoCancellerState newState)
 {
-	unsigned int i;
-
 	if (state == newState)
 		return;
 
@@ -550,12 +562,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 
 		if (state == V92_ECHO_FAST_TRAINING
 		    || state == V92_ECHO_SLOW_TRAINING) {
-			edprintf("**************** NEAR ECHO FILTER " "*************** \n");
-			for (i = 0; i < filterLength; i++)
-				edprintf("   = %c%d.%06d\r\n",
-					 sign_of(echoCoeff[i]),
-					 whole_of(echoCoeff[i]),
-					 frac_of(echoCoeff[i]));
+			print_echo_coeffs(echoCoeff, filterLength);
 		}
 
 		state = V92_ECHO_FILTER_ONLY;

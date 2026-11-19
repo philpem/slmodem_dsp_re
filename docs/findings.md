@@ -147113,8 +147113,10 @@ retained**, and one apparatus fault was found and fixed, taking the corpus to
 in both objects (`0x192, 0x207, 0x28f, 0x42, 0x150 x4, 0x306 x4, 0x164 x2`) and
 both `jmp *table(,%eax,4)` operands reference `.rodata`.  The refusal came from the
 jump-table prover, which needs the link artifacts the `byteident` docs describe
-(`tools/toolchain/byteident.py:60`, `:2047`, `:2245` reference
-`<build>/tc_repro/tc_link_manifest.txt`) -- absent in this worktree.
+(`tools/toolchain/byteident.py:60` and `::_link_selected_inputs` reference
+`<build>/tc_repro/tc_link_manifest.txt`; the two line numbers originally
+cited here moved when F12197 batched `nm` below line 379) -- absent in this
+worktree.
 
 `make partial-link` (Makefile:1546) writes `build/tc_repro/tc_link_manifest.txt`
 and `build/partial/dsplibs.o`; it ran in one pass (300 objects, 0 failed).  After
@@ -147487,3 +147489,829 @@ compare the two prologues' `sub $N,%esp` and the push counts.  (The corpus-wide
 the object spills three extra 4-byte result slots and uses `cwtl`/`cltd` where
 ours uses `movswl`; no single absent statement has been located.  Its callees
 `isAltRbs`/`updateUref`/`updateUrefAlt` are EXACT.
+
+## F12194. The frame-size screen; the V90Phase3Modulator family; three short-body recoveries
+
+### APPARATUS -- `scratch/cd/framesize.py` separates the two kinds of "short" row
+
+F12193 showed that `fidelity.canonical` keeps the DISPLACEMENT, so a frame-size
+difference makes every stack access print as MISSING/EXTRA.  The screen extracts,
+per symbol, the first `sub $0xN,%esp` and the push count before it, from the blob
+and from the candidate (one objdump pass over the blob, one per object file,
+cached), and splits the `delta < 0` rows into:
+
+- **DISPLACEMENT SUSPECTS** -- frame differs; `whatdiff` output is unreliable and
+  must be read with the prologue in hand.  Measured: 24 rows, including
+  `decodeDepth` (-64 bytes of frame, -213 delta), `FPM_FSD_demodulate` (-48,
+  matching the F12172 frame-gap analysis), `_ZN20V90Phase3Demodulator14getV92DecisionEf`
+  (-32, -155) and `v34handshak` (+32, -3505).
+- **GENUINE CANDIDATES** -- same frame, so the shortfall is a real absent
+  computation.  `VPcmV34Progress` (-361), `cadence_create` (-255),
+  `V90Equalizer::process` (-250), `V22_FSE_receive` (-181), `VTB_decoder` (-175),
+  `V8agc` (-165), `generateV92Symbol` (-146), `_init_transmitter` (-123),
+  `initTxSequence` (-120), `V92Precoder::reset` (-109), `cid_progress` (-108) ...
+
+### The V90Phase3Modulator family -- NO change retained (typed negative)
+
+`generateV92Symbol` (-146), `generateDIL` (-80) and `generateV90Symbol` (-71)
+share a frame with the reference, so their shortfall is real, and they are
+siblings in one TU -- but **no single source shape fixes them**.  The dominant,
+shared difference is in the inlined helpers (`scrambledSymbol`, `vectorBit`,
+`updateCodeSegment`): byte-vs-word zero-extension (the object `movzbl %r8l`
+against our `movzwl %r16` plus `and`/`test`/`xor`) and commutative operand order
+(the object `cmp mem,reg` against our `cmp reg,mem`, and `ja` against
+`jbe`+`jmp`).  Typed negatives: an early `return 0` in the terminated group makes
+BOTH V90 and V92 16 bytes worse; `24804.0f == (float)symbolCount` and
+`(float)24804` are byte-identical (inert).  **Reopening discriminator:** trace
+the native register at the recurring `movzbl %r8l,%r32` sites to the owning
+member or helper value (a `polarity`/`dilLevel`/`dilIndex` typing) and test a
+type change.  Fixture `t_v90p3mod` green.
+
+### RETAINED -- `_ZN17V92ModulusEncoder8progressEPhPj` (src/pump/v90/V92ModulusEncoder.cpp)
+
+The F12182 residual (the over-check emitted three times) is a SOURCE-POSITION
+difference, not bb-reorder duplication: the object's over-check is a 64-bit `>`
+followed by the i386 **64-bit `!=` idiom** --
+
+    55c58: mov 0xb4(%esp),%edx ; mov $0x1,%ecx ; mov 0xb0(%esp),%ebx
+    55c6b: xor %edi,%edx ; xor %esi,%ebx ; or %ebx,%edx ; jne
+
+-- and our baseline, spelling that arm `else if (hi > hh)`, re-issued a FULL
+second 64-bit `>` instead.  Writing `else if (hi != hh)` reproduces the object's
+over-check (4 `cmp`s in 2 blocks against the baseline's 6 in 3).  The retained
+F12182 `&` loop-test is preserved.
+
+**HONEST TRADE (flagged for review).**  Candidate 1160 -> 1156 instructions and
+delta -94 -> **-112** (further from the reference in size), and the multiplicity
+symmetric difference -8 worse.  The native witness above is the reason it is
+retained, but this is the weakest of the three changes in this batch: the
+structural gain is a compare-count observation while both metric axes moved the
+wrong way.  Reopen with the coupled 64-bit-locals spill fix.
+
+### RETAINED -- `V8agc` (src/v8/V8global.c)
+
+The `setcc` screen showed the object holds `4 sete + 1 setg` against our
+`4 sete`.  The missing `setg` is the FLOOR test, which the object
+**materialises as a value BEFORE the apply-gain loop** (`cmp $0x1f,%ax; setg;
+neg; and $1`, the flag kept in `%edi` and tested after the loop at 0x75202)
+while ours left it as a late branch.  `int above = (short)gain > V8_AGC_FLOOR;`
+before the loop, `if (!above) return 0;` after, reproduces the `setcc` multiset
+exactly (`dset`/`dmn` both 0) and takes symdiff 149 -> **146**, delta -165 ->
+**-157**.  Three spellings are byte-identical.  The object's extra
+`neg; and $1` idiom is not reproduced (parked); the remaining ~54-instruction
+gap is CFG/loop lowering in the band-filter inner loop.
+
+### RETAINED -- `cadence_create` (src/callprog/Cadence.c) -- an ABSENT STATEMENT
+
+The object references `toneiir_configuration_allpass` and copies a 44-byte
+structure from it:
+
+    7d7a8: mov 0x2a8(%ebx),%edi ; test %edi,%edi ; je +0x38e
+    7d7b2: cld ; mov $toneiir_configuration_allpass,%esi ; mov $0xb,%ecx
+           lea 0x20(%esp),%edi ; rep movsl
+
+Our source only wrote `c->use_allpass = 0;` and never referenced the template --
+the file's own header comment even documented the branch as unmodelled.
+Restoring `if (c->use_allpass) { cfg = toneiir_configuration_allpass;
+cfg.interval = c->buflen; }` takes delta -255 -> **-223** and symdiff 92 -> 86.
+The residual is a CFG block-order/allocation difference (`select_filter`
+inlining).  Fixture `t_cadence` green.
+
+## F12195. A fully-unrolled constant-trip loop means the SOURCE was unrolled; and two absent statements
+
+Three more GENUINE CANDIDATES closed (frame matches the reference, so the byte
+shortfall was real), plus one typed negative.
+
+### RETAINED -- `_ZN11V92Precoder5resetEP16V92MappingParams` (src/pump/v90/V92Precoder.cpp): delta -109 -> 0
+
+The reference body (`0x56e06`-`0x56eb0`) is **hand-unrolled**: 24
+constant-displacement stores (`mov %reg,0x8(%esi)` ... `0x64(%esi)`) and 22
+loads, with NO loop counter and NO back-edge.  Our baseline emitted the two
+source `for` loops rolled (`inc %ecx; cmp $0x5; jle` / `cmp $0xb; jle`), 34
+instructions against the object's 67.
+
+**Mechanism, from the extracted source.**  COMPLETE unrolling of a
+constant-trip-count loop is done only by `decide_unroll_stupid`
+(loop-unroll.c:1160), gated at `loop-unroll.c:1164` by
+`if (!(flags & UAP_UNROLL_ALL)) return;`, and `UAP_UNROLL_ALL` is set only by
+`-funroll-all-loops` (toplev.c:3086).  `-O3` sets just `flag_unroll_loops` ->
+`UAP_UNROLL` (toplev.c:3083), so `decide_unroll_constant_iterations`
+(loop-unroll.c:458) is the only path open and it produces a PARTIAL unroll with
+a rolled remainder.  The old unroller is inert: `do_unroll = LOOP_AUTO_UNROLL`
+(toplev.c:3027) and its predicate at `loop.c:5380-5384` fails because
+`unrolled_insn_copies = (insn_count - 2) * n_iterations - 1` (loop.c:5354-5364)
+far exceeds `insn_count`.  **So no loop spelling can reach the object: the
+source itself must be 24 explicit assignments.**  The `-funroll-all-loops`
+diagnostic unrolls but to a different order (prefix 7), confirming it is not the
+object's provenance.
+
+| variant | delta | our insns | run | symdiff |
+|---|---|---|---|---|
+| baseline (the two `for` loops) | -109 | 34 | 7/67 | 63 |
+| **unrolled, tableB-grouped (retained)** | **0** | **67** | 30/67 | **0** |
+| unrolled interleaved / head-grouped / object-emission order | 0 | 67 | 29-30/67 | 0 |
+
+Six sibling symbols stay EXACT; `process` unchanged.  **Named residual:** the
+`sched1` order from row 17 onward -- the multiset and the size are exact and only
+the scheduler's tie-break interleave differs, so this is a BYTES/order residual,
+not REGALLOC.  Reopen with a source order whose ready-list tie-break reproduces
+the object's `LC`/constant interleave.  Fixture `t_v92precoder` green.
+
+### RETAINED -- `cid_progress` (src/service/cidcore/cid.c): delta -108 -> -7
+
+The object contains the sample top-up loop **TWICE**: a prime at `0x8ffe0`
+(`movzwl (%ecx,%eax,2); mov %ax,0x266(%ebx,%edx,2)`, the fill kept in a
+register) and a **latch copy at `0x900f0`** (`movzwl (%esi,%ecx,2); mov
+%dx,0x268(%ebx,%eax,2); lea 0x1(%eax),%edx; mov %edx,0x3f8(%ebx)`,
+`samples_fill` re-read and re-published each iteration), plus a latch copy of the
+`fill != len` check at `0x90120`.  Our baseline had one copy.
+
+`-fno-unswitch-loops` is byte-identical, so unswitching is excluded; the two
+copies compile differently, so they are TWO SOURCE STATEMENTS, not one rotated
+duplicate.  Adding the tail top-up after `ctx->samples_fill = 0;` takes delta
+-108 -> **-7** (candidate 214 -> 230 instructions), symdiff 37 -> 33, with the
+`setcc` multiset preserved.  **Residual:** the object's outer-loop header is the
+dispatch with the latch check (back-edge `0x90139` -> `0x90040`) -- a rotation
+our period compiler does not apply to this form.  Fixture `t_cid` green.
+
+### RETAINED -- `_init_transmitter` (src/fax/class1tx.c): delta -123 -> +19, run 18 -> 70/276
+
+Three source facts, each derived from the native shape:
+
+1. **`int mod; int rate;` are UNINITIALISED.**  The native zeroes exactly ONE
+   entry register (`xor %ebp,%ebp` = `is_v17_short` only); every rate block
+   writes `mod`/`rate`, and the fall-through leaves them undefined.  This is the
+   ORIGINAL BUG, restored -- not a repair.
+2. **The `FAXVMI_CTL` template copy is sunk per slot branch.**  The native reads
+   `FAXVMI_CTL` three times; ours read it once.  Now `struct faxvmi_ctl ctl;`
+   with `ctl = FAXVMI_CTL;` inside each branch (class1tx.c:460, 467, 475, 483).
+3. **`is_v17_short = 1;` follows the short-train `printf` in source** -- the
+   native emits `mov $1,%ebp` after the debug `ja`.
+
+Result: delta -123 -> **+19**, candidate 258 -> 279 (reference 276), longest
+contiguous run 18 -> **70** of 276, symdiff 32 -> **3**.  **Residual:** three
+instructions (`movzwl` of `rate` at the table call, a self-`mov`, a duplicate
+`V17TX_CTL[16]` read) plus `sched2`/`bb-reorder` reorderings; removing the
+redundant `(unsigned short)` cast is byte-identical, so the truncation is a
+value-range/allocator artifact.  Fixture `t_class1inittx` green.
+
+### NOT RECOVERED -- `VTB_decoder` (src/dsp/fpm_vtb.c)
+
+Ours 458 against the native 493; the first divergence is the PROLOGUE (the native
+loads `q` before `i`), with a large structural multiset difference (the native
+has 28 `movswl` against our 3, branchless `cltd`/`xor`/`sub` against our
+`js`/`jns`, and FOUR stack arrays around the inlined `vtb_branch`/`vtb_acs`
+where ours has two).  This needs a derived source-shape change (an 8-wide
+point/metric array, or a shared even/odd body with short-typed indices), not a
+spelling fix.  The F12156 `setcc` recovery is preserved.  **Reopening
+discriminator:** derive the `vtb_branch` loop width from the native index
+registers.
+
+## F12196. V8agc: four coupled short/wide facts, found by the largest-missing-run instrument
+
+New instrument `scratch/cd/bigmiss.py SYM <object-basename>`: it aligns the
+canonical rows of the blob and the candidate and prints the opcodes with the
+largest NET ref-only count, with the reference rows listed.  That located
+`V8agc`'s gap in one call where `whatdiff` had shown only a scatter of single
+instructions.
+
+### The mechanism (four coupled facts, each with its own native witness)
+
+The reference's band-filter region (ref[41:77] of the alignment) reads
+
+    R mov %r32,0x14(%esp)
+    R movzwl (%r32),%r32
+    R mov %r16,0xe68(%r32)          ; v->agc_line[0] = v->rx_stage[i]
+    R xor %r32,%r32
+    R movswl 0xe68(%r32,%r32,2),%r32
+    R movswl (%r32),%r32
+    R add $0x2,%r32
+    R imul %r32,%r32
+    R lea 0x1(%r32),%r32            ; <-- TRUNCATING increment
+    R movswl %r16,%r32
+    R add %r32,%r32
+    R cmp $0x27,%r16                ; <-- 16-BIT compare (j <= 39)
+    R jle <layout-target>
+    ...
+    R lea 0xeb6(%r32),%r32          ; &agc_line[V8_AGC_TAPS - 1]
+    R mov %r16,(%r32)
+    R add $0x2,%r32
+    R sub $0x2,%r32
+    R cmp $0x26,%r16                ; <-- 16-BIT compare (j <= 38)
+
+so:
+
+1. **The band-filter inner counters are `short`.**  `lea 0x1(%r32),%r32;
+   movswl %r16,%r32` is a truncating increment and `cmp $0x27,%r16` is a
+   16-bit compare -- levers 8 and 41's rule read off the instruction.  Ours
+   used `int j` (`inc %ecx; cmp $0x27,%ecx`).
+2. **The outer counter `i` is `short` too.**  The reference has `inc %r32;
+   cwtl; cmp $0x3,%r16` -- the `cwtl` is the truncation of a short counter.
+3. **The `taps` selection belongs INSIDE the outer loop.**  Our source had a
+   function-scope `const short *taps = v->side != 0 ? ANSWER_Entrance_Filter :
+   CALLER_Entrance_Filter;`, hoisted above `v8_rxreadqueue` -- our object
+   loads ANSWER/CALLER in the prologue.  The reference re-selects it per outer
+   iteration and SPILLS the choice (`test %r32,%r32 ... je ... mov
+   ANSWER_Entrance_Filter ... mov %r32,0x10(%esp)`), then reloads it inside.
+   This is lever 31's addendum in the hoisting direction: a cached pointer the
+   object re-derives is residue.
+4. **`shift`, `e` and `idx` are 16-bit locals.**  The reference has
+   `lea 0x1a(%esp),%r32`, `movzwl 0x1a(%esp),%r32`, `shr $1,%r32`,
+   `mov %r16,0x1a(%esp)`, `movzwl 0x1a(%esp),%r32` -- a 2-byte stack slot
+   stored and re-read.  Ours used `int`.
+
+### Measured (complete single-object sweeps, `tools/toolchain/variant_run.py`)
+
+| variant | delta | our insns (ref 305) | symdiff |
+|---|---|---|---|
+| baseline (`int j`, `int i`, hoisted `taps`, `int` locals) | -157 | 251 | 146 |
+| V1 `short j` | -49 | 273 | 118 |
+| V2 V1 + `*t++` pointer walk (REFUTED) | -104 | 257 | 130 |
+| V4 V1 + `short i` | -72 | 268 | 113 |
+| V5 V4 + `taps` inside the loop | -23 | 279 | 116 |
+| **V7 V5 + `short shift`/`e`/`idx` (RETAINED)** | **-13** | **282** | 119 |
+
+`V2` is the informative loser: the reference's `add $0x2,%r32` for `taps` is
+GCC strength-reducing an INDEX, not a source pointer walk -- writing `*t++`
+makes it materially worse.
+
+**RECORDED COST:** the byte delta improves at every step (it is the right
+axis here) while the canonical symmetric difference moves 146 -> 113 -> 116 ->
+119; the four changes are each witnessed natively, so the multiset creep is
+downstream allocation, not a reason to keep a wrong shape.
+
+**Result:** delta **-157 -> -13** (144 bytes, 31 instructions recovered),
+candidate 251 -> 282 against the reference's 305, longest run 12 -> 16 of 305,
+`setcc` multiset matching the object (`dmn` 0).  Fixtures `t_v8sig` and
+`t_v8jm` green; `checkSignalStability` (-19), `v8_getbit` (-49) and `v8_txinit`
+(0) in the same TU are unchanged.
+
+**Residual:** 23 instructions -- the `energy` region (`lea 0x1a(%esp)`,
+`cmp $0x1fffffff`, the `shift & 1` arm) and the taps-selection block, plus
+downstream scheduling.  Reopen by re-running `scratch/cd/bigmiss.py` on the
+next-largest run.
+
+**APPARATUS GOTCHA:** a stray Python file in `/tmp/opencode` (`struct.py`, from
+an earlier scratch pass) shadows the stdlib `struct` and breaks `byteident` --
+and any script RUN FROM that directory puts it on `sys.path`.  Keep instruments
+in `scratch/cd/`.
+
+## F12197. Grading was 5x slower than compiling: `sizes()` spawned `nm` 300 times
+
+Measured, before any change:
+
+| operation | time |
+|---|---|
+| `make -f tools/toolchain/period.mk <abs>/build/tc_out/<one>.o` (one docker `gcc`) | **0.56 s** |
+| `docker run ... gcc --version` (bare container start) | 0.21 s |
+| `objdump -d ref/slmodemd/dsplibs.o` (1.2 MB blob) | 0.17 s |
+| `objdump -d build/tc_out/<one>.o` (7 kB) | 0.004 s |
+| `python3 tools/toolchain/byteident.py --why <one symbol>` | **13.5 s** |
+| `make -j12 tc` (all 300 objects) | ~26 s |
+
+`cProfile` on `--why` (13.719 s total): **`sizes()` 301 calls, 13.1 s**, all of it
+in `subprocess` + `select.poll` -- one `nm --size-sort -S` SPAWN PER OBJECT in
+`build/tc_out`, for a lookup that names one symbol.  The compile was never the
+bottleneck; the grading was.
+
+**Fix:** `_nm_sizes(paths)` runs ONE `nm --size-sort -S <all paths>` and parses
+the per-file headers, memoised per process, with a per-file retry for any path
+the batch did not yield (so a failed batch cannot become a silent zero -- the
+project's cardinal hazard).  `sizes()` is unchanged in signature and output.
+`--why` and the census loop both pre-fetch the glob.
+
+**Measured after:** `--why` **13.5 s -> 2.76 s** (5.0x).  The remaining 2.7 s is
+pyelftools parsing the 1.2 MB blob twice (`body()`), not process spawning.
+
+**CONTROL (the part that matters):** every `--why` output -- grade, byte
+diagnostic, longest run, candidate count, and the register-renaming rejection
+text -- was compared between the pre-change tool (`/tmp/opencode/ctrl/byteident_old.py`)
+and the new one over 21 symbols spanning EXACT, REGALLOC, NONMATCH, the
+`--why` fast path, a COMDAT pair and a symbol with a jump-table refusal:
+**21 identical, 0 differ.**  The checkpoint census after the change moved only
+the three rows the batch under test had edited (`VPcmFloModem` C1/C2,
+`displaySpectralParams`) with exactly their expected deltas -- no other row
+moved.
+
+**Citation note:** this insertion is below line 379, so two `byteident.py`
+line numbers cited in an earlier finding moved; that citation now names
+`::_link_selected_inputs` instead of the drifting line numbers.  Prefer a NAME
+when citing a maintained tool.
+
+**Measured again, for scale:** `python3 tools/refcheck.py` 3232 headings, and the
+full `--json-out` census still takes ~2 m (pyelftools over 300 objects + the
+blob) -- it is a checkpoint activity, and the remaining candidate there is a
+per-object process pool.
+
+## F12198. Corpus mining: ask which EXACT function already emits the window we lack
+
+The wild idea, made concrete: `ref/slmodemd/dsplibs.o` is a corpus of
+(assembly) -> (the source that produced it).  For the ~1242 EXACT symbols we
+KNOW the source and the bytes agree, so every instruction window in them is a
+SOLVED idiom.  When a NONMATCH body lacks a window, the cheapest way to learn
+that idiom is not to re-derive it from the compiler source -- it is to find an
+EXACT symbol that already contains it and go read that function's source.
+
+**New tool `tools/toolchain/whoelse.py`** (promoted from scratch/cd/
+whoelse.py).  Windows come from the project's own `fidelity.canonical`, with
+two normalisations that make them comparable ACROSS functions (without them
+every window is unique to its function and the index is useless): a jump's
+operand becomes `<T>`, and a `call` keeps its callee but loses its `+offset`.
+Alignment nops are dropped via `byteident._padding` -- they are not idioms.
+
+    python3 tools/toolchain/whoelse.py <census.json> <symbol> [K]
+    python3 tools/toolchain/whoelse.py <census.json> --rank [K] [--min-have N] [--top N]
+
+Both modes cache: the blob index keyed by the blob's size+mtime, each object's
+parsed disassembly keyed the same way.  A `--rank` sweep of the whole corpus
+takes **3 s**.
+
+**First result, and it is a real one.**  The catalogue's head is dominated by
+PROLOGUE/EPILOGUE save-forms, i.e. the `nregs` / `use_fast_prologue_epilogue`
+decision:
+
+| bodies lacking | EXACT symbols containing | window |
+|---|---|---|
+| 12 | 18 | `push %r32 \| push %r32 \| push %r32 \| sub $0x1c,%esp` |
+| 12 | 18 | `add $0x1c,%esp \| pop %r32 \| pop %r32 \| pop %r32` |
+| 9 | 52 | `mov 0x14(%esp),%r32 \| mov 0x18(%esp),%r32 \| add $0x1c,%esp \| ret` |
+| 9 | 12 | `push %r32 \| push %r32 \| push %r32 \| sub $0xc,%esp` |
+| 8 | 42 | `mov 0x24(%esp),%r32 \| mov 0x28(%esp),%r32 \| add $0x2c,%esp \| ret` |
+| 19 | 147 | `pop %r32 \| pop %r32 \| pop %r32 \| ret` |
+| 7 | 4 | `test %r32,%r32 \| je <T> \| cmpl $0x1,0x0 \| ja <T>` |
+
+The first six rows are the SAME mechanism one body at a time: the number of
+callee-saved registers a body needs (`frame->nregs`) decides
+`use_fast_prologue_epilogue` (`config/i386/i386.c:4988-5018`; `count =
+(frame->nregs - 1) * FAST_PROLOGUE_INSN_COUNT` at `:5004-5005` with
+`FAST_PROLOGUE_INSN_COUNT = 20` at `:531`, `expensive_function_p` =
+`predict.c:1071-1102`), which in turn decides push/pop versus
+`sub $N,%esp` + `mov %reg,K(%esp)`.  This is exactly the mechanism the
+`ModDataV32` investigation derived this batch from first principles (F12196's
+batch; the object saves 3 registers and gets mov-saves, ours saves 2 and gets
+pushes).  The catalogue says it is the single most repeated unresolved idiom in
+the corpus -- 30-50 bodies -- not a one-off.  `nregs` is moved by live-range /
+register pressure, so the lever is a source value kept live across a call, not
+a spelling.
+
+Corpus scale: 78,154 distinct windows are missing somewhere (k=4), 127 of them
+from 4+ bodies with 4+ EXACT exemplars -- the working queue.
+
+**Scope and limits, stated.**  A shared window is CORRELATION, not proof: it
+says "the same emitted shape appears in a function whose source we have", which
+is a place to go READ, not a conclusion.  The `whoelse.py <symbol>` mode
+reports how many windows each EXACT symbol shares (a low count is noise).  A
+symbol whose missing windows have NO EXACT exemplar (e.g. `initTxSequence`: 197
+missing, 1 shared) is telling you its idiom is genuinely un-recovered anywhere
+yet, so the compiler-source derivation is the only route.
+
+## F12199. The 16-bit loop counter is a FORM, not just a TYPE: `while (x--)`
+
+Two new broad-application screens were built from the `whoelse.py` catalogue
+(F12198), whose head is the prologue/epilogue save-form and whose SECOND class
+is the truncated loop counter.
+
+`scratch/cd/loop16.py <census.json>` -- counts, per symbol, the reference's
+`lea ±1(%r) | mov(z|s)w[lq]` pairs (the truncating counter) and ours, and lists
+the symbols where the reference has more.  **33 rows.**  The head:
+`VTB_decoder` 9 (the known structural gap), `probeselect` 7, `band_pass` 5,
+`modulatevector` 5, `cid_modem` 2, `updateAltRbsPhaseInDil` 2,
+`FPM_MRF_filter` 2, `initV34` 2, `SMCv17_encoder_abs` 2, `v8handshak` 2.
+
+`scratch/cd/prologue.py <census.json>` -- classifies each function's prologue
+as PUSH (`push %ebp; push %edi; ...`) or MOVSAVE (`sub $0xN,%esp; mov
+%edi,K(%esp); ...`) for both sides and lists the mismatches.  **90 rows**, of
+which **10 are reference-MOVSAVE / ours-PUSH** -- the clean `nregs` lever
+(`use_fast_prologue_epilogue`, config/i386/i386.c:4988-5018), the largest being
+`DialerProgress` (delta -445), `V92EchoCanceller::setState` (-48),
+`V90Demodulator::exitPhase3` (-44) and `V90Equalizer::enterFPE`/`enterRRN`
+(-28 each); one is the opposite direction (`FSE_decision_eqtrn`).
+
+### The rule, and it is a correction to levers 8/41
+
+The counter's declared TYPE is only half of it.  **GCC 3.4.2 emits
+`lea ±1(%r32),%r32 | inc %r16 | jne <T>` only for a countdown written as**
+
+    T x = n;
+    while (x--) { ... }
+
+with `T` a 16-bit type.  The other natural spellings do NOT give it:
+
+| source | emitted |
+|---|---|
+| `short i; for (i = n; i != 0; i--)` | `test/jne` (no truncating extend) |
+| `int i; for (i = 0; i < n; i++)` | `inc %r32; cmp %r32,%r32` |
+| `unsigned short i; i = n; while (i--)` | `lea -0x1(%r32),%r32; movzwl %r16,%r32; inc %r16; jne` (the object) |
+
+so the loop FORM is part of the forced shape, and the reference's own extend
+names the signedness (`movzwl` + `jne` = unsigned; `movswl` = signed).
+
+### Retained (three; the reference's bytes reproduced)
+
+| symbol | source | before -> after |
+|---|---|---|
+| `SMCv17_encoder_abs` (src/fax/Smc.c) | `unsigned int i; for (i = 0; i < count; i++)` -> `unsigned short i; i = count; while (i--)` with `*data++` | symdiff 24 -> **18**, insns 46 -> 44, delta -5 -> **-13** |
+| `SMCv17_encoder_dif` (same file) | `short i; for (i = count; i != 0; i--)` -> `unsigned short i; while (i--)` | symdiff 15 -> **8**, insns 54 -> 55, delta +4 |
+| `FPM_MRF_filter` (src/dsp/fpm_mrf.c) | the input-fill `for (k = 0; k < need; k++)` -> `short ki = need; while (ki--)` | symdiff 51 -> **44**, insns 172 -> 173, delta +7 |
+
+Reference bytes now reproduced: abs `lea -0x1(%edi),%eax; movzwl %ax,%edi;
+inc %ax; jne`, dif `lea -0x1(%ebp),%eax; movzwl %ax,%ebp; inc %ax; jne`, MRF
+`lea -0x1(%ecx),%eax; movswl %ax,%ebx; inc %ax; jne`.
+
+**Behaviour note.**  `while (x--)` on an UNSIGNED counter runs ~65536 times for
+a negative `count`, and `short ki = need` truncates a `need` above 32767 --
+both are what the OBJECT does, so they are the original behaviour being
+restored, not a repair.  Fixtures `t_v17smc`, `t_v17ppstab`, `t_v17txcreate`,
+`t_v17fax`, `t_fpm_mrf`, `t_fpm_mrf_input_slot` all green
+(`1 passed, 0 failed` each).  Neighbours unchanged: `SMC_init` EXACT,
+`SMC_encoder` -17, `SMCv17_encoder_tcm` 14; `FPM_MRF_init`/`FPM_MRF_free`
+EXACT.
+
+### Typed negatives (seven, each with its evidence)
+
+- `probeselect`, `band_pass`, `cid_modem`, `updateAltRbsPhaseInDil`: screens
+  artifacts -- the counters are ALREADY short (verified in the bytes; our
+  `lea;movsw` pair is present, the screen's 2-instruction window just misses it
+  through rotation), or the two sites share one `int` with a differently-typed
+  loop.
+- `modulatevector`: the missing sites are bisections written with POINTERS in
+  our source against a 16-bit index in the reference -- a different source
+  shape in an 807-instruction body 393 bytes short.
+- `initV34`: the "sites" are `(unsigned short)` casts in the index; making the
+  counters short is net WORSE (delta +6 -> +18).
+- `v8handshak`: the candidate is 749 bytes / 140 instructions SHORT -- missing
+  inlined code, not a counter.
+
+### A failed dispatch, recorded
+
+The `nregs`/prologue-form agent returned a malformed message, left **no edits
+and no report** -- checked with `git status` and `ls`.  `scratch/cd/prologue.py`
+is the screen it should have used; the 10 MOVSAVE/PUSH rows remain open.
+(The 90-row mismatch table is in the tool's output; the tool is the artefact.)
+
+## F12200. The prologue save-form predicate, read verbatim -- and the first row recovered
+
+`scratch/cd/prologue.py` found 90 prologue-form mismatches, 10 of them
+reference-MOVSAVE / ours-PUSH (the corpus catalogue's #1 unresolved idiom,
+30-50 bodies).  The predicate had been assumed, not read.  Read now, from the
+extracted GCC 3.4.2 tree, the verbatim selections are:
+
+`config/i386/i386.c:5014-5018` -- the selector:
+
+    if (TARGET_PROLOGUE_USING_MOVE
+        && cfun->machine->use_fast_prologue_epilogue)
+      frame->save_regs_using_mov = true;
+    else
+      frame->save_regs_using_mov = false;
+
+`config/i386/i386.c:4988-5013` -- `use_fast_prologue_epilogue`:
+`count = frame->nregs; if (count) count = (count - 1) * FAST_PROLOGUE_INSN_COUNT;`
+with `FAST_PROLOGUE_INSN_COUNT = 20` (`i386.c:531`); false when
+`function_frequency < NORMAL`, otherwise `!expensive_function_p(count)`.  One
+override at `i386.c:5097-5099` (false when `!to_allocate && nregs <= 1`).
+
+`predict.c:1071-1102` -- `expensive_function_p`:
+
+    if (ENTRY_BLOCK_PTR->frequency == 0) return true;
+    limit = ENTRY_BLOCK_PTR->frequency * threshold;
+    ... for each bb, for each active_insn_p insn: sum += bb->frequency;
+    ... return true when sum > limit;
+
+**The period line carries no profile flags, so `compute_function_frequency`
+returns at `predict.c:1213-1214` and `function_frequency` stays `NORMAL`
+(`function.c:6429`).  The whole predicate collapses to**
+
+    MOVSAVE  <=>  SUM_b (active_insns_b * freq_b)  <=  ENTRY_freq * (nregs-1) * 20
+
+**`-mtune=i686` does NOT disable it.**  `TARGET_PROLOGUE_USING_MOVE =
+x86_prologue_using_move & TUNEMASK` (`i386.c:508`), the set is
+`m_ATHLON_K8|m_PENT4|m_PPRO`, and `{"i686", PROCESSOR_PENTIUMPRO, 0}`
+(`i386.c:1101`) -- so PPRO makes it TRUE, which is why the reference can hold
+the form and our own build emits it elsewhere.  `-maccumulate-outgoing-args`
+only feeds `to_allocate` (`i386.c:5070`, `:5093`) and cannot switch the form.
+
+**So the form is a STEP FUNCTION of `nregs`** (2 -> 20, 3 -> 40, 4 -> 60) and a
+knife-edge on the weighted instruction sum.  `nregs` is
+`ix86_nsaved_regs()` (`i386.c:4977`, `ix86_save_reg` `i386.c:4923`) -- mobile
+only by whole-TU register allocation, i.e. by a value whose LIVE RANGE SPANS A
+CALL.  On the 10 rows the measured sums are 0.06-5 % over the `nregs=2` limit
+(six rows) or within ~1 % of the `nregs=4` limit (four rows), so they are all
+knife-edges.
+
+### RETAINED: `_ZN12V90Equalizer8enterFPEEv` (src/pump/v90/V90Equalizer.cpp)
+
+The reference keeps the return value in `%edi` across the whole body (F2134:
+"zeroed at entry, made 1 on exactly one path, moved to `%eax` at both
+returns"), so its `nregs` is 3 where ours was 2 -- one callee-saved register
+short of the threshold.  Writing the body as one common exit restores that
+lifetime:
+
+    int ret = 0;
+
+    if (state != V90EQU_STATE_FPE) {
+        ... body ...            /* the mmx arm sets `ret = 1;` */
+    }
+
+    return ret;
+
+**delta -28 -> 0, candidate 359 -> 387 (= the reference), longest contiguous
+run 23/90 -> 38/90, symdiff 34 -> 9.**  The reference prologue is reproduced
+byte-for-byte.
+
+**THE NEIGHBOUR TRAP, caught here.**  The SAME edit on the twin `enterRRN`
+takes that symbol from -28 to 0 as well, but it flips the EXACT neighbour
+`_ZN12V90Equalizer24enterChannelVerificationEv` (28/28, delta 0) to NONMATCH
+(13/28) through the TU's register-allocation state -- so only `enterFPE` is
+retained and `enterRRN` is left alone.  The delegated report had claimed "no
+neighbour regression"; the per-TU sweep of all 33 symbols found it.  **After
+any single-function edit in a TU, re-grade EVERY symbol of that TU -- the
+delegated claim is not the measurement.**
+
+Fixtures `t_v90equ`, `t_v90equproc`, `t_v90eqdata`, `t_v90equnumeric`,
+`t_v90leaves` green (`1 passed, 0 failed` each).  Census `census_f12199.json`:
+1242 EXACT / 35 REGALLOC / 575 NONMATCH / 0 UNRESOLVED, `size` 472 -> **471**,
+`bytes` 103 -> **104**; the only moved rows are `SMCv17_encoder_abs` (-5 ->
+-13) and `enterFPE` (-28 -> 0); **no EXACT loss**.
+
+### The remaining nine rows, and the failed dispatch
+
+`DialerProgress` (-445) has equal `nregs` (4) at 0.9 % over the limit;
+`V92EchoCanceller::setState` (-48) is `our nregs 2 vs ref 4`;
+`V90Demodulator::exitPhase3` (-44), `FSE_decision_trn` (-23, typed inert: no
+call to carry a lifetime), `V8GetMessage` (-14), `addReceivedSampleToStorage`
+(-14), `dp_wrapper_create` (-2) and `bValidateEnergyValue` (+300, 4.2x over,
+driven by a loop we introduce) remain open with these measurements recorded.
+
+A first delegated attempt at this batch returned a malformed message and left
+no edits and no report; it was replaced by the focused compiler-source probe
+that produced everything above.  Recorded because "the agent produced nothing"
+is a result worth knowing.
+
+## F12201. `enterFPE`/`enterRRN`: the object caches the `mmxMode` read -- and the neighbour it costs
+
+The file's own comment above `enterRRN` already said it: "`mmxMode` IS READ ONCE FOR
+THE ARRAY CLEAR AND AGAIN FOR THE RESTORE.  The first read is cached across the
+two clearing loops (`mov 0xb0(%esi),%ebx` before the German-PBX test, used after
+it); the second is reloaded because `setDfeBeta` and `setLinearEquBeta`
+intervene."  The CODE did not do it -- it read `mmxMode` inside the `word_28`
+arm, so the two objects differ:
+
+    ref   9 call edprintf
+         10 movl $0x4,0x60(%r32)      ; state = RRN
+         11 mov 0x58(%r32),%r32       ; spectralVerifier
+         12 mov 0xb0(%r32),%r32       ; <-- mmxMode read BEFORE the arm
+    ours 37 mov 0xb0(%r32),%r32       ; mmxMode read AFTER the first loop
+
+**The fix** is the cached local `int mmx = mmxMode;` placed before
+`if (spectralVerifier->word_28 == 2)`, with `mmx` used in the inner test and
+`mmxMode` still read for the restore arm (so the second read survives).
+
+### Measured, per symbol, over the whole 33-symbol TU
+
+| symbol | delta | run |
+|---|---|---|
+| `enterFPE` | 0 (unchanged) | **38 -> 40** |
+| `enterRRN` | **-28 -> 0** | **23 -> 40** |
+| `enterChannelVerification` | 0 | **EXACT -> NONMATCH (28 -> 13)** |
+| the other 30 | unchanged | unchanged |
+
+`enterRRN`'s delta-0 also needs F12200's common-exit shape (`int ret = 0;` and
+one exit), which is what moves the return value's live range and `nregs`.
+
+### The regression, its cause, and the repair plan
+
+`enterChannelVerification` is a neighbour in the same TU.  Its two objects
+differ by ONE register choice in a two-instruction schedule swap: the reference
+reuses `%ebx` -- the slot the dead `0.0f` constant occupied -- for the
+`0xb` (`V90_BLL_PRE_ANSPCM`) argument, so `mov $0xb,%ebx` lands before the
+`setDfeBeta` call; ours picks `%edx` and materialises it later.
+
+    ref  38862 mov %ebx,0x4(%esp)
+         38866 mov $0xb,%ebx          <-- reuse of the dead 0.0f slot
+         3886e call setDfeBeta
+    ours  27fa mov $0xb,%edx          <-- after both setters
+          27ee movl $0x6,0x60(%esi)
+
+Measured ablations (all whole-TU): `enterFPE`'s hoist ALONE is TU-safe (its run
+38 -> 40, the neighbour untouched); `enterRRN`'s hoist alone and `enterRRN`'s
+common-exit each cost the neighbour.  So the regression is a post-allocation
+register choice moved by the TU's emission state -- the same class as the
+peephole2 cursor (levers 39/49's family), not a property of
+`enterChannelVerification`'s source.
+
+**REPAIR PLAN (recorded so the loss is not silent):** recover `enterRRN`'s own
+residual (9 canonical entries, the same shape `enterFPE` has) or the TU's
+earlier bodies, so the emission entering `enterChannelVerification` matches the
+reference and the `%ebx` reuse comes back.  The CI ratchet will want a review
+entry for this symbol (`tools/ci/period_reviewed_losses.json`, fields
+`base_sha`/`symbol`/`head_body_sha256`/`accepted_commit`/`evidence_commit`/
+`evidence`; the digest from
+`python3 tools/ci/period_metrics.py --fingerprint <sym> --head-objects build/tc_out`).
+
+Fixtures `t_v90equ`, `t_v90equproc`, `t_v90eqdata`, `t_v90equnumeric`,
+`t_v90leaves` green (exit 0).
+
+### Two apparatus lessons
+
+1. **An identical-looking site is not the same site.**  The same hoist applied
+   to the THIRD occurrence of the pattern (`enterPhase4`, line 1036) REGRESSED
+   that function's run 19 -> 14, so it was scoped back out.  Take each site's
+   own native witness; do not fan an edit out by pattern match.
+2. **A scripted `str.replace()` hits EVERY occurrence.**  `enterFPE` and
+   `enterRRN` have byte-identical tails, so a one-site edit became a two-site
+   edit and left the file uncompilable (`expected '}' at end of input`).  Anchor
+   a scripted edit on a string unique to the site and assert the count -- and
+   check the brace balance / rebuild immediately.
+
+### F12018. setState's prologue is decided by an INLINED `print_echo_coeffs` call, not by a spelling
+
+`V92EchoCanceller::setState` (src_pump_v90_V92EchoCanceller.cpp.o, 0x11320) saves
+`{ebx,esi,edi,ebp}` with the mov-save form (`sub $0x4c,%esp; mov %ebx,0x3c(%esp);
+mov 0x50(%esp),%ebx; ...`); the reconstruction saved only `{esi,ebx}` with pushes
+(`push %esi; push %ebx; sub $0x24,%esp`).  Both are nregs 4 versus 2, so the
+save-form step function of F12200 lever 50 applies -- but the source statement
+that creates the extra live range is not a spelling, it is the CALL BOUNDARY.
+
+The FILTER_ONLY arm's per-tap dump is `print_echo_coeffs(echoCoeff,
+filterLength)`, INLINED by GCC 3.4.2.  The object binds the callee's two formals
+at the site -- `mov 0x20(%ebx),%edi` (echoCoeff) and `mov 0x14(%ebx),%ebp`
+(filterLength), both BEFORE the banner `edprintf` -- and keeps them live across
+every `edprintf` in the loop, which indexes `(%edi,%esi,4)` and bounds on
+`cmp %ebp,%esi`.  The reconstruction spelled the loop inline, so it re-read the
+members through `this` each iteration (`mov 0x20(%esi),%ecx` in the body,
+`cmp %ebx,0x14(%esi)` in the latch) and `this` alone was enough.
+
+Measured (whole-TU, period 3.4.2, `-O3 -frename-registers -march=i386
+-mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer
+-maccumulate-outgoing-args`): setState byte delta -48 -> -34, instructions
+290 -> 293, prologue PUSH -> MOVSAVE, object md5 601e2a4e.  An independent
+out-of-tree variant that hoists the same two locals by hand produced the
+byte-identical object, so the call is the source form.  Whole-TU re-grade of
+the object: only setState moved; no neighbour regressed.  Fixtures `t_v90leaves`
+and `t_p2echoleaves` green (exit 0).  Residual -34: the setEchoBeta/setDecayFactor
+inlining of F2411 (field-reload-for-sign versus forwarded store, x87
+product/pop, frame 0x4c versus 0x2c), not closed.
+
+The companion row `DialerProgress` (src_dialer_Dialer.c.o, delta -445) is NOT a
+nregs row: reference and candidate both save `{ebx,esi,edi,ebp}`, nregs 4 = 4,
+so the step function cannot move it.  Two derived source forms (a cached
+`limit` local, a cached `*pos` local) are sampled-and-inert -- byte-identical
+objects.  Its prologue is a knife-edge on `SUM_b(active_insns_b * freq_b)`
+(predict.c:1071-1102) and the residual is dominated by one missing inlined copy
+of `begin_next`: the reference inlines it three times, the candidate cross-jumps
+all three sites into one shared block, which is hotter and pushes the sum over
+the limit.  Named residual, parked.
+
+## F12202. initTxSequence: the same cached-pointer residue as its neighbour, 106 bytes
+
+`initTxSequence` (src/v8/V8.c) was delta -120 with the largest missing run
+(60 instructions) sitting in the extension region -- and the reference re-reads
+`v->cm` (at `0xa58(%r32)`) and `v->tx_seq` at every site, while our source
+cached them in two locals at the top of the body:
+
+    struct v8_tx_sequence *seq = v->tx_seq;
+    struct v8_cm *cm = v->cm;
+
+This is F12158's defect, in the same file and the same shape: **a cached pointer
+local the object does not have is residue** (lever 31).  `evaluateRxJMSequence`
+was fixed that way; `initTxSequence` carried the same two locals uncorrected.
+
+**Fix:** delete both declarations and spell `v->tx_seq->...` / `v->cm->...`
+inline throughout the body (including the bare cast read
+`(*(const unsigned int *)v->cm & 0x80008)`).
+
+| | delta | candidate insns (ref 258) | run | symdiff |
+|---|---|---|---|---|
+| before | -120 | 233 | 20/258 | -- |
+| **after** | **-14** | **255** | **35/258** | 69 |
+
+**106 bytes and 22 instructions recovered from one declaration pair.**
+
+Fixtures green (`1 passed, 0 failed` each): `t_v8direct`, `t_v8dp`,
+`t_v8jm`, `t_v8sig`, `t_v8util`, `t_v8history`, `t_v8hs`.  TU check: only
+`initTxSequence` moved -- `evaluateRxJMSequence` (-34) and `rebuildJMSequence`
+(-8) are unchanged, and `match_extension`/`emit_extension` are inlined and not
+emitted.
+
+**Residual:** 3 instructions -- the second menu character's
+`(cm->b0 & 0x80) ? 0x111 : 0x011` ternary, which the object lowers through the
+full i386 movcc (`shr $0x7,%al; movzbl; cmp $0x1; sbb %eax,%eax; and
+$0xffffff00; add $0x111`) while our build factors the shared `0x11` out.  That
+was F12157's named residual and remains open.
+
+## F12203. The lever-50 knife-edge has TWO sides: the weighted SUM flips the form when nregs does not
+
+## `dp_wrapper_create` (src/core/dp_wrapper.c:63) -- EXACT
+
+The previous three lever-50 recoveries all moved `nregs`.  This one does not:
+`dp_wrapper_create` already had `nregs` 4 on both sides, so the step function
+was equal -- and the form still differed, because the predicate's OTHER side
+was over the limit:
+
+    measured  SUM_b(active_insns_b * freq_b) = 606898   vs   limit 600000
+
+Two separate `if` guards each MATERIALISED the shared return value before its
+branch (two extra `xor %edx,%edx`, one in each of the frequency-10000 and
+frequency-9000 entry blocks).  The reference has ONE combined guard and
+materialises the value once at the shared NULL block (`xor %eax,%eax` at
+`0x5ac3`).  Folding the two guards into a single condition removes the
+duplicate materialisation, drops the weighted sum **under** 600000, flips
+PUSH -> MOVSAVE, and makes the object **byte-identical**:
+
+    694 = 694 bytes, 178/178 instructions, 100 % longest contiguous run, symdiff 0
+
+**So the threshold has two sides.**  When `nregs` is already equal, look at the
+weighted instruction sum: removing instructions from the HOT blocks (folding
+duplicate guards, materialising a constant once instead of twice, sharing a
+tail) can cross it.  This is the counter-intuitive direction -- making the code
+*simpler* in a hot block moves the save form -- and it is the first lever-50
+recovery that does not touch a live range at all.
+
+## `_ZN14V90Demodulator10exitPhase3Ev` (src/pump/v90/V90Demodulator.cpp:760) -- delta -44 -> 0
+
+Ref MOVSAVE nregs 4 (edi/ebx/esi/ebp) against our PUSH nregs 2.  Native
+witness: the reference reads `spectralVerifier.word_28` (at `0x238`) **once at
+`0x1bc83`, before the `getMaxLookahead`/`getMaxUcode` calls**, and stashes it at
+`0x40(%esp)`; our source named it at the call site, so the value was DEAD across
+both calls.  Binding it to a named local restores the native live range ->
+`nregs` 2 -> 3, PUSH -> MOVSAVE, and the size becomes exact:
+
+    768 = 768 bytes, longest run 20/186 -> 32/186
+
+Both changes were verified here (rebuilt with `rm` first, graded, the whole TU
+re-swept: **only the two targets moved of all 31 V90Demodulator symbols and 4
+dp_wrapper symbols** -- no neighbour regression), and the fixtures are green
+(`t_v90demprog`, `t_v90p4dperiod`, `t_v90p4ddec`, `t_dp_wrapper`, each
+`1 passed, 0 failed`).
+
+Census `census_f12203.json`: **exact 1241 -> 1242** (`dp_wrapper_create`
+promoted), **nonmatch 576 -> 575**, `size` 470 -> **468**, `bytes` 106 -> 107.
+No grade lost anywhere.
+
+**Residual on `exitPhase3`:** still NONMATCH at delta 0 -- the reference keeps
+FOUR callee-saved registers and 186 instructions against our three and 182.
+The fourth is `%ebp`, from the twelve-argument `V90TRN2Design` setup
+(`0x1bcb1-0x1bcf2`) where the reference holds base + 3 fields + arg10 + arg9
+simultaneously and our scheduler stores arg10 earlier.  Coupled to an x87
+sequence difference (`fld/fxch/fabs` early, `fsubp`/`flds 0x11c`/`fmulp`
+against our `fsubr`/`fmuls 0x8`).
+
+## F12204. Where the 576 NONMATCH actually live -- measured, and a ranked queue
+
+The owner asked what would move the NONMATCH count.  Measured on
+`census_f12203.json` (610 non-EXACT rows) rather than guessed:
+
+    instruction-count delta (ours - reference):
+      equal  163      ours 1..3 short  109      ours 1..3 long   96
+      ours >3 short  174                      ours >3 long    68
+    |byte_delta| <= 4 : 247 rows       |byte_delta| <= 16 : 417 rows
+
+So **283 rows are SHORT** (missing code -- lever 2), 164 are LONG, and **163
+rows have an IDENTICAL instruction count** (a pure emitter/order difference).
+
+Inside the identical-count tier, 43 rows have a 100 % longest run: those differ
+ONLY in register lanes.  Of them 35 are already REGALLOC and the rest are the
+8 allocation-bound NONMATCH rows F12173 typed (`v22_ans_rmloop2`,
+`V90Modulator::progress`, `voice_command`, `v8_process`, `V92Phase3Modulator::reset`,
+`V92Phase4Modulator::recivedRt`, `V90Jd::C1`, `GetFP_Value`).  Only 14 rows sit
+in the 70-99 % run band, and most of those already carry a documented
+post-allocation cause (`V90ConstellationDesigner::process` sched2,
+`_t30_silence_before_tx_state` sched2 store order, `SGD_correlate`
+peephole2/regrename, `FPM_SDM_init`/`SDM_init` regrename).  A mnemonic-level
+aggregation over the tier (`scratch/cd/errdist.py`) is dominated by lane churn
+(`mov`->`mov` 297) -- it confirms the tier is allocation, it does not name a
+lever.
+
+**The lever-2 mass is the actionable part, and it is now a ranked queue.**
+`scratch/cd/missrank.py <census.json> [--min-block N] [--top N] [--deep]`
+aligns the canonical rows of each short row and reports the size of its LARGEST
+contiguous reference-only block -- the single most valuable thing to go and
+read.
+
+**The instrument is only useful with stack-displacement masking, which is now
+built in** (the default; `--raw` disables it): canonical keeps the displacement,
+so a frame-size difference makes every stack access look like missing code.
+Measured effect of the mask: `_ZN25V90AutoDigitalImpDetector16studyUrefHandlerEfj`
+falls from a 313-instruction "missing block" to 78 -- i.e. 75 % of its apparent
+gap was the frame artefact, exactly as F12193 warned.  Rows with a block >= 30
+drop from 104 to 48.
+
+**The queue's head (post-mask, block size / run / delta):** `v34handshak` 915,
+`V90Phase3Demodulator::getV90Decision` 366 (-117), `V90CP::evaluateInfo` 291
+(-216), `V90ConstellationDesigner::adjustConstellationsToNew...` 263 (-528),
+`VPcmV34Progress` 214 (-361), `DialerProgress` 150 (-445),
+`V90AutoDigitalImpDetector::porcessSecondStudy` 145 (-64, run 50/232),
+`receiver` 130 (-74), `V90Jd::unPackData` 126 (-25),
+`generateV92Symbol` 118 (-146), `v34handshakinit` 81 (-45, run 73/489).
+
+**One head entry read in detail -- `v34handshakinit`** (10 instructions short,
+9.2 % run): its largest missing block is a debug print carrying a `StateName[]`
+lookup (`movswl 0xaa78(%r32),%r32` then `mov StateName(,%r32,4),%r32`) -- an
+ABSENT STATEMENT of the same class as F12187's, and a concrete next target.
+SSDMtime `porcessSecondStudy`'s block is an x87 sequence
+(`flds`/`fldz`/`shl $0x7`) storing into stack slots -- a real body difference to
+derive.
+
+**Typed caveat:** `missrank`'s block can be a `replace` (a substitution) as well
+as a `delete` (a true absence); the two want different work.  Separating them is
+the next refinement.

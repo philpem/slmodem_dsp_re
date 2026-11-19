@@ -71,6 +71,30 @@ the tool says so (in the first batch it caught a one-character typo in a worker'
 verifier agreeing on `delta`/`insns`/`run`/`symdiff`/`setcc` is what makes the
 batch's numbers citable.
 
+`tools/toolchain/whoelse.py` mines the reference object as a corpus of
+solved idioms: for a NONMATCH symbol it lists the instruction windows present
+in the reference but with fewer copies in our build, and names the EXACT
+symbols that already contain them -- i.e. where to go READ the source of an
+idiom we have not recovered.
+
+    python3 tools/toolchain/whoelse.py <census.json> <symbol> [K]
+    python3 tools/toolchain/whoelse.py <census.json> --rank [K] [--min-have N] [--top N]
+
+`--rank` is the corpus-wide catalogue, ordered by (#bodies lacking the window,
+#EXACT symbols containing it); a whole-corpus sweep takes about 3 s thanks to
+a blob index and per-object disassembly caches keyed by size+mtime.
+
+Scope of the conclusion: a shared window is CORRELATION.  It says the same
+emitted shape occurs in a function whose source is already right -- a place to
+read, never a proof, and the per-symbol mode prints a share count so a
+one-window hit can be discounted.  A symbol with no exemplar shares is the
+opposite signal: its idiom is not recovered anywhere in the corpus yet.
+
+Windows are canonicalised by `fidelity.canonical` with two normalisations that
+make them comparable across functions: a jump operand becomes `<T>`, a `call`
+keeps its callee and drops its offset, and `byteident._padding` alignment nops
+are dropped.
+
 ## `tools/refcheck.py` — hold the tree to its own cross-references
 
 Every claim is argued once and cited everywhere else. `--dangling` (the default,

@@ -130,8 +130,8 @@ COPY --from=build /opt/tc342/opt/gcc342 /opt/gcc342
 ENV PATH=/opt/gcc342/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN echo /opt/gcc342/lib >> /etc/ld.so.conf && ldconfig \
- && gcc --version | head -1 \
- && g++ --version | head -1 \
+ && gcc --version | head -n 1 \
+ && g++ --version | head -n 1 \
  && printf 'int f(int x){return x*3;}\n' > /tmp/t.c \
  && gcc -c -O2 -march=i386 -o /tmp/t.o /tmp/t.c \
  && printf '#include <cstddef>\nstruct S{int a;};int g(S*s){return s->a;}\n' > /tmp/t.cpp \

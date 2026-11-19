@@ -197,9 +197,10 @@ SMCv17_encoder_dif(void *smc, struct fpm_smc_ring *ring,
 	short widx = ring->widx;
 	int quad = statep->quad;
 	int state = statep->state;
-	short i;
+	unsigned short i;
 
-	for (i = count; i != 0; i--) {
+	i = count;
+	while (i--) {
 		unsigned int sel = (unsigned int)*data++ & 3u;
 		int point;
 
@@ -230,10 +231,11 @@ SMCv17_encoder_abs(void *smc, struct fpm_smc_ring *ring,
 	const short len = ring->len;
 	short widx = ring->widx;
 	int quad = statep->quad;
-	unsigned int i;
+	unsigned short i;
 
-	for (i = 0; i < count; i++) {
-		unsigned int sel = (unsigned int)data[i] & 3u;
+	i = count;
+	while (i--) {
+		unsigned int sel = (unsigned int)*data++ & 3u;
 		int point;
 
 		quad = (quad + 3) & 3;

@@ -34,6 +34,7 @@
  */
 
 #include <math.h>
+#include <string.h>
 #include "dsplib/debug.h"
 #include "dsplib/DILdescriptorPacker.h"
 #include "dsplib/encode.h"
@@ -2853,14 +2854,12 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	  sineWave(4800.0f, 980.0f, 0.0f, 9600.0f),
 	  entFilt(5, 5, entFiltDen, entFiltNum, 99)
 {
-	unsigned int i;
 	int analog = (side == V90_MODEM_SIDE_ANALOG);
 
 	sysdep_memset(bitVector, 0, sizeof(bitVector));
 	nofBits = 0;
 
-	for (i = 0; i < sizeof(v34BaudAllow); i++)
-		v34BaudAllow[i] = v34initialbauds[i];
+	memcpy(v34BaudAllow, v34initialbauds, sizeof(v34BaudAllow));
 
 	sweepCounter = 0;
 

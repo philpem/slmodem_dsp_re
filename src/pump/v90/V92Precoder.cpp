@@ -188,20 +188,38 @@ void
 V92Precoder::reset(V92MappingParams *params)
 {
 	struct V92ParamsInfo *p = (struct V92ParamsInfo *)params;
-	int i;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V92Precoder: reset 1 (with cfg) " "called\r\n");
 
 	paramsAt9c = p->indexConstel;
 
-	for (i = 0; i < 6; i++) {
-		head[i] = (unsigned int *)p->constellations[i];
-		tableB[i] = (int)p->LC[i];
-	}
+	tableB[0] = (int)p->LC[0];
+	tableB[1] = (int)p->LC[1];
+	tableB[2] = (int)p->LC[2];
+	tableB[3] = (int)p->LC[3];
+	tableB[4] = (int)p->LC[4];
+	tableB[5] = (int)p->LC[5];
 
-	for (i = 0; i < 12; i++)
-		tableA[i] = p->m[i];
+	head[0] = (unsigned int *)p->constellations[0];
+	head[1] = (unsigned int *)p->constellations[1];
+	head[2] = (unsigned int *)p->constellations[2];
+	head[3] = (unsigned int *)p->constellations[3];
+	head[4] = (unsigned int *)p->constellations[4];
+	head[5] = (unsigned int *)p->constellations[5];
+
+	tableA[0] = p->m[0];
+	tableA[1] = p->m[1];
+	tableA[2] = p->m[2];
+	tableA[3] = p->m[3];
+	tableA[4] = p->m[4];
+	tableA[5] = p->m[5];
+	tableA[6] = p->m[6];
+	tableA[7] = p->m[7];
+	tableA[8] = p->m[8];
+	tableA[9] = p->m[9];
+	tableA[10] = p->m[10];
+	tableA[11] = p->m[11];
 
 	state0 = 0.0f;
 	state1 = 0.0f;

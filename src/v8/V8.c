@@ -167,22 +167,20 @@ emit_extension(struct v8_tx_sequence *seq, int *n, const unsigned char *ext)
 void
 initTxSequence(struct v8 *v)
 {
-	struct v8_tx_sequence *seq = v->tx_seq;
-	struct v8_cm *cm = v->cm;
 	int n = 2;
 	int words;
 
-	seq->word[0] = V8_SEQ_PREAMBLE_0;
-	seq->word[1] = V8_SEQ_PREAMBLE_1;
+	v->tx_seq->word[0] = V8_SEQ_PREAMBLE_0;
+	v->tx_seq->word[1] = V8_SEQ_PREAMBLE_1;
 
 	/* The first extension, if the menu says there is one. */
-	if (cm->b2 & V8_CM_EXT1_PRESENT) {
-		if (emit_extension(seq, &n, cm->ext1) == 0) {
+	if (v->cm->b2 & V8_CM_EXT1_PRESENT) {
+		if (emit_extension(v->tx_seq, &n, v->cm->ext1) == 0) {
 			/* Complained about, then repaired -- in that order. */
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V8: BUG - raw Call Function selected " "without valid data !!!\r\n");
-			cm->b2 &= (unsigned char)~V8_CM_EXT1_PRESENT;
+			v->cm->b2 &= (unsigned char)~V8_CM_EXT1_PRESENT;
 		}
 	}
 
@@ -190,24 +188,24 @@ initTxSequence(struct v8 *v)
 	 * The call function.  Note the order: the extension bit is retested
 	 * here, so clearing it just above changes which branch is taken.
 	 */
-	if (cm->b2 & V8_CM_EXT1_PRESENT) {
+	if (v->cm->b2 & V8_CM_EXT1_PRESENT) {
 		/* nothing: the extension stood in for the function character */
-	} else if (cm->b1 & 0x40) {
-		seq->word[n++] = V8_SEQ_FN_DEFAULT;
-	} else if (cm->b2 & 0x01) {
-		seq->word[n++] = V8_SEQ_FN_B0;
-	} else if (v8_seq_flag_test(cm->b1, 0x80)) {
-		seq->word[n++] = V8_SEQ_FN_B1_80;
-	} else if (cm->b2 & 0x02) {
-		seq->word[n++] = V8_SEQ_FN_B2;
+	} else if (v->cm->b1 & 0x40) {
+		v->tx_seq->word[n++] = V8_SEQ_FN_DEFAULT;
+	} else if (v->cm->b2 & 0x01) {
+		v->tx_seq->word[n++] = V8_SEQ_FN_B0;
+	} else if (v8_seq_flag_test(v->cm->b1, 0x80)) {
+		v->tx_seq->word[n++] = V8_SEQ_FN_B1_80;
+	} else if (v->cm->b2 & 0x02) {
+		v->tx_seq->word[n++] = V8_SEQ_FN_B2;
 	} else {
 		/* Nothing asked for, so ask for the default and remember it. */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V8: BUG - no Call Function selected in bit "
 			    "fields - use data as default !!!\r\n");
-		cm->b1 |= 0x40;
-		seq->word[n++] = V8_SEQ_FN_DEFAULT;
+		v->cm->b1 |= 0x40;
+		v->tx_seq->word[n++] = V8_SEQ_FN_DEFAULT;
 	}
 
 	/*
@@ -215,27 +213,27 @@ initTxSequence(struct v8 *v)
 	 * by one bit and then further bits folded in, which is the modulation
 	 * list and the capability flags packed into V.8's fields.
 	 */
-	seq->word[n] = (short)(((cm->b0 & 0x08) ? 0x149 : 0x141)
-			       | ((cm->b0 & 0x20) ? 0x04 : 0)
-			       | ((cm->b0 & 0x40) ? 0x02 : 0));
+	v->tx_seq->word[n] = (short)(((v->cm->b0 & 0x08) ? 0x149 : 0x141)
+			       | ((v->cm->b0 & 0x20) ? 0x04 : 0)
+			       | ((v->cm->b0 & 0x40) ? 0x02 : 0));
 
-	seq->word[n + 1] = (short)(((cm->b0 & 0x80) ? 0x111 : 0x011)
-				   | ((cm->b1 & 0x01) ? 0x80 : 0)
-				   | ((cm->b1 & 0x02) ? 0x40 : 0)
-				   | ((cm->b1 & 0x04) ? 0x04 : 0)
-				   | ((cm->b1 & 0x08) ? 0x02 : 0));
+	v->tx_seq->word[n + 1] = (short)(((v->cm->b0 & 0x80) ? 0x111 : 0x011)
+				   | ((v->cm->b1 & 0x01) ? 0x80 : 0)
+				   | ((v->cm->b1 & 0x02) ? 0x40 : 0)
+				   | ((v->cm->b1 & 0x04) ? 0x04 : 0)
+				   | ((v->cm->b1 & 0x08) ? 0x02 : 0));
 
-	seq->word[n + 2] = (short)(((cm->b1 & 0x10) ? 0x51 : 0x11)
-				   | ((cm->b1 & 0x20) ? 0x13 : 0));
+	v->tx_seq->word[n + 2] = (short)(((v->cm->b1 & 0x10) ? 0x51 : 0x11)
+				   | ((v->cm->b1 & 0x20) ? 0x13 : 0));
 	n += 3;
 
 	/* The second extension, on the same terms as the first. */
-	if (cm->b2 & V8_CM_EXT2_PRESENT) {
-		if (emit_extension(seq, &n, cm->ext2) == 0) {
+	if (v->cm->b2 & V8_CM_EXT2_PRESENT) {
+		if (emit_extension(v->tx_seq, &n, v->cm->ext2) == 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V8: BUG - raw Protocol selected " "without valid data !!!\r\n");
-			cm->b2 &= (unsigned char)~V8_CM_EXT2_PRESENT;
+			v->cm->b2 &= (unsigned char)~V8_CM_EXT2_PRESENT;
 		}
 	}
 
@@ -245,22 +243,20 @@ initTxSequence(struct v8 *v)
 	 * flag bytes, which is the same as testing bit 3 of b0 and bit 3
 	 * of b2.
 	 */
-	seq = v->tx_seq;
-	cm = v->cm;
 
 #ifdef DSPLIB_REPRODUCE_BUGS
-	if ((*(const unsigned int *)cm & 0x80008) == 0)
+	if ((*(const unsigned int *)v->cm & 0x80008) == 0)
 #else
-	if ((cm->b0 & 0x08) == 0 && (cm->b2 & 0x08) == 0)
+	if ((v->cm->b0 & 0x08) == 0 && (v->cm->b2 & 0x08) == 0)
 #endif
-		seq->word[n++] = V8_SEQ_TAIL_A;
+		v->tx_seq->word[n++] = V8_SEQ_TAIL_A;
 
-	seq->word[n] = V8_SEQ_TAIL_B;
+	v->tx_seq->word[n] = V8_SEQ_TAIL_B;
 	words = n + 1;
 
-	if (cm->b0 & 0x08) {
-		seq->word[n + 1] = V8_SEQ_TAIL_C;
-		seq->word[n + 2] = V8_SEQ_TAIL_D;
+	if (v->cm->b0 & 0x08) {
+		v->tx_seq->word[n + 1] = V8_SEQ_TAIL_C;
+		v->tx_seq->word[n + 2] = V8_SEQ_TAIL_D;
 		words = n + 3;
 	}
 
@@ -274,19 +270,19 @@ initTxSequence(struct v8 *v)
 		    "V8: Initial %s message length is %d octets\r\n",
 		    v->side == 1 ? "JM" : "CM", words);
 
-	seq->crc = (short)0xffff;
+	v->tx_seq->crc = (short)0xffff;
 
-	seq->bitpos = 0;
-	seq->wordidx = 0;
-	seq->repeats = 0;
-	seq->nbits = (short)(words * V8_SEQ_BITS_PER_WORD);
-	seq->wordbits = V8_SEQ_BITS_PER_WORD;
-	seq->crc_enable = 0;
-	seq->shifter = 0;
-	seq->shifter0 = 0;
-	seq->nleft = 0;
-	seq->nleft0 = 0;
-	seq->repeat = 1;
+	v->tx_seq->bitpos = 0;
+	v->tx_seq->wordidx = 0;
+	v->tx_seq->repeats = 0;
+	v->tx_seq->nbits = (short)(words * V8_SEQ_BITS_PER_WORD);
+	v->tx_seq->wordbits = V8_SEQ_BITS_PER_WORD;
+	v->tx_seq->crc_enable = 0;
+	v->tx_seq->shifter = 0;
+	v->tx_seq->shifter0 = 0;
+	v->tx_seq->nleft = 0;
+	v->tx_seq->nleft0 = 0;
+	v->tx_seq->repeat = 1;
 }
 
 void

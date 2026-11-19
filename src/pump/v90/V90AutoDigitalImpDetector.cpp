@@ -1790,9 +1790,10 @@ V90AutoDigitalImpDetector::addReceivedSampleToStorage(short phase,
 {
 	int n = sampleCount[phase];
 	short q = (short)(v + 0.5f);
+	short *row = sampleStore[phase];
 
 	sampleCount[phase] = n + 1;
-	sampleStore[phase][n] = (short)adid_abs(q);
+	row[n] = (short)adid_abs(q);
 	codeHistogram[phase][code]++;
 }
 

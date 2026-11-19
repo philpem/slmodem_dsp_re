@@ -757,6 +757,18 @@ V90Demodulator::exitPhase3()
 	trn2Designer->setNofUcodesInTrn2(
 	    (short)autoDigitalImpDetector->isThereAnyAltRbsPhase());
 
+	/*
+	 * The reference reads `spectralVerifier.word_28` ONCE, immediately
+	 * after `sessionFlag` and BEFORE the two `getMaxLookahead` /
+	 * `getMaxUcode` calls, stashing it at 0x40(%esp) for the twelfth
+	 * argument (`mov 0x238(%edi),%ebx` at 0x1bc83, reloaded at 0x1bcca).
+	 * Reading the member at the call site instead leaves the value dead
+	 * across those calls, which drops the function to nregs 2 and the
+	 * PUSH prologue form.  The named local restores the native live range.
+	 */
+	V90SpecialSpectralConditions specialConditions =
+	    (V90SpecialSpectralConditions)spectralVerifier.word_28;
+
 	if (trn2Designer->V90TRN2Design(
 		mappingParams,
 		autoDigitalImpDetector->linMapp,
@@ -770,7 +782,7 @@ V90Demodulator::exitPhase3()
 		sessionFlag != 0 ? jdV92->getMaxLookahead()
 				 : jd->getMaxLookahead(),
 		(unsigned char)(phase2Info->maxTxPower + 1),
-		(V90SpecialSpectralConditions)spectralVerifier.word_28) == 0) {
+		specialConditions) == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Demodulator::exitPhase3() "
 					     "delayedRetrainRequest !!!\r\n");

@@ -60,9 +60,8 @@ dp_wrapper_create(void *dp_data, dp_process_fn process, int dp_frag,
 {
 	struct dp_wrapper *w;
 
-	if (dp_frag == 0 || host_srate == 0)
-		return NULL;
-	if (dp_srate == 0 || dp_frag > DPW_MAX_FRAG)
+	if (dp_frag == 0 || host_srate == 0 || dp_srate == 0
+	    || dp_frag > DPW_MAX_FRAG)
 		return NULL;
 
 	w = sysdep_malloc(sizeof(*w));

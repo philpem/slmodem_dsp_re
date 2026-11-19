@@ -304,7 +304,7 @@ V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
 
 		if (hi < hh)
 			over = 0;
-		else if (hi > hh)
+		else if (hi != hh)
 			over = 1;
 		else if (lo < ll)
 			over = 0;

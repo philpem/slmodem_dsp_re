@@ -4038,6 +4038,168 @@ Adopted: drop both unused locals and spell the accesses inline
 symmetric difference 86 -> 40, exactly one census row moved and no grade
 changed.
 
+### Lever 31 addendum: a cached POINTER the object re-SELECTS is residue too
+
+Lever 31 is about a local naming an address the reference folds.  The same rule
+runs the other way when the local is a SELECTION:
+
+    const short *taps = v->side != 0 ? ANSWER_Entrance_Filter
+                                     : CALLER_Entrance_Filter;
+
+hoisted above the prologue call is a value we keep once; the reference evaluates
+it per loop iteration and spills the choice (`test; je; mov ANSWER; mov
+%r32,0x10(%esp)`, reloaded inside the loop).  Measured on `V8agc` (F12196):
+moving the declaration into the loop body took the byte delta -72 -> -23.
+
+The tell is a ternary feeding a spilled slot that the object reloads per
+iteration.  Do not confuse it with lever 31's original direction: there the
+LOCAL is extra, here the local is right but its SCOPE is wrong.
+
+### Lever 8/41 refinement: the truncated countdown is a FORM, not just a TYPE
+
+Levers 8 and 41 say a value's or a counter's declared width is forced by the
+object's own extend/compare.  For a loop counter that is only half of it.  GCC
+3.4.2 emits the truncating countdown
+
+    lea -0x1(%r32),%r32 | inc %r16 | jne <T>          (or movzwl/movswl between)
+
+ONLY for a countdown written as
+
+    T x = n;
+    while (x--) { ... }
+
+with `T` 16-bit.  Measured:
+
+| source | emitted |
+|---|---|
+| `short i; for (i = n; i != 0; i--)` | `test`/`jne`, no truncating extend |
+| `int i; for (i = 0; i < n; i++)` | `inc %r32; cmp %r32,%r32` |
+| `unsigned short i; i = n; while (i--)` | the object's `lea; movzwl; inc %r16; jne` |
+
+So when the object shows the countdown, the source is the `while (x--)` form,
+and the object's extend names the signedness (`movzwl` + `jne` = unsigned,
+`movswl` = signed).  Recovered three symbols from one screen
+(`scratch/cd/loop16.py`, 33 rows) in F12199.
+
+### Lever 50. The prologue SAVE-FORM is a step function of `nregs` -- read the predicate, it is not a spelling
+
+Under `-maccumulate-outgoing-args` the i386 prologue saves callee-saved
+registers one of two ways, and the choice is NOT stylistic:
+
+    PUSH    : push %ebp; push %edi; push %esi; push %ebx; sub $0xN,%esp
+    MOVSAVE : sub $0xN,%esp; mov %edi,K(%esp); mov %esi,K(%esp); mov %ebx,K(%esp)
+
+Screen it with `python3 scratch/cd/prologue.py <census.json>` (90 mismatches in
+this tree, 10 of them reference-MOVSAVE / ours-PUSH -- the corpus catalogue's
+most repeated unresolved idiom, 30-50 bodies).
+
+The predicate, verbatim from the extracted GCC 3.4.2 tree:
+
+    config/i386/i386.c:5014-5018
+      if (TARGET_PROLOGUE_USING_MOVE && cfun->machine->use_fast_prologue_epilogue)
+        frame->save_regs_using_mov = true; else frame->save_regs_using_mov = false;
+
+    config/i386/i386.c:4988-5013     -- use_fast_prologue_epilogue
+      count = frame->nregs; if (count) count = (count - 1) * FAST_PROLOGUE_INSN_COUNT;
+      false when function_frequency < NORMAL, else !expensive_function_p(count);
+      FAST_PROLOGUE_INSN_COUNT = 20 (i386.c:531)
+
+    predict.c:1071-1102              -- expensive_function_p
+      limit = ENTRY_BLOCK_PTR->frequency * threshold;
+      for each bb, for each active_insn_p insn:  sum += bb->frequency;
+      return sum > limit;
+
+The period line has no profile flags, so `function_frequency` stays `NORMAL`
+(`predict.c:1213-1214`, `function.c:6429`) and the whole thing collapses to
+
+    MOVSAVE  <=>  SUM_b (active_insns_b * freq_b)  <=  ENTRY_freq * (nregs-1) * 20
+
+Two consequences worth holding:
+
+1. **`-mtune=i686` does NOT disable the mov-save form.**  `TARGET_PROLOGUE_USING_MOVE
+   = x86_prologue_using_move & TUNEMASK` (`i386.c:508`), the set is
+   `m_ATHLON_K8|m_PENT4|m_PPRO`, and i686 maps to `PROCESSOR_PENTIUMPRO`
+   (`i386.c:1101`) -- so it is TRUE.  `-maccumulate-outgoing-args` only feeds
+   `to_allocate` and cannot switch the form.
+2. **It is a STEP FUNCTION of `nregs`** (2 -> threshold 20, 3 -> 40, 4 -> 60)
+   and a knife-edge on the weighted instruction sum.  `nregs` moves only
+   through whole-TU register allocation -- i.e. a value whose LIVE RANGE SPANS
+   A CALL.  So the impulse is "keep one more value live across a call" (or, in
+   the other direction, stop caching a value the object re-derives), and the
+   inert directions are every spelling that does not change a live range.
+
+Recovered `enterFPE` this way: the reference keeps its return value in `%edi`
+across the body (one common exit, `int ret = 0; if (state != S) { body }
+return ret;`), `nregs` 2 -> 3, delta -28 -> 0, prologue reproduced
+byte-for-byte.
+
+**CAUTION -- the neighbour trap.**  The same edit on the twin `enterRRN` is
+also a win for that symbol but flips the EXACT neighbour
+`enterChannelVerification` to NONMATCH through the TU's allocation state.  Only
+`enterFPE` is retained.  **After any single-function edit, re-grade EVERY
+symbol of the TU** -- a delegated "no neighbour regression" is a claim, not a
+measurement.
+
+### Lever 31 addendum: the object CACHES a field read our source re-reads
+
+The mirror of lever 31's original direction.  When the object loads a field ONCE
+before a region and keeps it in a register across it, while our source names the
+field inside the region, the fix is a local at the object's load point.
+
+`enterFPE`/`enterRRN` (F12201): the reference reads `mmxMode` (offset 0xb0)
+immediately after `state = ...` and caches it across two clearing loops
+(`mov 0xb0(%esi),%ebx` before the German-PBX test, used after it), reloading it
+only for the later restore arm because the setters intervene.  Our source named
+`mmxMode` inside the test.  `int mmx = mmxMode;` before the test, `mmx` inside
+it, `mmxMode` still read in the restore arm: run 38 -> 40 on `enterFPE` and
+23 -> 40 on `enterRRN`.
+
+**CAUTION -- fan-out by pattern is not free.**  The same pattern appears a third
+time (`enterPhase4`, line 1036) and hoisting THERE regressed that function's run
+19 -> 14.  Each site needs its own native witness: read the object at that site,
+do not extend a fix because the source text matches.
+
+### Lever 31 addendum: the SAME file can carry the defect twice -- sweep a file, not a function
+
+F12158 removed `struct v8_tx_sequence *seq = &v->seq[2];` and
+`struct v8_cm *cm = v->cm;` from `evaluateRxJMSequence` (src/v8/V8.c) and gained
+a large delta.  The SAME pair of cached locals sat uncorrected at the top of
+`initTxSequence` in the same file; removing them (F12202) took it from delta
+-120 to **-14** -- 106 bytes and 22 instructions, the largest single recovery of
+the session.
+
+So after fixing this defect in one function, grep the whole FILE for a cached
+pointer whose target the object re-reads:
+
+    grep -nE "^\s*struct [a-z_]+ \*[a-z_]+ = (v|s|st|ctx|modem|obj)->" src/<file>.c
+
+and check each one against the object (does the reference re-load the root
+before each use?).  A file-level sweep is cheap; a function-level one leaves the
+twins behind.
+
+### Lever 50 addendum: the threshold has TWO sides -- when nregs is equal, the weighted SUM decides
+
+Lever 50's predicate is
+
+    MOVSAVE  <=>  SUM_b (active_insns_b * freq_b)  <=  ENTRY_freq * (nregs-1) * 20
+
+The first three rows recovered with it moved `nregs` (a live range spanning a
+call).  `dp_wrapper_create` shows the OTHER side: `nregs` was already 4 on both
+sides, and the form still differed because our build's weighted sum was
+**606898 against a 600000 limit** -- 1 % over.  Two separate `if` guards each
+materialised a shared return value before their branch; the reference had one
+combined guard and materialised the value once.  Folding the guards dropped the
+sum under the limit, flipped PUSH -> MOVSAVE, and made the object
+**byte-identical** (694 = 694 bytes, 178/178 instructions, symdiff 0).
+
+So when you have a reference-MOVSAVE / ours-PUSH row and `nregs` is EQUAL on
+both sides, do not stop: count the weighted instruction mix.  The impulse is to
+make the HOT blocks hold FEWER instructions -- fold duplicate guards, share a
+tail, materialise a constant once instead of twice.  It is the counter-intuitive
+direction (making the code simpler in a hot block moves the save form), and it
+is measurable: `scratch/cd/prologue.py` classifies the form, and the agent
+recipe is to compute the sum before and after the candidate edit.
+
 ### Lever 32. A hand-written mask (`x & -(cond)`) does NOT if-convert — only a conditional ASSIGNMENT does
 
 The corollary of lever 28, and the reason a `?:`-free source can still miss the
@@ -4738,6 +4900,35 @@ The same shape reads the other way too: if the object has `fchs`, the source is
 the statement; if it has `xor $0x80000000`, the source is the ternary.  This is
 lever 36's rule (an if/else over two VALUES is two conditional expressions)
 applied to a float negation, where the two arms differ only in sign.
+
+### Lever 49. A FULLY-unrolled constant-trip loop in the object means the SOURCE was unrolled
+
+Complete unrolling of a loop with a constant trip count is done only by
+`decide_unroll_stupid` (loop-unroll.c:1160), gated at `loop-unroll.c:1164`:
+
+    if (!(flags & UAP_UNROLL_ALL))
+      return;
+
+and `UAP_UNROLL_ALL` is set only by `-funroll-all-loops` (toplev.c:3086).  `-O3`
+sets only `flag_unroll_loops` -> `UAP_UNROLL` (toplev.c:3083), which opens just
+`decide_unroll_constant_iterations` (loop-unroll.c:458) -- and that produces a
+PARTIAL unroll with a rolled remainder, never a flat sequence.  The old unroller
+is inert at `-O3`: `do_unroll = LOOP_AUTO_UNROLL` (toplev.c:3027) and its
+predicate at `loop.c:5380-5384` fails because `unrolled_insn_copies =
+(insn_count - 2) * n_iterations - 1` (loop.c:5354-5364) far exceeds
+`insn_count`.
+
+**So when the object shows 24 stores at 24 constant displacements, no loop
+counter and no back-edge, no loop spelling in your source can reach it: the
+original source was written out.**  Unroll it by hand (behaviour-preserving),
+grouped however the object's groups fall.  Measured on `V92Precoder::reset`
+(F12195): delta -109 -> **0**, instructions 34 -> 67 (the object's), symdiff
+63 -> **0**.
+
+The tell is the absence of the counter: if the object has no back-edge and no
+comparison, the loop is not a loop.  A `-funroll-all-loops` diagnostic build
+unrolls but to a different order, which is how you tell a compiler unroll from a
+hand-written one.
 
 ### Trade two neighbours, and RECORD the loss: the codegen ratchet needs a review
 

@@ -915,9 +915,9 @@ setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
 #define SPECTRAL_FRAC_SCALE	1.0e6
 
 static int
-sign_of(long double v)
+sign_of(float v)
 {
-	return (0.0L < v) ? '+' : '-';
+	return (0.0f < v) ? '+' : '-';
 }
 
 static int

@@ -75,7 +75,7 @@ obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 # every build, so its own mtime is always fresher than any header and the test
 # would never fire.  An object is reusable only if it is newer than BOTH its
 # source and this.
-NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -1)
+NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -n 1)
 
 # Several transcript fixtures include another test/unit .cpp. Its mtime is
 # not covered by NEWEST_HDR. Keep compiler-produced dependencies for fixtures
@@ -372,7 +372,7 @@ for t in $TESTS; do
 		;;
 	*) echo "unknown fixture context: $LD_CONTEXT" >&2; exit 1 ;;
 	esac
-	LINK_NEWEST=$(ls -t $LINK_OBJS "$LINK_REF" 2>/dev/null | head -1)
+	LINK_NEWEST=$(ls -t $LINK_OBJS "$LINK_REF" 2>/dev/null | head -n 1)
 	{
 		printf '%s\n' "$LINK_MODE" "$LINK_OBJS" "$LINK_REF" "$EXTRA_LD"
 		cksum tools/toolchain/period_inner.sh

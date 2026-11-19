@@ -774,6 +774,11 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	cfg.keep_on_gap = c->continuous;
 	cfg.scales = c->sel_scales;
 
+	if (c->use_allpass) {
+		cfg = toneiir_configuration_allpass;
+		cfg.interval = c->buflen;
+	}
+
 	c->filter = toneiir_create(c->filter, &cfg);
 
 	c->n = 0;

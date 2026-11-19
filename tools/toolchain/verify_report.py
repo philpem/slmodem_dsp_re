@@ -171,9 +171,23 @@ def main(argv):
         if m:
             got["candidate_bytes"] = int(m.group(1))
 
+        got["md5_source"] = None
+        if c.get("source"):
+            sp = os.path.join(REPO, c["source"])
+            if os.path.exists(sp):
+                got["md5_source"] = hashlib.md5(open(sp, "rb").read()).hexdigest()
+
         checks = [(k, c.get(k), got.get(k)) for k in
-                  ("md5", "delta", "candidate_bytes", "insns", "run",
+                  ("delta", "candidate_bytes", "insns", "run",
                    "symdiff", "setcc_ref", "setcc_our") if c.get(k) is not None]
+        # md5 may be given as the OBJECT md5 (preferred) or the SOURCE md5 --
+        # both are accepted, since either pins the tree under test.  A false
+        # FAIL here would erode the verifier's signal.
+        md5_claim = c.get("md5")
+        if md5_claim is not None and md5_claim not in (got.get("md5"), got.get("md5_source")):
+            checks.append(("md5", md5_claim,
+                           "neither the object md5 %s nor the source md5 %s"
+                           % (str(got.get("md5"))[:12], str(got.get("md5_source"))[:12])))
         bad_here = [f"{k}: claimed {a!r}, actual {b!r}" for k, a, b in checks if a != b]
         verdict = "PASS" if not bad_here else "FAIL " + "; ".join(bad_here)
         if bad_here:

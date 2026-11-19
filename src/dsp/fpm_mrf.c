@@ -143,9 +143,14 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 			break;
 		}
 
-		for (k = 0; k < need; k++) {
-			widx = advance(widx, hlen);
-			history[widx] = *in++;
+		/* The input fill is a 16-bit countdown, not an int count-up. */
+		{
+			short ki = need;
+
+			while (ki--) {
+				widx = advance(widx, hlen);
+				history[widx] = *in++;
+			}
 		}
 		remaining -= need;
 

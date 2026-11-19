@@ -28,4 +28,4 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # A banner so a run says which compiler produced its verdicts.
-RUN gcc --version | head -1
+RUN gcc --version | head -n 1

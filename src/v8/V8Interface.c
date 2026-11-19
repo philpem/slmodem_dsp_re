@@ -663,11 +663,12 @@ V8GetMessage(struct v8 *v, unsigned char *out, int *count)
 {
 	const struct v8_tx_sequence *seq = rx_sequence(v);
 	int n = seq->wordidx;
-	int rc = 0;
+	int rc = V8_GET_EMPTY;
 	int i;
 
 	if (n <= 0)
-		return V8_GET_EMPTY;
+		return rc;
+	rc = 0;
 
 	/*
 	 * Too long for the caller's buffer: fill what fits and hand back the

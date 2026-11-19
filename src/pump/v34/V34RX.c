@@ -853,50 +853,54 @@ modem_serrint(void *objp)
 	if ((short)rx->flags < 0) {
 		wr[0] = sample;
 		wr[1] = 0;
-	} else if (rx->flags & V34_RX_FLAG_FIR) {
-		/*
-		 * The 60-tap filter.  Its delay line is echo1's fractional
-		 * coefficient array -- one region, now three readings.  The
-		 * history is shifted UP as it is read down, so the newest
-		 * sample goes in at [0] before the loop and each tap moves
-		 * one place as its product is accumulated.
-		 */
-		short *dl = obj->echo1.coeff_frac;
-		const short *c = rx->fir_coeff;
-		int sum = 0x8000;
-		short i;
-		short *p = &dl[0x3b];
-		short *q = &dl[0x3c];
-		const short *cp = c;
-
-		dl[0] = sample;
-		for (i = 0; i < 60; i++) {
-			short v = *p--;
-
-			*q-- = v;
-			sum += (int)*cp++ * v;
-		}
-		/*
-		 * And the filtered value REPLACES the residual from here
-		 * on: the second history ring, the energy estimate and both
-		 * error terms all see this rather than what came in.  The
-		 * other two paths leave `out` as the raw sample.  Missing
-		 * that is what made this mode, and only this mode, diverge.
-		 *
-		 * It is not truncated to 16 bits either -- the register is
-		 * used at full width downstream and only the queue store
-		 * narrows it.
-		 */
-		out = sum >> 16;
-		wr[0] = (short)out;
-		wr[1] = 0;
 	} else {
-		int re = 0, im = 0;
+		if (rx->flags & V34_RX_FLAG_FIR) {
+			/*
+			 * The 60-tap filter.  Its delay line is echo1's fractional
+			 * coefficient array -- one region, now three readings.  The
+			 * history is shifted UP as it is read down, so the newest
+			 * sample goes in at [0] before the loop and each tap moves
+			 * one place as its product is accumulated.
+			 */
+			short *dl = obj->echo1.coeff_frac;
+			const short *c = rx->fir_coeff;
+			int sum = 0x8000;
+			short i;
+			short *p = &dl[0x3b];
+			short *q = &dl[0x3c];
+			const short *cp = c;
 
-		V34HilbertFilter((short *)((char *)obj + 0xa1b8), sample,
-				 &re, &im);
-		wr[0] = (short)((re + 0x2000) >> 14);
-		wr[1] = (short)((im + 0x2000) >> 14);
+			dl[0] = sample;
+			for (i = 0; i < 60; i++) {
+				short v = *p--;
+
+				*q-- = v;
+				sum += (int)*cp++ * v;
+			}
+			/*
+			 * And the filtered value REPLACES the residual from here
+			 * on: the second history ring, the energy estimate and both
+			 * error terms all see this rather than what came in.  The
+			 * other two paths leave `out` as the raw sample.  Missing
+			 * that is what made this mode, and only this mode, diverge.
+			 *
+			 * It is not truncated to 16 bits either -- the register is
+			 * used at full width downstream and only the queue store
+			 * narrows it.
+			 */
+				out = sum >> 16;
+		}
+		if (rx->flags & V34_RX_FLAG_FIR) {
+			wr[0] = (short)out;
+			wr[1] = 0;
+		} else {
+			int re = 0, im = 0;
+
+			V34HilbertFilter((short *)((char *)obj + 0xa1b8), sample,
+					 &re, &im);
+			wr[0] = (short)((re + 0x2000) >> 14);
+			wr[1] = (short)((im + 0x2000) >> 14);
+		}
 	}
 
 	rxq->wr = q_next(rxq, (int *)wr + 1, V34_RXQ_END);

@@ -78,7 +78,8 @@ enum V92EchoCancellerState {
 
 /**
  * @brief Print the filter's tap bank to the debug log, one `%c%d.%06d` line
- *        per coefficient. Unreferenced anywhere in the object.
+ *        per coefficient. Called once, from setState, where GCC 3.4.2 inlines
+ *        it -- so the object has no out-of-line call to this entry.
  * @param coeffs  Coefficient array.
  * @param len     Number of coefficients.
  */

@@ -252,11 +252,9 @@ int
 V8agc(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
-	const short *taps = v->side != 0 ? ANSWER_Entrance_Filter
-					 : CALLER_Entrance_Filter;
 	int energy = 0;
 	int gain = 0;
-	int i;
+	short i;
 
 	v8_rxreadqueue(v);
 	r->buf = v->rx_stage + V8_QUEUE_BLOCK;
@@ -264,7 +262,13 @@ V8agc(struct v8 *v)
 	/* The band filter, a sample at a time, shifting its own line. */
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
 		int acc = 0;
-		int j;
+		short j;
+		/* The taps for this block: the object re-selects them here,
+		 * spilling the choice across the band filter, rather than
+		 * hoisting one pointer for the whole function.  F12196. */
+		const short *taps = v->side != 0 ? ANSWER_Entrance_Filter
+					 : CALLER_Entrance_Filter;
+
 
 		v->agc_line[0] = v->rx_stage[i];
 		for (j = 0; j < V8_AGC_TAPS; j++)
@@ -294,9 +298,9 @@ V8agc(struct v8 *v)
 
 	if (energy != 0) {
 		unsigned acc = (unsigned)energy;
-		int shift = 0;
-		int e;
-		int idx;
+		short shift = 0;
+		short e;
+		short idx;
 
 		/* Normalise, remembering by how much. */
 		while (acc <= 0x1fffffff) {
@@ -314,6 +318,8 @@ V8agc(struct v8 *v)
 		gain = (unsigned short)sqrt_table[(unsigned short)idx]
 		       >> (shift >> 1);
 	}
+
+	int above = (short)gain > V8_AGC_FLOOR;
 
 	/*
 	 * Apply the gain, saturating rather than wrapping.  A run of
@@ -349,7 +355,7 @@ V8agc(struct v8 *v)
 		r->clip_count = 0;
 	}
 
-	if ((short)gain <= V8_AGC_FLOOR)
+	if (!above)
 		return 0;
 
 	/* Adapt, from the energy of the four samples just scaled. */

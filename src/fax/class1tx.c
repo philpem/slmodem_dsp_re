@@ -359,8 +359,8 @@ struct v29tx_control_req V29TX_CTL = {
 void
 _init_transmitter(struct fax_class1 *ctx, int rate_code)
 {
-	int mod = 0;
-	int rate = 0;
+	int mod;
+	int rate;
 	int is_v17_short = 0;
 	struct faxvmi_cfg *cfg;
 
@@ -372,10 +372,10 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 
 	if (rate_code == 0x4a || rate_code == 0x62 || rate_code == 0x7a ||
 	    rate_code == 0x92) {
-		is_v17_short = 1;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"Short train in V.17 mode is selected\n");
+		is_v17_short = 1;
 	}
 
 	/* `_set_modem_rate`'s own shape (class1.c), inlined, extended with
@@ -457,12 +457,13 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 	}
 
 	if (is_v17_short) {
-		struct faxvmi_ctl ctl = FAXVMI_CTL;
+		struct faxvmi_ctl ctl;
 
 		cfg = ctx->modem_vmi;
 
 		if (cfg->slot == VMI_SLOT_V17TX) {
 			struct v17tx_control_req req = V17TX_CTL;
+			ctl = FAXVMI_CTL;
 
 			req.bit_rate = (short)rate;
 			req.ctl1 |= V17TXCTL_CTL1_BIT1;
@@ -470,6 +471,7 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 			FAXVMI_control(ctx->vmi_b, &ctl);
 		} else if (cfg->slot == VMI_SLOT_V29TX) {
 			struct v29tx_control_req req = V29TX_CTL;
+			ctl = FAXVMI_CTL;
 
 			req.bit_rate = (short)rate;
 			req.ctl1 |= V29TXCTL_CTL1_BIT1;
@@ -477,6 +479,7 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 			FAXVMI_control(ctx->vmi_b, &ctl);
 		} else {
 			struct v27tx_ctl req = V27TX_CTL;
+			ctl = FAXVMI_CTL;
 
 			req.bit_rate = (short)rate;
 			req.flags |= V27TXCTL_FLAGS_REINIT;

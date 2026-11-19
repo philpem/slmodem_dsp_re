@@ -1513,18 +1513,20 @@ int
 V90Equalizer::enterFPE()
 {
 	unsigned int i, n;
+	int ret = 0;
 
-	if (state == V90EQU_STATE_FPE)
-		return 0;
+	if (state != V90EQU_STATE_FPE) {
 
 	edprintf("V90Equalizer: enter FPE state\r\n");
 	state = V90EQU_STATE_FPE;
+
+	int mmx = mmxMode;
 
 	if (spectralVerifier->word_28 == 2) {
 		for (i = 0; i < dfeLength; i++)
 			dfeCoefs[i] = 0;
 
-		if (mmxMode != 0) {
+		if (mmx != 0) {
 			n = dfeLength + 8;
 			for (i = 0; i < n; i++) {
 				dfeMmxCoefs[i] = 0;
@@ -1547,10 +1549,12 @@ V90Equalizer::enterFPE()
 		edprintf("V90Equalizer: restoring Equalizer to float...\r\n");
 		restoreEqualizerToFloat();
 		mmxMode = 0;
-		return 1;
+		ret = 1;
 	}
 
-	return 0;
+	}
+
+	return ret;
 }
 
 /*
@@ -1575,7 +1579,8 @@ V90Equalizer::enterFPE()
  *
  * `mmxMode` IS READ ONCE FOR THE ARRAY CLEAR AND AGAIN FOR THE RESTORE.  The
  * first read is cached across the two clearing loops (`mov 0xb0(%esi),%ebx`
- * before the German-PBX test, used after it); the second is reloaded because
+ * before the German-PBX test, used after it -- the local `mmx` below; finding F12201);
+ * the second is reloaded because
  * `setDfeBeta` and `setLinearEquBeta` intervene.  Neither of them writes
  * +0xb0, so the two agree -- it is one field read twice in the source.
  */
@@ -1583,18 +1588,20 @@ int
 V90Equalizer::enterRRN()
 {
 	unsigned int i, n;
+	int ret = 0;
 
-	if (state == V90EQU_STATE_RRN)
-		return 0;
+	if (state != V90EQU_STATE_RRN) {
 
 	edprintf("V90Equalizer: enter RRN state\r\n");
 	state = V90EQU_STATE_RRN;
+
+	int mmx = mmxMode;
 
 	if (spectralVerifier->word_28 == 2) {
 		for (i = 0; i < dfeLength; i++)
 			dfeCoefs[i] = 0;
 
-		if (mmxMode != 0) {
+		if (mmx != 0) {
 			n = dfeLength + 8;
 			for (i = 0; i < n; i++) {
 				dfeMmxCoefs[i] = 0;
@@ -1617,10 +1624,12 @@ V90Equalizer::enterRRN()
 		edprintf("V90Equalizer: restoring Equalizer to float...\r\n");
 		restoreEqualizerToFloat();
 		mmxMode = 0;
-		return 1;
+		ret = 1;
 	}
 
-	return 0;
+	}
+
+	return ret;
 }
 
 /*

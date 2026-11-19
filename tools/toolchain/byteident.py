@@ -377,14 +377,14 @@ RELOC = re.compile(r"^\s*([0-9a-f]+):\s+(R_386_\w+)\s+(\S+)")
 
 
 def sizes(path):
-    out = subprocess.run(["nm", "--size-sort", "-S", path],
-                         capture_output=True, text=True).stdout
-    d = {}
-    for line in out.splitlines():
-        p = line.split()
-        if len(p) == 4 and p[2] in "TtWw":
-            d[p[3]] = int(p[1], 16)
-    return d
+    """Symbol -> size for `path`.
+
+    Batched: see `_nm_sizes`, which serves every path asked for in ONE `nm`
+    spawn.  A `--why` lookup used to spawn `nm` once per object in TC_OUT
+    (300 spawns, 13 s); it now spawns once.  Output is unchanged -- the same
+    `nm --size-sort -S` text, the same filter, the same fallback.
+    """
+    return _nm_sizes([path])[path]
 
 
 @functools.lru_cache(maxsize=None)
@@ -2284,7 +2284,9 @@ def main():
     if a.why:
         import fidelity
         k = a.why
-        definitions = [(obj, sizes(obj)) for obj in sorted(glob.glob(os.path.join(OURS, "*.o")))]
+        _objects = sorted(glob.glob(os.path.join(OURS, "*.o")))
+        _nm_sizes(_objects)
+        definitions = [(obj, sizes(obj)) for obj in _objects]
         definitions = [(obj, declared[k]) for obj, declared in definitions if k in declared]
         blob = sizes(BLOB)
         if not definitions:
@@ -2346,7 +2348,9 @@ def main():
     #
     ours = {}
     allobjs = {}
-    for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
+    _objects = sorted(glob.glob(os.path.join(OURS, "*.o")))
+    _nm_sizes(_objects)
+    for o in _objects:
         for k, v in sizes(o).items():
             ours.setdefault(k, o)
             allobjs.setdefault(k, []).append(o)
@@ -2607,6 +2611,59 @@ def main():
     fidelity.print_rows(functions, a.near or a.limit)
 
     return 0
+
+
+
+# ---------------------------------------------------------------------------
+# Batched symbol sizes.  `sizes()` used to spawn `nm` once per object, which
+# made a single `--why <symbol>` lookup pay for all ~300 objects in TC_OUT
+# (13 s of a 13.5 s run, measured F12197).  One `nm` invocation serves them
+# all; the per-file fallback keeps the old behaviour (and the old failure
+# mode) for any path the batched parse did not yield.
+# ---------------------------------------------------------------------------
+
+_SIZES = {}
+
+
+def _nm_rows(text, key, into):
+    """Parse `nm --size-sort -S` text into into[key][name] = size."""
+    d = into.setdefault(key, {})
+    for line in text.splitlines():
+        p = line.split()
+        if len(p) == 4 and p[2] in "TtWw":
+            d[p[3]] = int(p[1], 16)
+
+
+def _nm_sizes(paths):
+    """{path: {name: size}} for `paths`, memoised, in one `nm` spawn."""
+    todo = [p for p in paths if p not in _SIZES]
+    if todo:
+        text = subprocess.run(["nm", "--size-sort", "-S"] + todo,
+                              capture_output=True, text=True).stdout
+        if len(todo) == 1:
+            # nm prints no header for a single file.
+            _nm_rows(text, todo[0], _SIZES)
+        else:
+            cur = None
+            for line in text.splitlines():
+                s = line.strip()
+                if not s:
+                    continue
+                fields = s.split()
+                if len(fields) == 1 and s.endswith(":"):
+                    cur = s[:-1]
+                    continue
+                if len(fields) == 4 and fields[2] in "TtWw" and cur is not None:
+                    _SIZES.setdefault(cur, {})[fields[3]] = int(fields[1], 16)
+    # Any path the batch did not yield is read ALONE, exactly as before: a
+    # failed batch must never become a silent zero.
+    for p in paths:
+        if p not in _SIZES:
+            text = subprocess.run(["nm", "--size-sort", "-S", p],
+                                  capture_output=True, text=True).stdout
+            _nm_rows(text, p, _SIZES)
+    return {p: _SIZES[p] for p in paths}
+
 
 
 if __name__ == "__main__":

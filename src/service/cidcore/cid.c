@@ -415,6 +415,16 @@ cid_progress(struct cid_modem *ctx, short *in, int what, short *count)
 		}
 
 		ctx->samples_fill = 0;
+
+		/*
+		 * The object refills the block a second time here, at the
+		 * bottom of the turn, so the top of the next turn finds it
+		 * already topped up: the tail copy re-derives `samples_fill`
+		 * from memory each iteration and publishes it back, while the
+		 * head copy keeps it in a register.
+		 */
+		while (i < n && ctx->samples_fill < len)
+			ctx->samples[ctx->samples_fill++] = in[i++];
 	}
 }
 
