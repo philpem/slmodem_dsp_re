@@ -738,9 +738,10 @@ v34tx1_moh_silence(void *objp)
 			o->moh_org, o->moh_message);
 
 	/* 0x66dac */
-	hs_set_txstate(o,
-		    (o->moh_org == 1 || o->moh_message == 1)
-		    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);
+	if (o->moh_org == 1 || o->moh_message == 1)
+		hs_set_txstate(o, V34HS_MOH_FRR);
+	else
+		hs_set_txstate(o, V34HS_MOH_ON_HOLD);
 
 	o->vect_idx = 0;				/* 0x66dec */
 	return V34TX1_LOOP;				/* 0x63948 */
