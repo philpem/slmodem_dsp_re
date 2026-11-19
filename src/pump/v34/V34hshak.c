@@ -1535,9 +1535,10 @@ v34handshakinit(void *objp, int mode)
 		 * for, the other way round from `v34modeminit`'s -- which is
 		 * consistent, since the two ends listen for each other.
 		 */
-		detectorinit(&obj->detector,
-			     (obj->role == 0x65) ? c2400_ : c1200_,
-			     0, 0x64, 0x32, 0x800, 0);
+		if (obj->role == 0x65)
+			detectorinit(&obj->detector, c2400_, 0, 0x64, 0x32, 0x800, 0);
+		else
+			detectorinit(&obj->detector, c1200_, 0, 0x64, 0x32, 0x800, 0);
 		obj->detector.armed = 1;
 		obj->short_358a = 0;
 		break;
