@@ -80,12 +80,23 @@ GetFP_Value(short a, short b)
 	 * the xor/sub left in the preheader.  `-abs((int)b)` alone expands with
 	 * the whole magnitude in one block, so the negation is spelled as the
 	 * branchless `sb - (sb ^ b)` over this hoisted mask.
+	 *
+	 * `bi` widens the parameter once.  fold_binary canonicalises a
+	 * commutative xor through tree_swap_operands_p (fold-const.c), whose
+	 * STRIP_SIGN_NOPS (tree.h) only strips a conversion when the source and
+	 * destination modes match.  A short-to-int conversion changes HImode to
+	 * SImode, so the second operand stays a NOP_EXPR rather than a DECL and
+	 * the DECL_P(arg0) swap rule fires: `sb ^ (int)b` is rewritten to
+	 * `(int)b ^ sb`.  The object's xor keeps the sign mask in the
+	 * destination (`xor %edi,%eax` with %ecx holding sb).  A plain int local
+	 * leaves both operands as declarations, so the source order survives.
 	 */
 	int sb = (int)b >> 31;
+	int bi = (int)b;
 
 	/* The original counts subtraction steps in a wrapping short. */
 	if (remaining > 0) {
-		int step = sb - (sb ^ (int)b);
+		int step = sb - (sb ^ bi);
 
 		do {
 			remaining += step;
