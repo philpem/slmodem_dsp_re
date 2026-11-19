@@ -148315,3 +148315,95 @@ derive.
 **Typed caveat:** `missrank`'s block can be a `replace` (a substitution) as well
 as a `delete` (a true absence); the two want different work.  Separating them is
 the next refinement.
+
+## F12205. The short tier is not all lever 2: a mnemonic screen, and the reference inlines libm
+
+F12204's ranked queue is sorted by the size of the largest reference-only
+instruction block, and F12204 already warned that missrank's block can be a
+`replace` (substitution) rather than a `delete` (true absence).  This finding
+measures what the queue's heads actually turn out to be, and adds a screen that
+separates the two.
+
+**A mnemonic-multiset screen (`scratch/cd/mnemcls.py`).**  Run from the repo
+root against a census:
+
+    python3 scratch/cd/mnemcls.py <census.json> [--top N] [--long]
+
+For each non-EXACT row it takes the mnemonic multiset of the reference and of
+`build/tc_out/<object>`, normalising away everything that is a register or a
+width (x87 pop/size forms collapse -- `faddp`/`fadds`/`fadd` -> FADD, `flds`
+and `fld` -> FLD, `fcomp`/`fucom`/`fcomi` -> FCOM; `incb`/`incl` -> INC;
+`shll` -> SHL; `movzbl`/`mov` -> COPY) and folding the inverted condition-sense
+pairs (`je`/`jne` -> one token, and so on).  It then reports, per row, whether
+the difference is only copies/stack traffic or names a non-copy operation.
+
+Result on `census_f12203.json`, the 292 rows that are SHORT (`byte_delta < 0`,
+ours short of reference):
+
+    34 rows   copy/stack traffic only        -> allocation, NOT lever 2
+    10 rows   identical mnemonic multiset     -> allocation, NOT lever 2
+    248 rows  carry a non-copy operation diff -> mixed; needs a per-row read
+
+So ~15 % of the short tier is decoded as allocation by the screen alone and
+should leave the lever-2 queue.  The remaining 248 do NOT cleanly mean "missing
+operation": the dominant residue is branch/loop STRUCTURE -- a different count
+of conditional branches and jumps (loop rotation, unrolling, a `break` becoming
+a jump) -- which the mnemonic multiset cannot tell from a missing body.  The
+screen is a first pass, not a verdict.
+
+**The queue's top head, `v34handshakinit`, is allocation-bound and its premise
+is false.**  F12204 reported its missing block as a `StateName[]` debug print
+absent from our build (`movswl 0xaa78(%r32),%r32` then
+`mov StateName(,%r32,4),%r32`).  Both objects in fact carry 13
+`dsplibs_debug_printf` calls with identical callee sets.  The trace prints
+(`V34HSHAKE: rxstate/microstate/txstate %s=>%s(...)`) come from the
+`hs_set_rxstate`/`hs_set_txstate`/`hs_set_microstate` `static inline` helpers in
+`include/dsplib/v34hstx1_arms.h`, which inline the `StateName[...]` lookup; the
+table reads differ only in their .data base (`mov 0x6c00(,%eax,4)` vs
+`mov 0x220(,%edx,4)`).  The real difference is a BASE-REGISTER FACTORIZATION:
+the reference addresses `struct v34_tx` fields as `disp(%esi)` with
+`%esi = obj+0x221c` and receiver fields as `disp(%edi)` with `%edi = obj+0x264`,
+where our build folds those to `disp(%ebx)` on `%ebx = obj`.  The prologues
+otherwise agree.  Variants that route the same accesses through the `t->`/`rx->`
+locals moved the canonical symdiff (28 -> 19) without changing the grade; a
+typed rewrite of the MOH pointer store (`obj->paa70 = &obj->msgrec[1]` in place
+of the raw `*(short **)(m + 0xaa70) = ...`) compiled BYTE-IDENTICAL to the
+baseline, so the pointer-CSE hypothesis is false.  F179/F180 show the row was
+already written, not "started-not-finished".
+
+**`porcessSecondStudy` (the other named target) is x87/register-pressure
+allocation**, not the "real body difference" F12204 hoped.  A multiset diff
+proves the differing instructions are the SAME operations at different frame
+offsets (ref `0x44`/`0x4a`/`0x4b` vs ours `0x47`/`0x3f`/`0x2f`) plus the
+reference keeping its loop counters in memory (`incb 0x4b(%esp)`,
+`cmpb $0x5,...`) where ours keeps them in registers, and a deeper x87 stack.  The
+constants load identically (NaN `0x7fc00000`, `32256.0f` `0x46fc0000`, `2.0f`).
+
+**The reference INLINES libm; our C profile does not -- but the scope is two
+rows.**  `MTK_phasor` (`src/service/PHASOR.c:94`) writes `fmodf(phase, 2pi)`;
+the reference expands it to GCC's x87 `fmodsf3` loop (`fprem` / `fnstsw` /
+`sahf` / `jp`, then a `fld %st(0)`/`fstp %st(0)` duplicate of the remainder
+across the `if (x < 0)`), while our build emits `call fmodf` (an `R_386_PC32`
+to libm).  `beepgen_sample` is the same for `sin`/`cos`: the reference has
+`fsin`/`fcos`, ours calls both.  The reference blob defines its own `pow` and
+has no undefined `cos`/`sin`/`fmodf`.  Our `TC_FLAGS` (`tools/toolchain/period.mk`)
+is a C profile with no fast-math; `TC_CXXONLY` carries `-fno-math-errno
+-ffast-math` for the C++ TUs only.  Tested through `variant_run.py`: for
+`MTK_phasor` no single flag inlines the `fprem` loop EXCEPT the full
+`-ffast-math`, and even then the residual is -7 (it drops the
+`fstp`/`fld` duplicate the reference keeps, so it does not match);
+`-fno-unsafe-math-optimizations` removes the inline again, so unsafe-math is
+necessary but not sufficient.  `beepgen_sample` improves (canonical symdiff
+48 -> 27) under fast-math, still not EXACT.  A scan of all 610 non-EXACT rows
+finds EXACTLY these two with a missing x87 transcendental (`fprem`; `fsin` +
+`fcos`) and none missing `fyl2x`/`f2xm1`/`fpatan`/`fscale`.  So a global C
+fast-math flag would move two rows part-way and recover neither -- not
+justified.  Typed negative with a named mechanism and its scope.
+
+**Apparatus consequence.**  `missrank` overstates missing code and
+`byteident`'s "lever 2" label over-attributes: the two queue heads and the small
+"ours 4-6 short" tier are register allocation (the reference carries one extra
+stack spill, visible as a four-byte-larger frame and a store/reload pair that our
+build avoids).  Use `mnemcls.py` first to drop the copy/stack-only rows, then
+read the remainder; a `delete` in missrank is the only thing worth chasing as
+lever 2.

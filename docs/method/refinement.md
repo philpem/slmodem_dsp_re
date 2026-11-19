@@ -4930,6 +4930,33 @@ comparison, the loop is not a loop.  A `-funroll-all-loops` diagnostic build
 unrolls but to a different order, which is how you tell a compiler unroll from a
 hand-written one.
 
+### Lever 51. The reference INLINES libm; a C profile without `-ffast-math` calls it -- a two-row gap, not a spelling
+
+When a C function whose object body contains an x87 transcendental
+(`fsin`/`fcos`/`fprem`/`fyl2x`...) shows no `R_386_PC32` to its libm callee, the
+reference build emitted the INLINE expansion, and the source is just the libm
+call.  The predicate is `-funsafe-math-optimizations` (which `-ffast-math`
+implies): without it GCC treats the call as observable and emits the out-of-line
+call; with it the `expand_builtin` path emits the x87 sequence.
+
+Measured on `MTK_phasor` (`fmodf`): the reference is the x87 `fmodsf3` loop
+(`fprem` / `fnstsw` / `sahf` / `jp`, and a `fld %st(0)` / `fstp %st(0)`
+duplicate of the remainder across the `if (x < 0)`); our build emits `call
+fmodf`.  `-fno-math-errno` alone changes nothing; only the full `-ffast-math`
+inlines it, and even then the residual is -7 because fast-math drops the
+`fld`/`fstp` duplicate the reference keeps.  Adding
+`-fno-unsafe-math-optimizations` removes the inline again, so unsafe-math is
+necessary but not sufficient.
+
+**Scope, measured, before you reach for a flag.**  A scan of the whole corpus
+finds EXACTLY two non-EXACT rows missing an x87 transcendental: `MTK_phasor`
+(`fprem`) and `beepgen_sample` (`fsin`+`fcos`, canonical symdiff 48 -> 27 under
+fast-math).  No row is missing `fyl2x`/`f2xm1`/`fpatan`/`fscale`.  `period.mk`
+keeps `-fno-math-errno -ffast-math` in `TC_CXXONLY` (C++ only) for exactly this
+reason; the C profile has no fast-math.  Because UNsafe-math is required and
+neither row reaches EXACT even with it, a global C fast-math flag moves two rows
+part-way and recovers neither -- do not add one for these.  F12205.
+
 ### Trade two neighbours, and RECORD the loss: the codegen ratchet needs a review
 
 Moving one function can take an EXACT neighbour with it, because the period
