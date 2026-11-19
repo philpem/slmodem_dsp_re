@@ -410,13 +410,13 @@ int
 V90Phase3Modulator::generateDIL()
 {
 	int fromSegment = (seq2[seq2Index] == 0);
-	unsigned short code = (unsigned short)dilLevel[dilIndex];
 	unsigned char next1, next2;
 	unsigned int pos;
 	short level;
 
 	level = fromSegment ? segmentLevel[segmentIndex]
 			    : dilLevel[dilIndex];
+	unsigned short code = (unsigned short)dilLevel[dilIndex];
 	usingSegmentLevel = (short)fromSegment;
 
 	if (pcmType != PCM_TYPE_MU_LAW)
