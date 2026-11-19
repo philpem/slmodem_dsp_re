@@ -10967,6 +10967,7 @@ setInitialPhase(void *objp)
 	int besti = 0;
 	int i;
 	int pos;
+	int ki;
 
 	/* Only search when the first pair already straddles the crossing. */
 	if ((int)rx->timing_out[0] * rx->timing_out[1] < 0) {
@@ -10982,8 +10983,9 @@ setInitialPhase(void *objp)
 			k = 1;
 	}
 
-	a = (short)rx->timing_out[k - 1];
-	b = (short)rx->timing_out[k];
+	ki = k - 1;
+	a = (short)rx->timing_out[ki];
+	b = (short)rx->timing_out[ki + 1];
 	if (a < 0) {
 		a = (short)-a;
 		b = (short)-b;
