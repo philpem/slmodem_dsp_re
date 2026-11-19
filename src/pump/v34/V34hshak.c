@@ -1369,9 +1369,13 @@ v34handshakinit(void *objp, int mode)
 		hs_set_microstate(obj, V34HS_DET_SYNC);
 
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
-		obj->paa70 = &obj->msgrec[1];
-		obj->msgrec[1].nbits = 0x11;
-		obj->tx.tx_pwr_reduction = 0;
+		{
+			struct v34_bitsource *rec = &obj->msgrec[1];
+
+			obj->paa70 = rec;
+			rec->nbits = 0x11;
+			t->tx_pwr_reduction = 0;
+		}
 
 		/*
 		 * 0x66 and not 0x65: `role` is the originate/answer flag
@@ -1458,9 +1462,9 @@ v34handshakinit(void *objp, int mode)
 			r->acc0 = 0;
 		}
 
-		obj->tx.seg_symcount = 0;
-		obj->tx.prev_quadrant = 0;
-		obj->tx.tx_scr_sr = 0;
+		t->seg_symcount = 0;
+		t->prev_quadrant = 0;
+		t->tx_scr_sr = 0;
 		t->tx_flags = (short)((t->tx_flags & ~0x4018) | 0x2000);
 
 		rx->rx_blocks = 0x21e;
