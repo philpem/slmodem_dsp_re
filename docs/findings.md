@@ -148597,3 +148597,47 @@ one short of complete.
 all 1/0.  Census 1245 -> 1247 EXACT / 573 -> 571 NONMATCH (34 REGALLOC).
 Ratchet OK: `exact 1235 -> 1247, legacy protected 1270 -> 1281,
 link-selected exact 1238 -> 1250, regalloc 35 -> 34`, one displacement.
+
+## F12210. Three single-non-exact TU targets: two retained partials, one typed negative
+
+Second batch over the closest single-non-exact TUs.  No whole-function
+promotion; two witnessed partial source corrections were retained and one
+target was closed as an allocator-internal negative.
+
+### V90SdDetector::process -- partial (src/pump/v90/V90SdDetector.cpp)
+
+The single differing instruction was an integer `cmp` operand reversal.
+Mechanism: `tree_swap_operands_p` (fold-const.c) swaps the comparison when
+the left operand is a DECL (the local `run`) and the right is a COMPONENT_REF
+(the member `count`); the object compares the member, so the source must
+compare `count`, not a local copy.  Removing the `run` local and using
+`count = count + 1; if (count >= limit)` makes the cmp byte-exact and raises
+the longest run 52 -> 56 / 81.  The residual `mov %ebp,%edx` is global
+register allocation: the DECL_RESULT (reg58) does not coalesce with the
+local accumulator; 12 return/increment spellings were sampled and inert.
+Grade stays NONMATCH; neighbours all EXACT.
+
+### DetSequence -- partial (src/pump/v32/V32prc.c)
+
+The object is a countdown loop (`while (count-- != 0)`) with `found` hoisted
+to function scope and `word` hoisted above the mask/target declarations; the
+reconstruction used a count-up `for` with per-iteration `found`/`word`.  The
+countdown form plus a `shift` variable reproduces the object instruction
+multiset exactly and raises the longest run 16 -> 56 / 93 (symdiff 19 -> 0).
+The residual is the allocator picking ESI for the found-zero where the blob
+picks EDI -- source-driven levers are exhausted.  Grade stays NONMATCH; the
+other 7 functions in the TU stay EXACT.
+
+### ModulusDecoder::progress -- typed negative (src/pump/v90/V90ModulusDecoder.cpp)
+
+The difference is the reload home for the known-zero high word of the Horner
+accumulator: the object rematerialises it, the reconstruction keeps it in a
+register.  `allocno_compare`/reload decides the home; three declaration and
+doubling spellings were sampled and inert (one regressed by 40 bytes).  No
+source lever moves it; parked with the allocator as the named mechanism.
+
+### Validation
+
+`make phase` 404/404; period differentials `t_v90leaves`, `t_v32seq`,
+`t_v32rxhdx` all 1/0.  Census unchanged at 1247 EXACT / 34 REGALLOC / 571
+NONMATCH (both partials stay NONMATCH); ratchet OK.

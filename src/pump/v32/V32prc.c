@@ -136,20 +136,22 @@ DetSequence(struct v32_modem *modem, const short *data, unsigned short count)
 		modem->hdx;
 	int nbits = hdx->det_width;
 	int reg = hdx->det_reg;
+	unsigned int word;
 	int mask = hdx->det_mask;
 	int target = hdx->det_target;
+	int found = 0;
 	short nread = 0;
-	unsigned short i;
 
-	for (i = 0; i < count; i++) {
-		unsigned int word = (unsigned short)*data++;
-		int found = 0;
+	while (count-- != 0) {
+		word = (unsigned short)*data++;
 		short bit;
+		short shift = (short)(nbits - 1);
 
 		nread++;
 		for (bit = 0; bit < nbits; bit++) {
 			reg = (reg << 1) |
-			      (int)((word >> (nbits - 1 - bit)) & 1u);
+			      (int)((word >> shift) & 1u);
+			shift--;
 
 			/*
 			 * A BITWISE AND, and the object's own encoding: both

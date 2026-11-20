@@ -220,7 +220,6 @@ V90SdDetector::process(float sample)
 	long double correlation = 0.0L;
 	long double energy = 0.0L;
 	long double ratio;
-	unsigned int run;
 
 	history[0] = sample;
 
@@ -254,9 +253,8 @@ V90SdDetector::process(float sample)
 	 * where the spelling IS the lever and no single text serves both.
 	 */
 	if (!(thresh_0c >= ratio)) {
-		run = count + 1;
-		count = run;
-		if (run >= limit)
+		count = count + 1;
+		if (count >= limit)
 			result = 1;
 		return result;
 	}
