@@ -27,13 +27,15 @@
 static int
 ecc_filter(const short *hist, short idx, short len, const short *c)
 {
+	const short *h = hist + idx;
 	int acc = 0;
 	short i;
 
 	for (i = idx; i >= 0; i--)
-		acc += (hist[i] * *c++) >> 3;
+		acc += (*h-- * *c++) >> 3;
+	h += len;
 	for (i = (short)(len - 1); i > idx; i--)
-		acc += (hist[i] * *c++) >> 3;
+		acc += (*h-- * *c++) >> 3;
 	return acc;
 }
 
@@ -48,16 +50,17 @@ ecc_adapt(short *c, const short *hist, short idx, short len, int mu, int e)
 {
 	short i;
 	int t;
+	short *dest;
 
-	for (i = idx; i >= 0; i--) {
-		t = (short)((hist[i] * mu + 0x10) >> 5);
-		*c = (short)(((t * e + 0x10000) >> 17) + *c);
-		c++;
+	for (i = idx; i >= 0;) {
+		t = (short)((hist[i--] * mu + 0x10) >> 5);
+		dest = c++;
+		*dest = (short)(((t * e + 0x10000) >> 17) + *dest);
 	}
-	for (i = (short)(len - 1); i > idx; i--) {
-		t = (short)((hist[i] * mu + 0x10) >> 5);
-		*c = (short)(((t * e + 0x10000) >> 17) + *c);
-		c++;
+	for (i = (short)(len - 1); i > idx;) {
+		t = (short)((hist[i--] * mu + 0x10) >> 5);
+		dest = c++;
+		*dest = (short)(((t * e + 0x10000) >> 17) + *dest);
 	}
 }
 
@@ -84,7 +87,7 @@ FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count)
 	unsigned short phase = state->phase;
 	unsigned short symbols = 0;
 	short energy = 0;
-	int n;
+	unsigned short n;
 
 	/*
 	 * Input power, before anything is taken out of it.  The meter is a
@@ -101,7 +104,8 @@ FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count)
 			(((state->pwr_in - acc) * 0x666) >> 15));
 	}
 
-	for (n = count; n != 0; n--) {
+	n = count;
+	while (n-- != 0) {
 		short *coef = state->coef[phase];
 		short *fcoef;
 		short *ucoef;

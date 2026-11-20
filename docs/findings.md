@@ -148867,3 +148867,26 @@ print: all six call sites match. The eight native instructions in the
 `maxTxPower` block are a register-allocation rematerialisation of the
 `(int)field+1)*-0.5f` operand. No source spelling tested reproduced it; parked
 with the missing instrument named (a period-GCC regalloc remat trace).
+
+### F12220. FPM_ECC_cancel and V21TX_create: the "missing" instructions are pointer walks and dead-store protocol branches
+
+`FPM_ECC_cancel` (`src/dsp/fpm_ecc.c`) was 47 instructions short (delta -178).
+The two static helpers were reconstructed with indexed source; the object inlines
+them from pointer walks. `ecc_filter` walks the history with a decrementing
+pointer and the `h += taps` seam (the same idiom recovered in `FPM_circ_dotp2`,
+F12219); `ecc_adapt` uses `short *dest = coeff++`. The block counter is an
+`unsigned short` driven by `while (n-- != 0)`, which the object narrows with
+`movzwl` and rotates. Reconstructed accordingly: delta -178 -> +3, instructions
+565 -> 610 of 612. The residual is two instructions and one stack slot
+(register/stack allocation); both siblings stay EXACT.
+
+`V21TX_create` (`src/fax/V21tx.c`) was 81 bytes short. The missing instructions
+are the object's dead-store protocol branches: the three protocol frequency
+writes are emitted even though `fsm = FPM_FSM_CFG` overwrites them, and the
+`samples_per_sym` store is explicit. The object also reads `tx->cfg.int_0018`
+into `mrf.aux` and reloads `tx->hdx` for the FIFO, so `v21cfg.h`'s "never read"
+note on `int_0018` is wrong. Reconstructed with the branch writes, the explicit
+init, the struct-copy `fc = FIFO_CFG`, and the field-access idiom: delta -81 ->
++4, instructions 169 -> 172 of 174. The residual is register allocation and
+block ordering. `V21TX_delete` stays EXACT. Period differentials `t_fpm_ecc`,
+`t_v21txcreate`, `t_faxadapt` and `t_v29txcreate` pass; `make phase` 404/404.

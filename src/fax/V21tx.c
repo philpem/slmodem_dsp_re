@@ -74,12 +74,11 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 {
 	struct v21_tx *tx;
 	struct fpm_fsm_cfg fsm;
-	struct fpm_mrf_cfg mrf;
 	struct fifo_cfg fc;
-	struct v21_tx_dsp *dsp;
+	struct fpm_mrf_cfg mrf;
 	struct v21_tx_hdx *hdx;
 	struct fax_fifo *existing_fifo;
-	short protocol;
+	unsigned long aux;
 	int fresh = 0;
 	int zero = 0;
 
@@ -123,42 +122,49 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	 * (0 either of the blob's two copies), `size` and `fill` the
 	 * literals 6 and 1 -- see the function comment.
 	 */
-	fc.word0 = FIFO_CFG.word0;
+	fc = FIFO_CFG;
 	fc.size = 6;
 	fc.fill = 1;
-	existing_fifo = hdx->fifo;
-	hdx->fifo =
+	existing_fifo = tx->hdx->fifo;
+	tx->hdx->fifo =
 		FIFO_create(existing_fifo, &fc);
 
-	hdx->int_0004 = 0;
-	hdx->handler = TxHdxStartV21;
-	hdx->state = V21TX_STATE_START;
-	hdx->short_000e = 0;
+	tx->hdx->int_0004 = 0;
+	tx->hdx->handler = TxHdxStartV21;
+	tx->hdx->state = V21TX_STATE_START;
+	tx->hdx->short_000e = 0;
 
-	dsp = tx->dsp;
-	if (dsp == NULL) {
-		dsp = (struct v21_tx_dsp *)
+	aux = (unsigned long)tx->cfg.int_0018;
+	if (tx->dsp == NULL) {
+		tx->dsp = (struct v21_tx_dsp *)
 			sysdep_malloc(sizeof(struct v21_tx_dsp));
-		sysdep_memset(dsp, 0, sizeof(struct v21_tx_dsp));
-		tx->dsp = dsp;
-		dsp->scratch = sysdep_malloc(V21TX_SCRATCH_BYTES);
-		sysdep_memset(dsp->scratch, 0, V21TX_SCRATCH_BYTES);
+		sysdep_memset(tx->dsp, 0, sizeof(struct v21_tx_dsp));
+		tx->dsp->scratch = sysdep_malloc(V21TX_SCRATCH_BYTES);
+		sysdep_memset(tx->dsp->scratch, 0, V21TX_SCRATCH_BYTES);
 	}
 
 	/*
-	 * `protocol` selects one of three (past the dead frequency writes,
-	 * identical) paths; only the third has an observable side effect.
+	 * `protocol` selects one of three paths; the frequency writes are
+	 * dead (the whole config is overwritten by FPM_FSM_CFG below) but the
+	 * object still emits them, and only the third has an observable side
+	 * effect.
 	 */
-	memcpy(&protocol, modem, sizeof protocol);
-	if (protocol == 0 || protocol == 1) {
-		/* No observable effect; see the function comment and D1241. */
+	if (tx->cfg.protocol == 0) {
+		fsm.freq[0] = 1180;
+		fsm.freq[1] = 980;
+	} else if (tx->cfg.protocol == 1) {
+		fsm.freq[0] = 1850;
+		fsm.freq[1] = 1650;
 	} else {
+		fsm.freq[0] = 0;
+		fsm.freq[1] = 0;
 		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
 		tx->result.byte.status = V21TX_STATUS_DEFAULT;
 	}
 
 	fsm = FPM_FSM_CFG;
 	fsm.scale = 0x1900;
+	fsm.samples_per_sym = 24;
 	FPM_FSM_init(&tx->dsp->fsm, &fsm);
 
 	mrf = FPM_MRF_CFG;
@@ -166,6 +172,7 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	mrf.decimate = 9;
 	mrf.coeff = V21_MRF_FILT;
 	mrf.taps = 360;
+	mrf.aux = (void *)aux;
 	FPM_MRF_init(&tx->dsp->mrf, &mrf, fresh);
 
 	return modem;
