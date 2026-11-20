@@ -118,15 +118,17 @@ FPM_circ_dotp2(const short *coeff, const short *hist, short widx, short taps,
 	       short stride, short shift)
 {
 	const short *c = coeff;
+	const short *h = hist + widx;
 	int acc = 0;
 	short i;
 
 	for (i = widx; i >= 0; i--) {
-		acc += (hist[i] * *c) >> 3;
+		acc += (*h-- * *c) >> 3;
 		c += stride;
 	}
+	h += taps;
 	for (i = (short)(taps - 1); i > widx; i--) {
-		acc += (hist[i] * *c) >> 3;
+		acc += (*h-- * *c) >> 3;
 		c += stride;
 	}
 

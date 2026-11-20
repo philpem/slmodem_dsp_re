@@ -148830,3 +148830,40 @@ load.  Affected functions stay NONMATCH (their residue is register allocation),
 but the shift and load forms now match the object.  No sibling regressed; all
 nine instruction counts are unchanged.  Period differentials `t_v32fse`,
 `t_v32d302`, `t_v32nsrng` pass; `make phase` 404/404.
+
+### F12219. FPM_circ_dotp2 walks the history with a decrementing pointer; the seam is `h += taps`
+
+`FPM_circ_dotp2` (`src/dsp/fpm_div32.c`) was six instructions short (delta -16,
+58/64). The object walks `hist` with a second pointer decremented beside the
+index: the seam between the two loops is the direct witness, `lea ecx,[ebx+ebp*2]`
+(= `h += taps` after the first loop). Reconstructing the source as
+`const short *h = hist + widx;` with `*h--` in both loops and `h += taps`
+between them reproduces all 64 instructions and the full 195 bytes: delta
+-16 -> 0, instruction multiset difference 0, longest run 10 -> 43/64. The
+residual NONMATCH is confined to the first 0x48 bytes: prologue instruction
+order and the temporary chosen for `widx` (`edi` native vs `esi`). Sibling
+`FPM_div_32` stays EXACT. Period differential `t_fpm_div` passes.
+
+`MTK_phasor` (`src/service/PHASOR.c`) is not a missing statement: its five
+missing instructions are the glibc `mathinline.h` `fmodf` inline asm, selected
+by `__FAST_MATH__` (preprocessed witness at pp line 679). The reference C
+profile therefore had `__FAST_MATH__`; ours does not, so GCC emits `call fmodf`.
+This corrects F12205's wording that the loop is GCC's x87 `fmodsf3`. Building
+the TU with `-ffast-math` takes the delta -15 -> -7 (78/81) but leaves three
+x87 copy/stack/branch instructions; no adoption, because the remaining gap is
+not flag-mappable and a global fast-math would move unrelated TUs.
+
+`edprintf` (`src/core/encode.c`) is four instructions short in its loop: the
+object's `encode_step` spells the counter update as ordinary `if/else`, so the
+store to `iEncodeOffset` lands before the intervening `cEncodedTemp[o++]` char
+store and the second body reloads the global. Our ternary form lets CSE keep one
+load and one store. Changing the ternary to `if/else` recovers the loop shape
+(delta -9 -> +6, 84 -> 88 instructions, symdiff 36 -> 34) but the two remaining
+instructions are the deliberate D40 plain-encoder deviation, and the change
+raises the byte delta, so it is recorded as a measured partial, not retained.
+
+`V90Phase2Info::printInfo` and `V92Phase2Info::printInfo` are not missing a
+print: all six call sites match. The eight native instructions in the
+`maxTxPower` block are a register-allocation rematerialisation of the
+`(int)field+1)*-0.5f` operand. No source spelling tested reproduced it; parked
+with the missing instrument named (a period-GCC regalloc remat trace).
