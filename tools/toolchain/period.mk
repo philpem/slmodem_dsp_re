@@ -184,6 +184,13 @@ TC_V90P4_FLAGS := --param max-inline-insns-auto=80
 TC_V90DEMOD_SRC := src/pump/v90/V90Demodulator.cpp
 TC_V90DEMOD_FLAGS := --param max-inline-insns-auto=50
 
+# Native bValidateEnergyValue calls FDSP_Kernel_InitObj rather than inlining it
+# (a direct R_386_PC32 relocation in the object), while its estimated cost is
+# ~70 under the default O3 threshold.  A supported interior of the measured
+# 9..70 interval; 50 reuses the corpus's existing V90Demodulator value (F12226).
+TC_FDSPKRNL_SRC := src/service/Fdspkrnl.c
+TC_FDSPKRNL_FLAGS := --param max-inline-insns-auto=50
+
 #
 # THE SOURCE LIST HAS ONE HOME AND IT IS THE TOP-LEVEL MAKEFILE.  Re-deriving
 # it here with `find` would be a second definition of the same set, which is
@@ -289,11 +296,12 @@ tc: $(TC_OBJ) $(TC_GCCVER)
 FORCE:
 
 $(TC_STAMP): FORCE | $(TC_OUT) tc-image
-	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\nfaxproc %s\nfaxproc-sources %s\nv90p4 %s\nv90p4-source %s\nv90demod %s\nv90demod-source %s\n' \
+	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\nfaxproc %s\nfaxproc-sources %s\nv90p4 %s\nv90p4-source %s\nv90demod %s\nv90demod-source %s\nfdspkrnl %s\nfdspkrnl-source %s\n' \
 	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' \
 	        '$(TC_FAX_PROC_FLAGS)' '$(TC_FAX_PROC_SRCS)' \
 	        '$(TC_V90P4_FLAGS)' '$(TC_V90P4_SRC)' \
-	        '$(TC_V90DEMOD_FLAGS)' '$(TC_V90DEMOD_SRC)' > '$@.new'
+	        '$(TC_V90DEMOD_FLAGS)' '$(TC_V90DEMOD_SRC)' \
+	        '$(TC_FDSPKRNL_FLAGS)' '$(TC_FDSPKRNL_SRC)' > '$@.new'
 	@if cmp -s '$@.new' '$@'; then rm -f '$@.new'; else \
 	   mv '$@.new' '$@'; \
 	   echo "  TC-CFG  $(TC_IMAGE) $(if $(TC_EXTRA),TC_EXTRA=$(TC_EXTRA) ,)-- rebuilding every object"; \
@@ -339,7 +347,7 @@ tc-image:
 define TC_CC_RULE
 $(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
 	@echo '  TC-CC   $(1)'
-	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) $(if $(filter $(TC_FAX_PROC_SRCS),$(1)),$(TC_FAX_PROC_FLAGS)) -MMD -MP -MT '$$@' \
+	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) $(if $(filter $(TC_FAX_PROC_SRCS),$(1)),$(TC_FAX_PROC_FLAGS)) $(if $(filter $(TC_FDSPKRNL_SRC),$(1)),$(TC_FDSPKRNL_FLAGS)) -MMD -MP -MT '$$@' \
 	    -MF '/out/.deps/$$(@F).d' -o '/out/$$(@F)' '$$<'
 endef
 

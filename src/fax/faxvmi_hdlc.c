@@ -58,6 +58,7 @@
 int
 faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 {
+	struct faxvmi_framer *fr;
 	struct faxvmi_link *lk;
 	unsigned short *out;
 	unsigned int word, acc, mask, elem_mask;
@@ -67,49 +68,49 @@ faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 
 	left = (short)(count - faxvmi_write_frame(vmi, &src, count));
 
+	fr = vmi->framer;
 	lk = vmi->link;
-	word = vmi->framer->pack_word;
-	mask = vmi->framer->pack_mask;
-	acc = vmi->framer->pack_acc;
-	bit = vmi->framer->pack_bit;
+	word = fr->pack_word;
+	mask = fr->pack_mask;
+	acc = fr->pack_acc;
+	bit = fr->pack_bit;
 	n = lk->pack_count;
 	out = lk->buf;
 	width = lk->pack_width;
 	elem_mask = (1u << width) - 1;
-	nleft = vmi->framer->pack_frame_left;
-	flagging = vmi->framer->pack_flagging;
+	nleft = fr->pack_frame_left;
+	flagging = fr->pack_flagging;
 
 	if (count != 0) {
-		unsigned short len = vmi->framer->fifo[vmi->framer->rd];
+		unsigned short len = fr->fifo[fr->rd];
 		unsigned int i;
 
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
 			    "HDLC Transmitted Frame (Length = %d, iR = %d,"
-			    " iW = %d): \n", len, vmi->framer->rd, vmi->framer->wr);
+			    " iW = %d): \n", len, fr->rd, fr->wr);
 
 		/* D1121: `rd + 1` is not wrapped before the first read */
-		i = (unsigned int)vmi->framer->rd + 1;
-		while (i != (unsigned int)vmi->framer->wr) {
+		i = (unsigned int)fr->rd + 1;
+		while (i != (unsigned int)fr->wr) {
 			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("%02X,", vmi->framer->fifo[i]);
+				dsplibs_debug_printf("%02X,", fr->fifo[i]);
 			i = i + 1;
-			if ((int)vmi->framer->fifo_size <= (int)i)
+			if ((int)fr->fifo_size <= (int)i)
 				i = 0;
 		}
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("\n");
 
 		if (len > 2) {
-			unsigned char hdr[3];
+			unsigned char hdr[3] = {0};
 			int k;
 
-			hdr[0] = hdr[1] = hdr[2] = 0;
-			i = (unsigned int)vmi->framer->rd + 1;
+			i = (unsigned int)fr->rd + 1;
 			for (k = 0; k <= 2; k++) {
-				hdr[k] = (unsigned char)vmi->framer->fifo[i];
+				hdr[k] = (unsigned char)fr->fifo[i];
 				i = i + 1;
-				if ((int)vmi->framer->fifo_size <= (int)i)
+				if ((int)fr->fifo_size <= (int)i)
 					i = 0;
 			}
 			if (dsplibs_debug_level > 1)
@@ -126,24 +127,24 @@ faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 		unsigned int b;
 
 		if (mask == 0) {
-			if (vmi->framer->count != 0) {
-				unsigned short rd = vmi->framer->rd;
+			if (fr->count != 0) {
+				unsigned short rd = fr->rd;
 
 				if (nleft != 0) {
-					word = vmi->framer->fifo[rd];
+					word = fr->fifo[rd];
 					mask = 0x80;
 					flagging = 0;
 					nleft = (short)(nleft - 1);
 				} else {
-					nleft = (short)vmi->framer->fifo[rd];
+					nleft = (short)fr->fifo[rd];
 					word = 0x7e7e7e;
 					mask = 0x800000;
 					flagging = 1;
 				}
-				vmi->framer->rd = (unsigned short)(rd + 1);
-				vmi->framer->count = (unsigned short)(vmi->framer->count - 1);
-				if (vmi->framer->rd >= vmi->framer->fifo_size)
-					vmi->framer->rd = 0;
+				fr->rd = (unsigned short)(rd + 1);
+				fr->count = (unsigned short)(fr->count - 1);
+				if (fr->rd >= fr->fifo_size)
+					fr->rd = 0;
 			} else {
 				word = 0x7e;
 				mask = 0x80;
@@ -167,12 +168,12 @@ faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 		}
 	}
 
-	vmi->framer->pack_mask = mask;
-	vmi->framer->pack_acc = acc;
-	vmi->framer->pack_word = word;
-	vmi->framer->pack_frame_left = nleft;
-	vmi->framer->pack_flagging = flagging;
-	vmi->framer->pack_bit = bit;
+	fr->pack_mask = mask;
+	fr->pack_acc = acc;
+	fr->pack_word = word;
+	fr->pack_frame_left = nleft;
+	fr->pack_flagging = flagging;
+	fr->pack_bit = bit;
 
 	left = (short)(left - faxvmi_write_frame(vmi, &src, left));
 	vmi->framer->residue = left;
