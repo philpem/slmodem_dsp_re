@@ -101,6 +101,8 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 int
 V29TX_status(void *tx, void *status)
 {
+	unsigned char f;
+
 	if (status == 0)
 		return 0;
 
@@ -119,11 +121,13 @@ V29TX_status(void *tx, void *status)
 	 * not one value used twice.
 	 */
 	((struct v29_status_prefix *)status)->short_10 = ((struct v29_tx_root *)tx)->cfg.bitrate;
+	f = ((struct v29_status_prefix *)status)->flags;
 	((struct v29_status_prefix *)status)->short_12 = 0;
 
 	unsigned char t;
 
-	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_FLAGS_LOW2;
+	f &= (unsigned char)~V29STAT_FLAGS_LOW2;
+	((struct v29_status_prefix *)status)->flags = f;
 	t = *(unsigned char *)(void *)&((struct v29_tx_root *)tx)->cfg.flags;
 	((struct v29_status_prefix *)status)->flags2 &= (unsigned char)~V29STAT_FLAGS2_BIT0;
 	((struct v29_status_prefix *)status)->flags = (unsigned char)(t & V29TXS_10_BIT2);

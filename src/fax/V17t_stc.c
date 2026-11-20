@@ -83,7 +83,7 @@ V17TX_control(void *fp, const struct v17tx_control_req *req)
 int
 V17TX_status(void *params, struct v17_status *status)
 {
-	unsigned char *p;
+	unsigned char *p, f;
 
 	if (status == 0)
 		return 0;
@@ -98,6 +98,7 @@ V17TX_status(void *params, struct v17_status *status)
 	status->short_0a = 0;
 	status->short_0c = 0;
 	status->short_10 = TXROOT(params)->cfg.bitrate;
+	f = status->flags;
 	status->short_12 = 0;
 
 	/*
@@ -110,7 +111,8 @@ V17TX_status(void *params, struct v17_status *status)
 	 */
 	unsigned char t;
 
-	status->flags &= (unsigned char)~V17_STATUS_FLAGS_CLEAR;
+	f &= (unsigned char)~V17_STATUS_FLAGS_CLEAR;
+	status->flags = f;
 	t = p[0x10];
 	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
 	status->flags = (unsigned char)(t & V17_STATUS_FLAG_04);

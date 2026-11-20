@@ -148680,3 +148680,20 @@ swap (a in ecx vs edx) that source shaping did not move.
 
 `make phase` 404/404; census 1247 -> 1248 EXACT / 571 -> 570 NONMATCH (34
 REGALLOC); ratchet OK (`exact 1235 -> 1248, link-selected exact 1238 -> 1251`).
+
+## F12212. The TX_status family: three EXACT promotions from the combine all_adjacent predicate
+
+V17TX_status, V21TX_status and V29TX_status each read a flags byte, cleared
+bits and stored it back.  The reconstruction wrote the clear as a single
+compound assignment (`flags &= ~MASK`), which `combine` merges into a
+read-modify-write `andb ...,0x14(%reg)`.  The object keeps a separate load,
+and and store.  Mechanism: `combine.c` `can_combine_p`/`all_adjacent` -- a
+store that is NOT adjacent to its load (an intervening memory write) cannot
+be merged.  Reading the byte into a local early, letting the intervening
+`short_12`/`short_0c` store sit between the load and the masked store, keeps
+the three-instruction sequence.  Exact edits: declare a local `f`, read
+`f = status->flags` before the next short store, then `f &= ~MASK;
+status->flags = f;`.  The dead first store and the later assignment are
+preserved.  All three TUs (2/2 each) are now fully EXACT.  Period
+differentials t_v17fax/t_v21fax/t_v29fax pass; census 1248 -> 1251 EXACT,
+570 -> 567 NONMATCH; ratchet OK.
