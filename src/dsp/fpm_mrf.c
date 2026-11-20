@@ -62,7 +62,7 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
  * (F12153).
  */
 #ifdef DSPLIB_REPRODUCE_BUGS
-static short
+static int
 advance(short idx, short len)
 #else
 static int
@@ -95,7 +95,7 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 #ifdef DSPLIB_REPRODUCE_BUGS
 	const short hlen = state->history_len;
 	short phase = state->phase;
-	short widx = state->widx;
+	int widx = state->widx;
 	short need = state->need;
 #else
 	const int hlen = state->history_len;
@@ -138,7 +138,8 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 			while (remaining-- > 0) {
 #endif
 				widx = advance(widx, hlen);
-				history[widx] = *in++;
+				history[widx] = *in;
+				in++;
 			}
 			break;
 		}
@@ -149,7 +150,8 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, int count)
 
 			while (ki--) {
 				widx = advance(widx, hlen);
-				history[widx] = *in++;
+				history[widx] = *in;
+				in++;
 			}
 		}
 		remaining -= need;

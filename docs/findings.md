@@ -148790,3 +148790,26 @@ header edit is inert.  Siblings `FPM_FSM_init`/`FPM_FSM_delete` stay EXACT.
 (0x2c) and non-sibling call but overshoots size (+5 vs baseline +2); parked as a
 measured structural partial, not retained.  Period differentials pass; census
 size 459 -> 457, bytes 108 -> 110.
+
+### F12217. FPM_MRF_filter and v23FP_rx_progress: type and literal recovery from the object's own immediates
+
+`FPM_MRF_filter` (`src/dsp/fpm_mrf.c`) was NONMATCH at +7.  The object has ONE
+`movsx` on the wrap index, not two; the reconstruction's `short` advance return
+and `short widx` force a redundant `extendhisi2` round-trip.  Recovering the
+`int` return type and `int widx` (the object's own signedness) and spelling the
+advance as `*in; in++` removes the duplicate extend: delta +7 -> -5, insns
+173 -> 169, run 14 -> 26.  Still NONMATCH on the stack-slot residue.  Both
+siblings stay EXACT.
+
+`v23FP_rx_progress` (`src/pump/v23/v23rx.c`) was NONMATCH at +4.  The reference's
+second `FPM_AGC_agc` call passes a literal `1` in the unused slot (`mov $0x1`),
+not the signed count; the in-source comment's F11613 attribution was wrong.
+Passing the literal 1: delta +4 -> +3.  The full V5 restructure (nout reuse)
+reaches the reference instruction count (163) but grows the byte delta to +8;
+parked as a source-fidelity tradeoff.  Both siblings stay EXACT.
+
+`dp_wrapper_run` X3 (ring aliases + rc_to_dp selection + advanced params) reaches
+symdiff 2/169 but delta -2; its single residual is a global-alloc tie-break
+(w pseudo in call-clobbered edx vs call-saved ebx) with no readable allocno_order
+in the extracted tree.  Parked.  Period differentials pass; census unchanged
+(1251/34/567, size 457, bytes 110).

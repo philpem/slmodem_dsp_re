@@ -369,7 +369,7 @@ v23FP_rx_progress(struct v23rx *rx, short *samples, int count, int *bits,
 	 * F11613 restores the fourth slot: original signed count, not nout.
 	 * Finding F11962 restores the return boundary without a field reload.
 	 */
-	signal = (short)FPM_AGC_agc(&rx->agc, samples, (unsigned short)nout, (short)count);
+	signal = (short)FPM_AGC_agc(&rx->agc, samples, (unsigned short)nout, 1);
 
 	/*
 	 * Exactly one block sees state 10, so the gain is frozen once and the
