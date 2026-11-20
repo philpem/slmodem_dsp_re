@@ -148935,7 +148935,7 @@ zeroing `fill`. Reconstructed accordingly: delta -30 -> -21, instructions 260 ->
 Period differentials `t_datafmt`, `t_v27txcreate`, `t_cidsvc`, `t_class1inittx`
 pass; `make phase` 404/404.
 
-## F12213. Numeric --param weight factors are implausible as original build settings
+## F12223. Numeric --param weight factors are implausible as original build settings
 
 Owner guidance (2026-11-20): a period i686 DSP-library user plausibly changes
 the optimisation level, or turns named optimisations on/off for a particular
