@@ -91,7 +91,7 @@ CID_MTD_detect(const short *samples, short count, struct cid *cid)
 	}
 
 	for (i = 0; i < count; i++) {
-		short x = samples[i];
+		short x = *samples++;
 		short y;
 
 		/*

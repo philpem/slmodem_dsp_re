@@ -148697,3 +148697,20 @@ status->flags = f;`.  The dead first store and the later assignment are
 preserved.  All three TUs (2/2 each) are now fully EXACT.  Period
 differentials t_v17fax/t_v21fax/t_v29fax pass; census 1248 -> 1251 EXACT,
 570 -> 567 NONMATCH; ratchet OK.
+
+### F12213. CID_MTD_detect walks the sample pointer; the object's own `add $0x2,%ebx` proves it
+
+`CID_MTD_detect` in `src/service/Cidmtd.c` was NONMATCH at delta -18 (ours 74
+instructions against the blob's 77).  The native inner loop keeps a callee-saved
+pointer and does `add $0x2,%ebx`; there is no indexed addressing at all.  The
+reconstruction indexed the parameter (`samples[i]`), so the pointer-increment
+instruction was absent and the reload re-read the parameter from the stack every
+iteration.  Replacing the indexed load with `short x = *samples++` restores the
+walk: delta 0, 77/77 instructions, symdiff 0, dset 0.  The function is still
+NONMATCH because the two coefficient pointers are loaded in the opposite order
+(`MTD_COEF_1_9600`/`MTD_COEF_2_9600` swap lanes) — a global-alloc lane choice,
+not a source property.  Splitting the declarations, using an if/else both-arms
+form, and initialising from the 8000 pair then overriding are all byte-identical
+or worse, so the source order is inert.  The `*samples++` form is derived from
+the object's own emitted pointer walk, not fitted to the byte count.  Period
+differential t_cid_mtd passes; census size 462 -> 461.
