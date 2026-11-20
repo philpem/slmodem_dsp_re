@@ -156,14 +156,13 @@ data_look_for_other_than(const char *buf, short start, int except)
 void
 data_formatted_output(struct cid *cid, char *out)
 {
-	const unsigned char *msg = cid->data;
 	short date, name, nmbr, pos;
 	int i, j, n;
 
 	if (cid->pack_len == 0)
 		return;
 
-	if (msg[0] != CID_MSG_MDMF) {
+	if (cid->data[0] != CID_MSG_MDMF) {
 		out[0] = 'D';
 		out[1] = 'A';
 		out[2] = 'T';
@@ -173,7 +172,7 @@ data_formatted_output(struct cid *cid, char *out)
 		out[6] = ' ';
 		i = 7;
 		for (j = 2; j < 6; j++)
-			out[i++] = (char)msg[j];
+			out[i++] = (char)cid->data[j];
 		out[i] = '\0';
 		out += i + 1;
 
@@ -186,7 +185,7 @@ data_formatted_output(struct cid *cid, char *out)
 		out[6] = ' ';
 		i = 7;
 		for (j = 6; j < 10; j++)
-			out[i++] = (char)msg[j];
+			out[i++] = (char)cid->data[j];
 		out[i] = '\0';
 		out += i + 1;
 
@@ -198,18 +197,18 @@ data_formatted_output(struct cid *cid, char *out)
 		out[5] = '=';
 		out[6] = ' ';
 		i = 7;
-		n = msg[1] + 2;
+		n = cid->data[1] + 2;
 		if (n > CID_FIELD_MAX)
 			n = CID_FIELD_MAX;
 		for (j = 10; j < n; j++)
-			out[i++] = (char)msg[j];
+			out[i++] = (char)cid->data[j];
 		out[i] = '\0';
 		return;
 	}
 
-	date = (short)data_look_for((const char *)msg, 1);
-	name = (short)data_look_for((const char *)msg, 7);
-	nmbr = (short)data_look_for((const char *)msg, 2);
+	date = (short)data_look_for((const char *)cid->data, 1);
+	name = (short)data_look_for((const char *)cid->data, 7);
+	nmbr = (short)data_look_for((const char *)cid->data, 2);
 
 	out[0] = 'D';
 	out[1] = 'A';
@@ -220,7 +219,7 @@ data_formatted_output(struct cid *cid, char *out)
 	out[6] = ' ';
 	i = 7;
 	for (j = 2; j < 6; j++)
-		out[i++] = (char)msg[date + j];
+		out[i++] = (char)cid->data[date + j];
 	out[i] = '\0';
 	out += i + 1;
 
@@ -233,7 +232,7 @@ data_formatted_output(struct cid *cid, char *out)
 	out[6] = ' ';
 	i = 7;
 	for (j = 6; j < 10; j++)
-		out[i++] = (char)msg[date + j];
+		out[i++] = (char)cid->data[date + j];
 	out[i] = '\0';
 	out += i + 1;
 
@@ -246,11 +245,11 @@ data_formatted_output(struct cid *cid, char *out)
 	out[6] = ' ';
 	i = 7;
 	if (nmbr > 0) {
-		n = msg[nmbr + 1] + 2;
+		n = cid->data[nmbr + 1] + 2;
 		if (n > CID_FIELD_MAX)
 			n = CID_FIELD_MAX;
 		for (j = 2; j < n; j++)
-			out[i++] = (char)msg[nmbr + j];
+			out[i++] = (char)cid->data[nmbr + j];
 	}
 	out[i] = '\0';
 
@@ -264,17 +263,17 @@ data_formatted_output(struct cid *cid, char *out)
 		out[5] = '=';
 		out[6] = ' ';
 		i = 7;
-		n = msg[name + 1] + 2;
+		n = cid->data[name + 1] + 2;
 		if (n > CID_FIELD_MAX)
 			n = CID_FIELD_MAX;
 		for (j = 2; j < n; j++)
-			out[i++] = (char)msg[name + j];
+			out[i++] = (char)cid->data[name + j];
 		out[i] = '\0';
 	}
 
-	pos = (short)data_look_for_other_than((const char *)msg, 2, 0);
+	pos = (short)data_look_for_other_than((const char *)cid->data, 2, 0);
 	while (pos > 0) {
-		if (msg[pos + 1] > 1) {
+		if (cid->data[pos + 1] > 1) {
 			out += i + 1;
 			out[0] = 'M';
 			out[1] = 'E';
@@ -284,9 +283,9 @@ data_formatted_output(struct cid *cid, char *out)
 			out[5] = '=';
 			out[6] = ' ';
 			i = 7;
-			data_raw((const char *)msg + pos, out + i);
+			data_raw((const char *)cid->data + pos, out + i);
 		}
-		pos = (short)data_look_for_other_than((const char *)msg, pos,
+		pos = (short)data_look_for_other_than((const char *)cid->data, pos,
 						      pos);
 	}
 }

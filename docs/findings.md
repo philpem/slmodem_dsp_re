@@ -148914,3 +148914,23 @@ and the gap is spill/reload plus loop-lowering; the captured-pointer idiom is a
 measured partial (delta -17 -> -7), not a promotion. `DILdescriptorPacker` is
 allocator spill/zero-idiom: the source implements the algorithm completely and
 the period test `t_dilpack` passes; no spelling variant moved the grade.
+
+### F12222. data_formatted_output and V27TX_create: the extra local alias and the cached rate are the source differences
+
+`data_formatted_output` (`src/service/Data.c`) was 117 bytes short. The source
+materialised `const unsigned char *msg = cid->data;` and indexed through it; the
+object indexes `cid->data` directly and never forms the alias before the branch.
+Removing the alias lets value-numbering and loop strength reduction match the
+object's walker reloads and pointer/countdown loops: delta -117 -> -54,
+instructions 333 -> 338 of 347. The residual is the object's cross-jump
+duplication of the walker advance. `data_raw` and `data_unformatted_output`
+stay EXACT.
+
+`V27TX_create` (`src/fax/V27tx.c`) was 30 bytes short. The object re-reads
+`source->rate` at every table index (five in the SMC block, ten in the PPS
+block), addresses `tx->ring` directly, and copies the whole `FIFO_CFG` before
+zeroing `fill`. Reconstructed accordingly: delta -30 -> -21, instructions 260 ->
+262 of 264. The residual is the dead `FIFO_CFG.fill` copy pair that DSE removes
+(`flow.c:insn_dead_p`); the object keeps it. `V27TX_delete` stays EXACT.
+Period differentials `t_datafmt`, `t_v27txcreate`, `t_cidsvc`, `t_class1inittx`
+pass; `make phase` 404/404.

@@ -142,7 +142,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		prm = ((struct v27_tx *)modem)->source;
 		rate = prm->rate;
 
-		fc.word0 = FIFO_CFG.word0;
+		fc = FIFO_CFG;
 		fc.fill = 0;
 		fc.size = (short)(n * V27TX_FRMSIZE[rate]);
 
@@ -165,47 +165,41 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 
 		tx = ((struct v27_tx *)modem)->tx;
 		if (tx == 0) {
-			struct fpm_smc_ring *ring;
-
 			tx = sysdep_malloc(0x94);
 			((struct v27_tx *)modem)->tx = tx;
-			ring = (struct fpm_smc_ring *)(void *)
-					&tx->ring;
-			ring->sym = (short *)
+			tx->ring.sym = (short *)
 				sysdep_malloc((unsigned)(ring_len * 2));
 		}
 
 		tx = ((struct v27_tx *)modem)->tx;
 		{
-			struct fpm_smc_ring *ring = (struct fpm_smc_ring *)
-					(void *)&tx->ring;
 			short i;
 
-			ring->i = 0;
-			ring->q = 0;
-			ring->widx = 0;
-			ring->ridx = 0;
-			ring->len = ring_len;
+			tx->ring.i = 0;
+			tx->ring.q = 0;
+			tx->ring.widx = 0;
+			tx->ring.ridx = 0;
+			tx->ring.len = ring_len;
 
 			for (i = 0; i < ring_len; i++)
-				ring->sym[i] = 0;
+				tx->ring.sym[i] = 0;
 		}
 	}
 
 	{
 		struct fpm_smc_cfg scfg = SMC_CFG;
 		struct v27_tx_block *tx = ((struct v27_tx *)modem)->tx;
-		short rate = ((struct v27_tx *)modem)->source->rate;
+		struct v27_tx_source *src = ((struct v27_tx *)modem)->source;
 
 		scfg.f00 = 1;
 		scfg.direct = 0;
-		scfg.rot_step = V27TX_SMC_CRR_ADJ[rate];
-		scfg.rot_mod = V27TX_SMC_CRR_LEN[rate];
+		scfg.rot_step = V27TX_SMC_CRR_ADJ[src->rate];
+		scfg.rot_mod = V27TX_SMC_CRR_LEN[src->rate];
 		scfg.qshift = 0;
-		scfg.qmask = (unsigned short)V27TX_SMC_PHS_MASK[rate];
+		scfg.qmask = (unsigned short)V27TX_SMC_PHS_MASK[src->rate];
 		scfg.amask = 0;
-		scfg.pmask = (unsigned short)V27TX_SMC_PHS_MASK[rate];
-		scfg.pmap = V27TX_SMC_PMAP[rate];
+		scfg.pmask = (unsigned short)V27TX_SMC_PHS_MASK[src->rate];
+		scfg.pmap = V27TX_SMC_PMAP[src->rate];
 
 		SMC_init(&tx->smc, &scfg);
 	}
@@ -213,19 +207,19 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 	{
 		struct fpm_pps_cfg pcfg = FPM_PPS_CFG;
 		struct v27_tx_block *tx = ((struct v27_tx *)modem)->tx;
-		short rate = ((struct v27_tx *)modem)->source->rate;
+		struct v27_tx_source *src = ((struct v27_tx *)modem)->source;
 
-		pcfg.phases = V27TX_PPS_UP_FACT[rate];
-		pcfg.step = V27TX_PPS_DOWN_FACT[rate];
+		pcfg.phases = V27TX_PPS_UP_FACT[src->rate];
+		pcfg.step = V27TX_PPS_DOWN_FACT[src->rate];
 		pcfg.mapped = 1;
-		pcfg.scale = V27TX_PPS_SCALE[rate] *
+		pcfg.scale = V27TX_PPS_SCALE[src->rate] *
 			(&((struct v27_tx *)modem)->cfg)->scale_mul;
 		pcfg.step_adj = 0;
-		pcfg.imap = V27TX_PPS_IMAP[rate];
-		pcfg.qmap = V27TX_PPS_QMAP[rate];
-		pcfg.coeff_i = V27TX_PPS_IFILT[rate];
-		pcfg.coeff_q = V27TX_PPS_QFILT[rate];
-		pcfg.coeffs = V27TX_PPS_FILT_LEN[rate];
+		pcfg.imap = V27TX_PPS_IMAP[src->rate];
+		pcfg.qmap = V27TX_PPS_QMAP[src->rate];
+		pcfg.coeff_i = V27TX_PPS_IFILT[src->rate];
+		pcfg.coeff_q = V27TX_PPS_QFILT[src->rate];
+		pcfg.coeffs = V27TX_PPS_FILT_LEN[src->rate];
 		pcfg.aux = (&((struct v27_tx *)modem)->cfg)->aux;
 
 		FPM_PPS_init(&tx->pps,
