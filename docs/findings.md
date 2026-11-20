@@ -148520,11 +148520,30 @@ entry is refused if the total EXACT or grade-0/1 count falls.  The self-test
 carries both directions (accept; reject on a missing `upstream`, a stale body
 hash, or an aggregate drop).
 
-`tools/ci/displaced.json` records both losses: a `cascade` entry for
-`enterChannelVerificationEv` and an `exact` (to REGALLOC) entry for `exitDILEv`,
-each with a `body_sha256` pin and a `recovery` naming the ascending-order fix.
+`tools/ci/displaced.json` records the loss: a `cascade` entry for
+`enterChannelVerificationEv` with a `body_sha256` pin and a `recovery` naming
+the ascending-order fix.
+
+**`exitDILEv` was recovered, and its entry removed.**  The `generateDIL` recovery
+was re-spelled so `usingSegmentLevel` re-reads `seq2[seq2Index]` instead of
+caching `fromSegment` (`seq2Index` is untouched between the two reads, and the
+object re-reads it at 0x2b0a7).  That restores the cursor and returns
+`exitDILEv` to EXACT while improving `generateDIL` (-64 -> -48),
+`generateV90Symbol` (-39 -> -11) and `generateV92Symbol` (-96 -> -68).  The one
+cost is the V90 copy of the weak COMDAT `_ZN9ScramblerIhiE5resetEh`
+(EXACT -> REGALLOC); it is not link-selected (the V92 copy is) and it was
+REGALLOC at the floor baseline, so it is not a ratchet loss.
+
+**`enterChannelVerificationEv` is a COUPLED trade.**  Its cascade is `enterRRN`:
+the 11-19 common-exit change moves the return value into `%edi`, freeing `%eax`;
+the peephole2 scratch then takes `%eax` and advances the cursor to 51 instead of
+3 (measured with the scratch observer).  About 50 re-spellings of `enterRRN` keep
+its gain but none restores the victim, and reverting `enterRRN` costs its
+28-byte gain -- so the choice is the `enterRRN` gain or the victim's EXACT grade,
+and keeping the gain with the victim displaced is the current call.
 
 **Validation.**  `byteident --ratchet-self-test` 77/77;
-`link_selected_check --self-test` 24/24; the real ratchet passes --
-`ratchet OK (exact 1235 -> 1245, legacy protected 1270 -> 1279, link-selected
-exact 1238 -> 1247, regalloc 35 -> 34)` with both displacements listed.
+`link_selected_check --self-test` 24/24; `make phase` 404/404 (green); the real
+ratchet passes -- `ratchet OK (exact 1235 -> 1245, legacy protected 1270 ->
+1279, link-selected exact 1238 -> 1248, regalloc 35 -> 34)` with one displacement
+listed.

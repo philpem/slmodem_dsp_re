@@ -417,7 +417,7 @@ V90Phase3Modulator::generateDIL()
 	level = fromSegment ? segmentLevel[segmentIndex]
 			    : dilLevel[dilIndex];
 	unsigned short code = (unsigned short)dilLevel[dilIndex];
-	usingSegmentLevel = (short)fromSegment;
+	usingSegmentLevel = (short)(seq2[seq2Index] == 0);
 
 	if (pcmType != PCM_TYPE_MU_LAW)
 		dilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);
