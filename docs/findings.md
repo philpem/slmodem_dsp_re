@@ -148934,3 +148934,19 @@ zeroing `fill`. Reconstructed accordingly: delta -30 -> -21, instructions 260 ->
 (`flow.c:insn_dead_p`); the object keeps it. `V27TX_delete` stays EXACT.
 Period differentials `t_datafmt`, `t_v27txcreate`, `t_cidsvc`, `t_class1inittx`
 pass; `make phase` 404/404.
+
+## F12213. Numeric --param weight factors are implausible as original build settings
+
+Owner guidance (2026-11-20): a period i686 DSP-library user plausibly changes
+the optimisation level, or turns named optimisations on/off for a particular
+file that misbehaves. Reaching into a numeric weight factor such as
+`--param max-inline-insns-auto=N` is a GCC-developer move, not a user move.
+Prefer a named flag or a source explanation over a weight-factor fit. A
+per-TU `--param` that reproduces a native call boundary is a qualified
+profile hypothesis, not recovered original flags; retain it only when no
+named flag or source form reaches the same boundary, and say so explicitly.
+
+Applied to `bValidateEnergyValue`: the `--param max-inline-insns-auto=50`
+candidate (delta +300 -> +20) was reverted for this reason. The unresolved
+native call to `FDSP_Kernel_InitObj` remains a typed negative; the source
+explanation (a larger original helper, or a named flag) is not excluded.
