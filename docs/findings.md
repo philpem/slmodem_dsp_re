@@ -148762,3 +148762,31 @@ Period differential t_voicesvc passes; census size 460 -> 459, bytes 107 -> 108.
 `dcr_process` V3 (per-case sum/count locals) was measured at delta -1 -> 0 but
 its store placement reads as fitting the object's debug-arm stores rather than
 decoding the original source; parked, not retained.
+
+### F12216. V29TX_create and FPM_FSM_modulate: recovered struct-copy, zero-fill and return-width from the object's own stores
+
+`V29TX_create` (`src/fax/V29tx.c`) was NONMATCH at +4.  Three source facts are
+readable from the object's own stores: the FIFO config is a whole-struct copy
+then zero-filled (`fc = FIFO_CFG; fc.fill = 0;` — the object keeps a 32-bit
+word0+size store and a 0-store), the PPS config writes `step_adj = 0` and
+`coeffs = 120` explicitly (the object emits both redundant zero/120 stores), and
+the SDM `nbits` ternary is written `(rate == 0) ? 3 : 4` (the object folds to
+`setne`).  Result: delta +4 -> 0, run 34 -> 38/261.  Still NONMATCH on the
+dead-store selection at cse2 (the object keeps a dead FIFO copy and drops dead
+SDM/PPS loads; ours does the inverse) — the DSE predicate is not quotable from
+the extracted tree.  Sibling `V29TX_delete` stays EXACT.
+
+`FPM_FSM_modulate` (`src/dsp/fpm_fsm.c`) was NONMATCH at +3.  The object's field
+load is `movswl` then `movzwl` (so the snapshot is `short`) and its epilogue is a
+plain 32-bit load (so the function returns `unsigned short`).  Changing the
+snapshot type to `short` and the return type to `unsigned short` (header
+`include/dsplib/fpm_fsm.h` updated in its one home) removes the 16-bit pseudo
+coalescing and the spill: delta +3 -> 0, run 14 -> 54/69.  Still NONMATCH on a
+`sched2` preheader reorder (`xor total` vs `push` at row 1).  All 8 includer TUs
+plus `B103int` emit byte-identical objects with the prototype changed, so the
+header edit is inert.  Siblings `FPM_FSM_init`/`FPM_FSM_delete` stay EXACT.
+
+`V23ModemMain` V5 (shared `rc` + duplicated carrier) reaches the reference frame
+(0x2c) and non-sibling call but overshoots size (+5 vs baseline +2); parked as a
+measured structural partial, not retained.  Period differentials pass; census
+size 459 -> 457, bytes 108 -> 110.

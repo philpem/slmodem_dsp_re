@@ -46,14 +46,14 @@ FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg)
 	 */
 	state->tone = FPM_TONE_create(state->tone, &tone);
 }
-short
+unsigned short
 FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		 short *out, unsigned short nbits)
 {
 	/* Keep the entry configuration across the tone calls, as in the object. */
 	const short *scaled = state->scaled;
 	short scale = state->cfg.scale;
-	unsigned short samples_per_sym = state->cfg.samples_per_sym;
+	short samples_per_sym = state->cfg.samples_per_sym;
 	unsigned short total = 0;
 
 	while (nbits--) {
@@ -83,7 +83,7 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 			FPM_TONE_generate(state->tone, out++, 1);
 	}
 
-	return (short)total;
+	return total;
 }
 
 

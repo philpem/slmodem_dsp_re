@@ -71,7 +71,7 @@ void FPM_FSM_delete(struct fpm_fsm *state);
  * @param nbits  Number of bits to modulate.
  * @return The number of samples written (`nbits * samples_per_sym`).
  */
-short FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
+unsigned short FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		       short *out, unsigned short nbits);
 
 #endif /* DSPLIB_FPM_FSM_H */

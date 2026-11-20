@@ -142,9 +142,9 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		unsigned short n = (unsigned short)
 			(&((struct v29_tx_root *)modem)->cfg)->fifo_size_factor;
 
-		fc.word0 = FIFO_CFG.word0;
+		fc = FIFO_CFG;
 		fc.size = (short)(n * 3 * 16);
-		fc.fill = FIFO_CFG.fill;
+		fc.fill = 0;
 
 		existing = prm->fifo;
 		prm->fifo =
@@ -213,8 +213,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 	{
 		struct fpm_sdm_cfg dcfg = SDM_CFG;
 
-		dcfg.nbits = (short)((prm->rate != 0)
-				     ? 4 : 3);
+		dcfg.nbits = (short)((prm->rate == 0) ? 3 : 4);
 		dcfg.tap1 = 0x12;
 		dcfg.tap2 = 0x17;
 
@@ -249,8 +248,10 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		pcfg.step = 3;
 		pcfg.mapped = 0;
 		pcfg.scale = V29TX_PPS_SCALE[prm->rate];
+		pcfg.step_adj = 0;
 		pcfg.coeff_i = V29TX_PPS_IFILT;
 		pcfg.coeff_q = V29TX_PPS_QFILT;
+		pcfg.coeffs = 120;
 		pcfg.aux = (&((struct v29_tx_root *)modem)->cfg)->aux;
 
 		FPM_PPS_init(&((struct v29_tx_root *)modem)->tx->pps, &pcfg, fresh);
