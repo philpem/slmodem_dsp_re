@@ -76,28 +76,28 @@ unsigned short
 FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src, short *out,
 	       unsigned short count)
 {
-	const short *coeff_i = state->cfg.coeff_i;
-	const short *coeff_q = state->cfg.coeff_q;
-	short *hist_i = state->hist_i;
-	short *hist_q = state->hist_q;
-	int scale = state->cfg.scale;
-	const short *imap = state->cfg.imap;
-	const short *qmap = state->cfg.qmap;
-	const short *in_i = src->i;
-	const short *in_q = src->q;
-	const short *sym = src->sym;
 	short phases = state->cfg.phases;
 	short step = state->cfg.step;
 	short taps = state->taps;
 	short need = state->need;
-	short phase = state->phase;
 	short widx = state->widx;
 	short ridx = src->ridx;
 	short len = src->len;
+	short phase = state->phase;
+	short si, sq, yi, yq;
+	int scale = state->cfg.scale;
+	const short *imap = state->cfg.imap;
+	const short *qmap = state->cfg.qmap;
+	const short *coeff_i = state->cfg.coeff_i;
+	const short *coeff_q = state->cfg.coeff_q;
+	short *hist_i = state->hist_i;
+	short *hist_q = state->hist_q;
+	const short *in_i = src->i;
+	const short *in_q = src->q;
+	const short *sym = src->sym;
 	unsigned short produced = 0;
 
 	while (count != 0) {
-		short si, sq, yi, yq;
 
 		if (need != 0) {
 			/*
@@ -132,8 +132,8 @@ FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src, short *out,
 		yq = pps_rail(hist_q, coeff_q, phases, phase,
 			      taps, widx);
 
-		produced = (unsigned short)(produced + 1);
 		*out++ = (short)(((short)(yi - yq) * scale) >> 15);
+		produced = (unsigned short)(produced + 1);
 
 		/*
 		 * Advance the phase.  A wrap is what consumes the next symbol,

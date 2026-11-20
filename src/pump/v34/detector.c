@@ -88,15 +88,15 @@ tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *start,
 		d->y[0][0] = (short)acc;
 		d->y[0][1] = old;
 
+		old = d->x[0][0];
+		d->x[0][0] = (short)(x >> 4);
+		d->x[0][1] = old;
+
 		/*
 		 * Shift the 32-bit accumulator, THEN truncate.  Section 2
 		 * does the opposite; see the file comment.
 		 */
 		mid = (short)(acc >> 4);
-
-		old = d->x[0][0];
-		d->x[0][0] = (short)(x >> 4);
-		d->x[0][1] = old;
 
 		/* --- section 2 --- */
 		acc = mid;

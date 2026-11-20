@@ -148714,3 +148714,28 @@ form, and initialising from the 8000 pair then overriding are all byte-identical
 or worse, so the source order is inert.  The `*samples++` form is derived from
 the object's own emitted pointer walk, not fitted to the byte count.  Period
 differential t_cid_mtd passes; census size 462 -> 461.
+
+### F12214. tone_detect and FPM_PPS_filter: recovered declaration order from the object's own slot/register map
+
+`tone_detect` (`src/pump/v34/detector.c`) was NONMATCH at +7.  The `mid`
+local's live range overlapped `x` because the x-history block was placed after
+`mid`'s definition.  Moving the x-history block above the `mid` computation
+(the object's own store order) removes the overlap: delta +7 -> 0, run 21 -> 23,
+symdiff 31 -> 18.  Still NONMATCH: the residual is bb-reorder trace duplication
+(`-fno-reorder-blocks` clears it) plus a `jg/jl` polarity pair.  The whole TU
+(`detectorinit`) stays EXACT.
+
+`FPM_PPS_filter` (`src/dsp/fpm_pps.c`) was NONMATCH at delta 0 with run 12/229.
+The reference's stack-slot map is directly readable from its ascending pseudo
+numbers (reload's `assign_stack_local` order is pseudo order, `reload.c:1961`),
+so the original declaration order is recoverable: loop scalars first, then the
+filter pointers.  Reordering the declarations to that order and hoisting
+`si, sq, yi, yq` to the top of the function reproduces the reference's slot map
+byte-for-byte: run 12 -> 55, symdiff 43 -> 5.  The one-line body move
+(`*out++` before `produced++`) follows the same object order.  Still NONMATCH:
+two `jg/jl` polarity sites and one extra `state` reload are local-alloc/sched
+residue.  Both siblings (`FPM_PPS_init`, `FPM_PPS_free`) stay EXACT.
+
+Both forms are derived from the object's own emitted order, not fitted to a
+byte count.  Period differentials t_detector and t_fpm_pps pass; census size
+461 -> 460, bytes 106 -> 107.
