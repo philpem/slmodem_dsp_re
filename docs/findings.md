@@ -148451,3 +148451,42 @@ peephole2 scratch, and reordering the scratch-free `V8_setFilters` does not move
 it, so this is NOT a simple upstream-scratch cascade: the register is more likely
 `30.rnreg`'s choice over the function's own RTL.  `CrossDataLinks`/`FDSP_DP_Run`
 (src/service/Beepgen.c) are the same shape (single `pop`).
+
+## F12207. The corpus peephole2-exposure map, a clean flag audit, and what the reorder lever reaches
+
+**A -- exposure map.**  `scratch/promotion-triage/advance_corpus.py` compiled
+each of the 204 non-exact TUs twice (with and without `-fno-peephole2`) and
+classified every non-exact symbol (609).  Result:
+
+| verdict | rows | meaning |
+|---|---:|---|
+| CLEARED | **35** | bytes identical without peephole2; the cursor cannot reach it |
+| EXPOSED | **78** | peephole2 introduces a register the `-fno-peephole2` build never uses |
+| UNDECIDED | **492** | peephole2 changes code, no new register (treat as exposed, weaker) |
+| NO_SYMBOL | 4 | symbol not found after a partial rebuild |
+
+By hill-kind: EXPOSED = 62 COUNT / 13 REORDER / 3 LANE; UNDECIDED = 358 COUNT /
+94 REORDER / 35 LANE / 4 MNEMONIC / 1 OPERAND; CLEARED = 23 COUNT / 10 REORDER /
+2 LANE.  So **only 35 symbols are provably outside the cursor**; the rest are
+reachable in principle -- but F12147's rule stands, exposed is necessary and not
+sufficient.
+
+**F -- flag audit: clean negative.**  No flag-sensitive signature differs between
+the reference and our build: no `__stack_chk_*`, no `__x86.get_pc_thunk.*` in
+either, and the `__divdi3`/`__moddi3` call sites are IDENTICAL (the reference and
+ours both use them only in `ModulusEncoder::progress`,
+`V92ModulusEncoder::progress` and `V90ConstellationPower::calcModulusParameters`).
+The only flag signal is the known one: our `src_service_Beepgen.c.o` (cos/pow/sin)
+and `src_service_PHASOR.c.o` (fmodf) call libm where the reference inlines it --
+F12205's two rows, re-confirmed.  No per-TU flag/profile misconfiguration exists
+to fix, so no source should be fitted around a wrong profile.
+
+**What the reorder lever actually reaches.**  F12206's two promotions were cases
+where the SOURCE ORDER differed from the object.  The pure single-moved REORDER
+rows (`FSE_decision_CD`, `_t30_silence_before_tx_state`, `k56FlexPhase34`,
+`txinit`, `V32FP_create`, `fComputeRMSValueFloatBuf`) are the other kind: one
+instruction moved but the source order ALREADY matches the object, so the
+difference is compiler SCHEDULING (F617), and a source reorder does not apply.
+The lever therefore reaches only the subset of REORDER rows where the author's
+statement order itself differs -- identified by reading the source, not by the
+alignment vector alone.
