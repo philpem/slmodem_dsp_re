@@ -148739,3 +148739,26 @@ residue.  Both siblings (`FPM_PPS_init`, `FPM_PPS_free`) stay EXACT.
 Both forms are derived from the object's own emitted order, not fitted to a
 byte count.  Period differentials t_detector and t_fpm_pps pass; census size
 461 -> 460, bytes 106 -> 107.
+
+### F12215. voice_rx: the reference materialises 1/32767 as an integer bit pattern, not a CONST_DOUBLE
+
+`voice_rx` (`src/service/Rx.c`) was NONMATCH at delta -2: the reference carries a
+3-instruction group our source lacks.  The reference materialises the `1/32767`
+scale as an integer bit pattern through a union type-pun at both format arms
+(`mov $0x38000100,%eax; mov %eax,0x20(%esp); flds 0x20(%esp); fmuls gain`).
+Our plain `(1.0f/32767.0f)` literal is a `CONST_DOUBLE:SF`; `i386.md:2187
+*movsf_1` refuses to load a float constant as an immediate into a non-memory
+destination and routes it through the constant pool (`flds .rodata.cst4`), one
+instruction per arm.  `standard_80387_constant_p` (i386.c:4353) only special-
+cases 0.0/1.0.  The bit pattern `0x38000100` is exactly `1.0f/32767.0f`, so the
+union form is semantically identical.  Two further source facts recovered from
+the object's bytes: the DC blend term order is `v->dc*KEEP + dc*FOLD` (the
+reference's `fldl` sequence), and the u-law loop bound is an `int` (the
+reference compares in 32 bits).  Result: delta -2 -> 0, run 43 -> 166/242.
+Still NONMATCH on an extra epilogue instruction plus two `*hostcount` store
+sites (register allocation / bb-reorder).  Sibling `voice_set_rx` stays EXACT.
+Period differential t_voicesvc passes; census size 460 -> 459, bytes 107 -> 108.
+
+`dcr_process` V3 (per-case sum/count locals) was measured at delta -1 -> 0 but
+its store placement reads as fitting the object's debug-arm stores rather than
+decoding the original source; parked, not retained.

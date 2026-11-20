@@ -278,6 +278,12 @@ int
 voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	 short *tx_lin, unsigned short *hostcount, unsigned short *countp)
 {
+	int ret = 0;
+	union {
+		unsigned int bits;
+		float f;
+	} scale;
+	int hi;
 	unsigned char *out = (unsigned char *)tx_lin;
 	float *flt = v->flt;
 	float sum = 0.0f;
@@ -286,7 +292,6 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	unsigned short i;
 	unsigned short j = 0;
 	int k;
-	int ret = 0;
 
 	(void)rx_flt;
 
@@ -299,7 +304,7 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 		if (v->dc_init)
 			v->dc_init = 0;
 		else
-			dc = (float)(dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP);
+			dc = (float)(v->dc * VOICE_RX_DC_KEEP + dc * VOICE_RX_DC_FOLD);
 		v->dc = dc;
 		for (k = 0; k < have; k++)
 			tx_flt[k] -= v->dc;
@@ -320,7 +325,8 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 		float gain;
 
 		if (v->out_format == 3 || v->out_format == 1) {
-			gain = VOICE_RX_LINEAR_SCALE
+			scale.bits = 0x38000100u;
+			gain = scale.f
 			       * (v->out_format == 1 ? v->gain_fmt1
 						     : v->gain_fmt3);
 			if (*countp > VOICE_RX_MAX_SAMPLES) {
@@ -338,7 +344,8 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 				tx_flt[i] *= gain;
 		}
 
-		for (i = 0; i < have; i++) {
+		hi = have;
+		for (i = 0; i < hi; i++) {
 			unsigned char b;
 
 			b = linear2ulaw((short)(flt[i] * VOICE_RX_FULL_SCALE)
