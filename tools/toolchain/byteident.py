@@ -162,9 +162,13 @@ RATCHET_SELECTED_EXACT_SYMBOLS = "selected_exact_symbols"
 RATCHET_MATCHED_SYMBOLS = "matched_symbols"
 
 DISPLACED = os.path.join(ROOT, "tools", "ci", "displaced.json")
-DISPLACED_METRICS = ("exact", "selected", "both")
+DISPLACED_METRICS = ("exact", "selected", "both", "cascade")
 DISPLACED_PHASES = ("order", "tu-split", "neighbour-codegen")
 DISPLACED_TARGETS = ("REGALLOC", "BYTES", "RELOC", "UNRESOLVED")
+# The grades a `cascade` entry may displace FROM.  A per-TU cascade can move a
+# function out of EXACT, out of grade 0/1, or out of the matched floor, so the
+# entry names which it left.
+DISPLACED_CASCADE_FROM = ("EXACT", "REGALLOC", "MATCHED")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
@@ -198,22 +202,37 @@ def ledger_entry_problem(entry, root=ROOT):
     if entry.get("metric") not in DISPLACED_METRICS:
         return "%s: metric must be one of %s" % (
             symbol, "/".join(DISPLACED_METRICS))
-    if entry.get("from") != "EXACT":
-        return "%s: from must be EXACT" % symbol
-    if entry.get("to") not in DISPLACED_TARGETS:
-        return "%s: to must be one of %s" % (
-            symbol, "/".join(DISPLACED_TARGETS))
     metric = entry.get("metric")
-    if metric in ("exact", "both"):
+    if metric == "cascade":
+        if entry.get("from") not in DISPLACED_CASCADE_FROM:
+            return "%s: cascade from must be one of %s" % (
+                symbol, "/".join(DISPLACED_CASCADE_FROM))
+        if not isinstance(entry.get("to"), str) or \
+                not entry.get("to").strip():
+            return "%s: cascade to must name the current grade" % symbol
+        if not isinstance(entry.get("upstream"), str) or \
+                not entry.get("upstream").strip():
+            return "%s: cascade entry needs upstream" % symbol
         if not isinstance(entry.get("body_sha256"), str) or not \
                 SHA256.fullmatch(entry.get("body_sha256", "")):
-            return ("%s: body_sha256 must be a full 64-hex SHA-256 for "
-                    "metric=%s" % (symbol, metric))
-    if metric in ("selected", "both"):
-        if not isinstance(entry.get("selected_body_sha256"), str) or not \
-                SHA256.fullmatch(entry.get("selected_body_sha256", "")):
-            return ("%s: selected_body_sha256 must be a full 64-hex SHA-256 "
-                    "for metric=%s" % (symbol, metric))
+            return ("%s: cascade entry needs a full 64-hex body_sha256"
+                    % symbol)
+    else:
+        if entry.get("from") != "EXACT":
+            return "%s: from must be EXACT" % symbol
+        if entry.get("to") not in DISPLACED_TARGETS:
+            return "%s: to must be one of %s" % (
+                symbol, "/".join(DISPLACED_TARGETS))
+        if metric in ("exact", "both"):
+            if not isinstance(entry.get("body_sha256"), str) or not \
+                    SHA256.fullmatch(entry.get("body_sha256", "")):
+                return ("%s: body_sha256 must be a full 64-hex SHA-256 for "
+                        "metric=%s" % (symbol, metric))
+        if metric in ("selected", "both"):
+            if not isinstance(entry.get("selected_body_sha256"), str) or not \
+                    SHA256.fullmatch(entry.get("selected_body_sha256", "")):
+                return ("%s: selected_body_sha256 must be a full 64-hex "
+                        "SHA-256 for metric=%s" % (symbol, metric))
     if entry.get("phase") not in DISPLACED_PHASES:
         return "%s: phase must be one of %s" % (
             symbol, "/".join(DISPLACED_PHASES))
@@ -1612,25 +1631,100 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
     selected_now = now.get(RATCHET_SELECTED_EXACT_SYMBOLS)
     selected_now = set(selected_now) if isinstance(selected_now, list) else None
 
-    for symbol in sorted(set(was.get(RATCHET_GRADE01_SYMBOLS, [])) -
-                         grade01_now):
-        failures.append(
-            "grade 0/1 lost: %s -- the function itself got worse; no ledger "
-            "entry can excuse this" % symbol)
-
-    # Use the actual scored REGALLOC names, not the legacy grade01 set or
-    # a claimed current matched list: UNRESOLVED is not a matching proof.
-    for symbol in sorted(set(was.get(RATCHET_MATCHED_SYMBOLS, [])) -
-                         (exact_now | set(grade1_symbols))):
-        failures.append(
-            "matched lost: %s -- no EXACT or REGALLOC proof remains; no "
-            "ledger entry can excuse this" % symbol)
-
     by_symbol = {}
     for entry in displaced:
         if isinstance(entry, dict):
             by_symbol.setdefault(entry.get("symbol"), []).append(entry)
     used = set()
+    cascade_used = False
+    cascade_cache = {}
+
+    def allow(metric, symbol):
+        if (metric, symbol) not in allowed:
+            allowed.append((metric, symbol))
+
+    def cascade_entry(symbol):
+        """A reviewed per-TU cascade displacement, or a reason it is refused.
+
+        `cascade` entries exist because the peephole2 scratch cursor is
+        threaded through a translation unit in emission ORDER: a change in a
+        function moves the allocations of the functions emitted after it, so
+        an unchanged downstream body can leave EXACT or grade 0/1 for a
+        reason that is not its own defect.  Such a loss may be displaced by a
+        reviewed entry pinning the current worst per-TU body and naming the
+        upstream function; it is refused, not accepted, if the aggregate
+        floor drops (checked by the caller).
+
+        Returns (True, None) when displaced, (False, None) when there is no
+        cascade entry at all, and (False, reason) when one is unusable.
+        """
+        matches = [entry for entry in by_symbol.get(symbol, [])
+                   if entry.get("metric") == "cascade"]
+        if not matches:
+            return False, None
+        if len(matches) > 1:
+            return False, ("%d cascade entries match, so the review is "
+                           "ambiguous" % len(matches))
+        entry = matches[0]
+        problem = ledger_entry_problem(entry, root)
+        if problem is not None:
+            return False, problem
+        try:
+            actual = digest(symbol)
+        except ValueError as error:
+            return False, ("cannot measure the current worst per-TU body: %s"
+                           % error)
+        if actual != entry.get("body_sha256"):
+            return False, ("cascade body hash mismatch: entry pins %s, the "
+                           "current worst per-TU body is %s"
+                           % (entry.get("body_sha256"), actual))
+        used.add(id(entry))
+        return True, None
+
+    def cascade_for(symbol):
+        if symbol not in cascade_cache:
+            cascade_cache[symbol] = cascade_entry(symbol)
+        return cascade_cache[symbol]
+
+    for symbol in sorted(set(was.get(RATCHET_GRADE01_SYMBOLS, [])) -
+                         grade01_now):
+        ok, reason = cascade_for(symbol)
+        if ok:
+            allow("cascade", symbol)
+            cascade_used = True
+        elif reason is not None:
+            failures.append("grade 0/1 lost: %s -- %s" % (symbol, reason))
+        else:
+            failures.append(
+                "grade 0/1 lost: %s -- the function itself got worse; no "
+                "reviewed cascade entry excuses this" % symbol)
+
+    # Use the actual scored REGALLOC names, not the legacy grade01 set or
+    # a claimed current matched list: UNRESOLVED is not a matching proof.
+    for symbol in sorted(set(was.get(RATCHET_MATCHED_SYMBOLS, [])) -
+                         (exact_now | set(grade1_symbols))):
+        ok, reason = cascade_for(symbol)
+        if ok:
+            allow("cascade", symbol)
+            cascade_used = True
+        elif reason is not None:
+            failures.append("matched lost: %s -- %s" % (symbol, reason))
+        else:
+            failures.append(
+                "matched lost: %s -- no EXACT or REGALLOC proof remains; no "
+                "reviewed cascade entry excuses this" % symbol)
+
+    # The aggregate floor guards the cascade escape: a reviewed cascade may
+    # explain an individual loss, but it must never let the totals fall.
+    if cascade_used:
+        if now.get("exact", 0) < was.get("exact", 0):
+            failures.append(
+                "aggregate floor: EXACT %d fell below the baseline %d"
+                % (now.get("exact", 0), was.get("exact", 0)))
+        if now.get("grade01", 0) < was.get("grade01", 0):
+            failures.append(
+                "aggregate floor: grade 0/1 %d fell below the baseline %d"
+                % (now.get("grade01", 0), was.get("grade01", 0)))
 
     def candidates(symbol, metric):
         return [entry for entry in by_symbol.get(symbol, [])
@@ -1681,6 +1775,11 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
         return None
 
     for symbol in sorted(set(was.get(RATCHET_EXACT_SYMBOLS, [])) - exact_now):
+        ok, _reason = cascade_for(symbol)
+        if ok:
+            allow("cascade", symbol)
+            cascade_used = True
+            continue
         if symbol not in grade01_now:
             # Already a hard grade-0/1 failure.  The entry still describes a
             # real loss, so do not also call it stale.
@@ -1688,7 +1787,7 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
             continue
         problem = consume(symbol, "exact", True)
         if problem is None:
-            allowed.append(("exact", symbol))
+            allow("exact", symbol)
         else:
             failures.append("EXACT loss %s: %s" % (symbol, problem))
 
@@ -1696,6 +1795,11 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
         for symbol in sorted(
                 set(was.get(RATCHET_SELECTED_EXACT_SYMBOLS, [])) -
                 selected_now):
+            ok, _reason = cascade_for(symbol)
+            if ok:
+                allow("cascade", symbol)
+                cascade_used = True
+                continue
             if multiply_defined is not None and symbol not in multiply_defined:
                 # One definition: phase 2 is phase 0.  The exact check owns
                 # this loss; requiring a second selected pin would demand
@@ -1703,7 +1807,7 @@ def ratchet_displacement(was, now, displaced, digest, grade1_symbols,
                 continue
             problem = consume(symbol, "selected", False)
             if problem is None:
-                allowed.append(("selected", symbol))
+                allow("selected", symbol)
             else:
                 failures.append("link-selected EXACT loss %s: %s"
                                 % (symbol, problem))
@@ -1754,6 +1858,14 @@ def ratchet_self_test():
             item["selected_body_sha256"] = (selected if selected is not None
                                             else selected_digest(symbol))
         return item
+
+    def cascade(symbol, frm="MATCHED", to="NONMATCH", body=None,
+                upstream="_ZN9dummyUpstreamEv", phase="neighbour-codegen"):
+        return {"symbol": symbol, "metric": "cascade", "from": frm, "to": to,
+                "upstream": upstream, "phase": phase, "cause": "reviewed",
+                "recovery": "fix the upstream function in ascending order",
+                "evidence": "tools/ci/displaced.json",
+                "body_sha256": body if body is not None else digest(symbol)}
 
     checks = []
 
@@ -1952,6 +2064,65 @@ def ratchet_self_test():
         was, regressed, [entry("a"), entry("a", metric="both")], digest,
         {"a"})
     check("ambiguous duplicate ledger entries fail", bool(failures))
+
+    # --- cascade displacements (the per-TU emission-order escape) ----------
+    # `a` leaves grade 0/1 and matched while `c` is gained, so the aggregate
+    # floor HOLDS and a reviewed cascade entry may displace the loss.
+    c_was = row(["a", "b"], ["a", "b"], ["a", "b"], [])
+    c_now = row(["b", "c"], ["b", "c"], ["b", "c"], [])
+    failures, allowed = ratchet_displacement(
+        c_was, c_now, [cascade("a")], digest, set())
+    check("cascade entry displaces a grade-0/1 loss when the floor holds",
+          not failures and ("cascade", "a") in allowed)
+
+    failures, allowed = ratchet_displacement(
+        c_was, c_now,
+        [cascade("a", frm="REGALLOC", to="NONMATCH")], digest, set())
+    check("cascade from=REGALLOC accepted",
+          not failures and ("cascade", "a") in allowed)
+
+    failures, _ = ratchet_displacement(
+        c_was, c_now, [cascade("a", upstream="")], digest, set())
+    check("cascade entry without upstream fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        c_was, c_now, [cascade("a", phase="")], digest, set())
+    check("cascade entry without phase fails", bool(failures))
+
+    failures, _ = ratchet_displacement(
+        c_was, c_now, [cascade("a", body="0" * 64)], digest, set())
+    check("cascade entry with a stale body hash fails",
+          any("cascade body hash mismatch" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        c_was, c_now, [], digest, set())
+    check("grade-0/1 loss without any entry still fails",
+          any("grade 0/1 lost: a" in f for f in failures))
+
+    # Aggregate floor: the recorded EXACT count falls, so a cascade entry
+    # cannot save it even though it pins the current body.
+    agg_was = row(["a", "b", "c"], ["a", "b", "c"], ["a", "b", "c"], [])
+    failures, _ = ratchet_displacement(
+        agg_was, c_now, [cascade("a")], digest, set())
+    check("cascade entry cannot hide an aggregate-floor drop",
+          any("aggregate floor" in f for f in failures))
+
+    failures, _ = ratchet_displacement(
+        c_was, c_was, [cascade("a")], digest, set())
+    check("stale cascade entry fails",
+          any("stale ledger entry" in f for f in failures))
+
+    # Structural validation of a cascade entry.
+    check("well-formed cascade entry is valid",
+          ledger_entry_problem(cascade("a")) is None)
+    for label, mutate in (
+            ("missing upstream", {"upstream": ""}),
+            ("bad from", {"from": "BYTES"}),
+            ("empty to", {"to": ""}),
+            ("no body hash", {"body_sha256": "x"})):
+        bad = dict(cascade("a"), **mutate)
+        check("cascade entry rejects %s" % label,
+              ledger_entry_problem(bad) is not None)
 
     # --- the selected pin must be the SELECTED body -----------------------
     # Worst body unchanged (digest), selected body changed (selected_digest

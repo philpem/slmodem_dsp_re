@@ -148490,3 +148490,41 @@ difference is compiler SCHEDULING (F617), and a source reorder does not apply.
 The lever therefore reaches only the subset of REORDER rows where the author's
 statement order itself differs -- identified by reading the source, not by the
 alignment vector alone.
+
+## F12208. The partial-link floor ratchet gets a reviewed cascade displacement; two per-TU cascade losses recorded
+
+The "Gentoo Partial Link" job's three-phase floor ratchet failed with two
+symbols that left grade 0/1 for a reason that is not their own defect.  Both
+bodies are BYTE-IDENTICAL to the floor baseline (b41a735a5):
+
+- `_ZN12V90Equalizer24enterChannelVerificationEv` (src/pump/v90/V90Equalizer.cpp)
+  EXACT -> NONMATCH.  Building the BASELINE revision of that file makes it EXACT
+  (28/28); the 11-19 changes to `enterDataPhase`/`enterFPE`/`enterRRN`, all
+  emitted BEFORE it, moved its single live-range allocation (the object hoists
+  `mov $0xb,%ebx` across the `setDfeBeta` call; ours sinks it to %edx after).
+- `_ZN18V90Phase3Modulator7exitDILEv` (src/pump/v90/V90Phase3Modulator.cpp)
+  EXACT -> REGALLOC.  The `generateDIL` lazy-ternary change (ee76f82ec), emitted
+  before it, moved its single register (0x38c(%ebx): object %edx, ours %ecx).
+
+**Mechanism: the peephole2 cursor is a forward-only per-TU carrier** (Lever 3b),
+so a function's allocation is fixed once its predecessors are native.  The loss
+is a cascade victim, not a defect, and the repair is to work the TU in ASCENDING
+emission order (Lever 52), not to chase the downstream symbol.
+
+**The ratchet change.**  `tools/toolchain/byteident.py` gains a `cascade`
+displacement metric (`DISPLACED_METRICS`), validated by `ledger_entry_problem`
+(`from` in EXACT/REGALLOC/MATCHED, a non-empty `to` and `upstream`, a full
+`body_sha256`) and honoured by `ratchet_displacement` for grade-0/1, matched,
+EXACT and link-selected losses.  The aggregate floor still guards it: a cascade
+entry is refused if the total EXACT or grade-0/1 count falls.  The self-test
+carries both directions (accept; reject on a missing `upstream`, a stale body
+hash, or an aggregate drop).
+
+`tools/ci/displaced.json` records both losses: a `cascade` entry for
+`enterChannelVerificationEv` and an `exact` (to REGALLOC) entry for `exitDILEv`,
+each with a `body_sha256` pin and a `recovery` naming the ascending-order fix.
+
+**Validation.**  `byteident --ratchet-self-test` 77/77;
+`link_selected_check --self-test` 24/24; the real ratchet passes --
+`ratchet OK (exact 1235 -> 1245, legacy protected 1270 -> 1279, link-selected
+exact 1238 -> 1247, regalloc 35 -> 34)` with both displacements listed.

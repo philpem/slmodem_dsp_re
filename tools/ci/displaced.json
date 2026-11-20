@@ -1,4 +1,28 @@
 {
   "version": 1,
-  "displaced": []
+  "displaced": [
+    {
+      "symbol": "_ZN12V90Equalizer24enterChannelVerificationEv",
+      "metric": "cascade",
+      "from": "MATCHED",
+      "to": "NONMATCH",
+      "upstream": "_ZN12V90Equalizer8enterRRNEv",
+      "phase": "neighbour-codegen",
+      "cause": "Per-TU peephole2 emission-order cascade. The body is byte-identical to the floor baseline, and building the baseline revision of src/pump/v90/V90Equalizer.cpp makes it EXACT (28/28); the 11-19 changes to enterDataPhase/enterFPE/enterRRN, all emitted before it, moved its single live-range allocation (native hoists `mov $0xb,%ebx` across the setDfeBeta call, ours sinks it to %edx after).",
+      "recovery": "Fix the earliest non-native function in V90Equalizer.cpp in ascending emission order and re-measure the whole TU; remove this entry when the symbol returns to grade 0/1.",
+      "evidence": "docs/findings.md",
+      "body_sha256": "00ff908e274ba4c01ad8c859a3ccd9039ac769c9771312ead7b67aafe8d824b6"
+    },
+    {
+      "symbol": "_ZN18V90Phase3Modulator7exitDILEv",
+      "metric": "exact",
+      "from": "EXACT",
+      "to": "REGALLOC",
+      "phase": "neighbour-codegen",
+      "cause": "Per-TU peephole2 emission-order cascade. The body is byte-identical to the floor baseline; the generateDIL lazy-ternary change (ee76f82ec), emitted before it, moved its single register (native reads 0x38c(%ebx) into %edx, ours into %ecx).",
+      "recovery": "Fix generateDIL/exitDILEv in ascending emission order and re-measure the TU; remove this entry when the symbol returns to EXACT.",
+      "evidence": "docs/findings.md",
+      "body_sha256": "9a6216501aa0ec60893593b29569a024d8e354daff4b9e8a4ce25d6782571329"
+    }
+  ]
 }

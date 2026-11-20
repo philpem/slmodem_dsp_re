@@ -4993,6 +4993,42 @@ and after in the commit message, add the review entry in the same batch, and
 expect the ratchet to keep failing until you do. A loss with no review is not a
 smaller problem than a red differential -- it is the same problem with a quieter
 alarm.
+
+### Lever 52. Work a TU in ASCENDING EMISSION ORDER; the peephole2 cursor makes a downstream loss a victim, not a defect
+
+The one cross-function carrier is the peephole2 round-robin cursor
+(`recog.c`'s `static int search_ofs`), advanced only on a successful scratch
+find and reset on failure, threaded through a translation unit in EMISSION
+order (Lever 3b; `global_alloc`, `sched2`, `bb-reorder` and `rnreg` are all
+per-function).  So a function's codegen is (its own source) x (the cursor state
+it RECEIVES), and that state is fixed entirely by the functions emitted before
+it.  That is a DAG that resolves in ONE ascending pass: fix f1, then f2, ... and
+each function receives the native cursor once its predecessors are native.
+
+Two rules follow:
+
+- **Do not spend on a downstream function while an upstream one is non-native.**
+  Its grade is contaminated by the cursor it inherited, and chasing it is
+  chasing a symptom.  The next target is the EARLIEST function whose own
+  canonical diff is not explained by a predecessor.
+- **But DO re-measure the whole TU after each fix.**  A predecessor fix can
+  promote a downstream function for free (the `Dtmf_Rx.c` bystander, Lever 3b),
+  so a downstream difference is a victim until its predecessors are native --
+  not a separate work item.
+
+That makes a per-TU cascade loss a reviewable event, not a defect.  The
+partial-link floor ratchet accepts a `cascade` entry in `tools/ci/displaced.json`
+(`metric: "cascade"`, with `from` in EXACT/REGALLOC/MATCHED, the current `to`,
+the `upstream` function, and a `body_sha256` pinning the current worst per-TU
+body).  It is refused if the aggregate floor drops, and the entry goes stale and
+must be removed when the symbol returns -- so the loss stays visible and forced
+to be explained, rather than silently re-blessed.
+
+The worked case is F12208: `enterChannelVerificationEv` (V90Equalizer.cpp) and
+`exitDILEv` (V90Phase3Modulator.cpp), both with bodies byte-identical to the
+floor baseline yet moved out of EXACT by the 11-19 changes to functions emitted
+before them.
+
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
