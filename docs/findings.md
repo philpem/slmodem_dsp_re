@@ -148890,3 +148890,27 @@ init, the struct-copy `fc = FIFO_CFG`, and the field-access idiom: delta -81 ->
 +4, instructions 169 -> 172 of 174. The residual is register allocation and
 block ordering. `V21TX_delete` stays EXACT. Period differentials `t_fpm_ecc`,
 `t_v21txcreate`, `t_faxadapt` and `t_v29txcreate` pass; `make phase` 404/404.
+
+### F12221. V17RX_create: the SDM/SGD config slot order is fixed by the object's frame map
+
+`V17RX_create` (`src/fax/V17rx.c`) was 126 bytes short. The object's local slot
+map fixes the declaration order: `sgd_cfg` sits at +0x... and `sdm_cfg` at the
+lower offset, so the source must declare `sdmcfg` before `sgdcfg` (the same
+lever as the tone_detect slot-map recovery). Swapping the two declarations takes
+the delta -126 -> -94 and the instruction count 621 -> 623 of 634. The residual
+is register allocation: the object reloads the incoming `modem` slot and keeps
+`ctl_fresh` in a callee-saved register; ours keeps `modem` in a register. No
+missing statement: the 22 call anchors and all field writes are present.
+`V17RX_delete` stays EXACT. Period differentials `t_v17cfg`, `t_class1initrx`,
+`t_faxstatusprotocol` pass.
+
+`FPM_FSD_demodulate` is a frame-allocation residue, not a missing statement: the
+opcode bag is identical and the 7-instruction gap is reload spill pairs from a
+16-byte larger frame. A `struct fpm_fsd_cfg` local copy reproduces the object's
+frame 0x7c and reaches delta 0, but it materialises a 28-byte prologue copy the
+object does not have, so it is a carrier, not the original source; not retained.
+`Dual_TONE_detect` is also allocation: the computational opcode bag is identical
+and the gap is spill/reload plus loop-lowering; the captured-pointer idiom is a
+measured partial (delta -17 -> -7), not a promotion. `DILdescriptorPacker` is
+allocator spill/zero-idiom: the source implements the algorithm completely and
+the period test `t_dilpack` passes; no spelling variant moved the grade.

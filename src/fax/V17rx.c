@@ -128,8 +128,8 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	struct fpm_mrf_cfg mrfcfg;
 	struct fpm_sre_cfg srecfg;
 	struct fpm_fse_cfg fsecfg;
-	struct sgd_cfg sgdcfg;
 	struct fpm_sdm_cfg sdmcfg;
+	struct sgd_cfg sgdcfg;
 	struct vtb *v;
 	short *mrfbuf;
 	short *srebuf;
