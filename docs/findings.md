@@ -148407,3 +148407,47 @@ stack spill, visible as a four-byte-larger frame and a store/reload pair that ou
 build avoids).  Use `mnemcls.py` first to drop the copy/stack-only rows, then
 read the remainder; a `delete` in missrank is the only thing worth chasing as
 lever 2.
+
+## F12206. Two promotions by enumerating a two-member order space; and a hill-view diagnostic
+
+The "fit the compiler" rule was re-read: the objective IS the authority
+compiler's output, and the prohibition is fitting a *disparate* compiler (a
+modern GCC, a different 3.4.x, wrong flags) plus retaining a match from a
+many-to-one map without an exhausted candidate space or a predicted mechanism
+(F7782/F84530's taken/declined line).  Under that reading a small candidate
+space enumerated to completion with a unique preimage is a *decode*, not a fit.
+
+**`dftenergy`** (src/pump/v34/DFTC.c) was NONMATCH, delta 0, 69/69 instructions.
+The object stores `energy` (+0xc) BEFORE `denergy` (`fstpl 0x20`); our source had
+the `denergy` assignment first.  The two-member space (energy-first,
+denergy-first) was enumerated and only energy-first reproduces the bytes.  The
+denergy expression is kept whole, so the x87 rounding is unchanged.  **NONMATCH
+-> EXACT** (69/69).  `dftupdate` stays EXACT.
+
+**`V29TX_control`** (src/fax/V29t_stc.c) was REGALLOC, delta 0, 38/38.  The
+object reads `rate` AFTER the first `scale` store (`tx = ...->tx`, the store,
+then `movswl 0xc(%edi)`); our source read it before.  Same two-member
+enumeration; only the late read reproduces the object's %ecx/%edx lanes.
+**REGALLOC -> EXACT** (38/38).  `V29TX_status` unchanged.
+
+Census **1243 -> 1245 EXACT / 35 -> 34 REGALLOC / 574 -> 573 NONMATCH**; `make
+phase` green (404 passed, 0 failed).  `make period` green for `t_v34dft` and
+`t_v29txcreate`.
+
+**Hill view (`scratch/promotion-triage/hill.py`, local).**  A read-only
+per-function diagnostic vector: `count_delta`, and the aligned rows split into
+`lane` (register-only), `operand`, `mnemonic`, `missing`, `extra`, plus
+`align_ratio` and the first-divergence position.  Over the 609 non-exact rows:
+**41 LANE, 118 REORDER (same count, block moved), 445 COUNT, 4 MNEMONIC, 1
+OPERAND**.  Diagnostic only, never a grade -- its job is to steer an enumeration,
+not to score (F617/structsim's rule).
+
+**The peephole2 `pop` scratch is a recurring LANE shape.**  `i386.md:18083`'s
+"convert esp additions to pop" `define_peephole2` takes a `match_scratch:SI 0
+"r"`, so the `pop %reg` register is filled from `search_ofs` (Lever 3b).
+`v8_fsktxfilter` (src/v8/V8Dpsk.c) differs from the object ONLY in `pop %ecx`
+vs `pop %edx` -- a REGALLOC row.  Its TU's three prior functions carry no
+peephole2 scratch, and reordering the scratch-free `V8_setFilters` does not move
+it, so this is NOT a simple upstream-scratch cascade: the register is more likely
+`30.rnreg`'s choice over the function's own RTL.  `CrossDataLinks`/`FDSP_DP_Run`
+(src/service/Beepgen.c) are the same shape (single `pop`).

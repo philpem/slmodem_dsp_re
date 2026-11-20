@@ -203,18 +203,24 @@ dftenergy(struct v34_dftbin *bins, short nbins, short scale)
 		unsigned e;
 		short k;
 
-		/*
-		 * One expression, so the two squares and the sum stay in x87
-		 * registers and round once.  Splitting it would change the
-		 * result in the last place.
-		 */
-		bins->denergy = bins->sum_re * bins->sum_re
-			      + bins->sum_im * bins->sum_im;
-
 		re >>= 16;
 		im >>= 16;
 		e = (unsigned)(re * re) + (unsigned)(im * im);
 		bins->energy = (short)((int)e >> 16);
+
+		/*
+		 * One expression, so the two squares and the sum stay in x87
+		 * registers and round once.  Splitting it would change the
+		 * result in the last place.  The object stores `energy`
+		 * BEFORE `denergy` -- `mov %r16,0xc` then `fstpl 0x20` -- so
+		 * this assignment sits after the integer block; the denergy
+		 * expression is still whole, so the x87 rounding is
+		 * unchanged.  The order is decoded from the object, not
+		 * fitted: the two-member space (this order and the reverse)
+		 * was enumerated and only this one reproduces the bytes.
+		 */
+		bins->denergy = bins->sum_re * bins->sum_re
+			      + bins->sum_im * bins->sum_im;
 
 		/*
 		 * Count the redundant sign bits of `e`, which is the exponent

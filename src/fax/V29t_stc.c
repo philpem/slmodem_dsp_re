@@ -42,9 +42,17 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 		return 0;
 
 	prm = ((struct v29_tx_root *)fp)->params;
-	rate = prm->rate;
 
+	/*
+	 * The rate is read AFTER the first scale store, not before it.  The
+	 * object's order is `tx = ...->tx` (0x24(%esi)) then the store, then
+	 * `rate = prm->rate` (movswl 0xc(%edi)) -- and that statement order
+	 * is what gives the two values %ecx/%edx as the object does.  Both
+	 * orders are legal (neither reads what the other writes); the
+	 * two-member space was enumerated and only this one matches.
+	 */
 	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = req->scale_mul;
+	rate = prm->rate;
 	((struct v29_tx_root *)fp)->tx->pps.cfg.scale *= V29TX_PPS_SCALE[rate];
 
 	((struct v29tx_cfg *)fp)->int_0008 = req->int_0004;
