@@ -148641,3 +148641,42 @@ source lever moves it; parked with the allocator as the named mechanism.
 `make phase` 404/404; period differentials `t_v90leaves`, `t_v32seq`,
 `t_v32rxhdx` all 1/0.  Census unchanged at 1247 EXACT / 34 REGALLOC / 571
 NONMATCH (both partials stay NONMATCH); ratchet OK.
+
+## F12211. V17RX_modem EXACT (whole TU 10/10); V22FP_control and FPM_atan typed negatives
+
+Third batch over single-non-exact TUs.  One whole-function promotion and a
+whole-TU completion; two targets closed as allocator-internal negatives.
+
+### V17RX_modem -- EXACT (src/fax/V17r_prc.c)
+
+The missing spill was a global-alloc ordering difference.  The reference body
+is instruction-for-instruction identical to the already-EXACT V27RX_modem and
+V29RX_modem; their idiom reads `*count` directly for both the subtraction and
+the loop test (no `left` local), which changes count's reference structure and
+flips the global-alloc order so `count` takes ebp and `total` spills to
+0x18(%esp) -- exactly the two native instructions the reconstruction lacked.
+Rewriting to the shared idiom (inline `before = (short)*count`, `in += before -
+(unsigned short)*count`, `while (*count != 0)`) makes the whole TU 10/10 EXACT.
+Period differential t_v17fax passes.
+
+### V22FP_control -- typed negative (src/pump/v22/v22stc.c)
+
+A pure REGALLOC lane swap in block 0.  Mechanism: local-alloc's qty priority
+`floor_log2(n_refs)*freq*size/(death-birth)` (local-alloc.c:1672) orders
+`dsp` (p65) above `scrambler` (p64); flipping needs span65/span64 > 1.5.  The
+object's store order pins scrambler's death and def so the ratio cannot exceed
+1.4; statement and declaration order are inert.  A GDB dump of qty_order at
+local-alloc.c:1567 confirmed the ranking.  Reopen only with a typed caller.
+
+### FPM_atan -- partial / typed negative (src/dsp/fpm_atan.c)
+
+Three coupled source-shape differences: the branchless abs needs the `abs()`
+builtin (expand_abs_nojump xor/sub path), the octant masks need `(int)y >> 31`,
+and the shortcut needs `(short)ratio`.  The derived V1 lands on native's 114
+instructions (symdiff 40 -> 20) but the residual is a global register-allocation
+swap (a in ecx vs edx) that source shaping did not move.
+
+### Validation
+
+`make phase` 404/404; census 1247 -> 1248 EXACT / 571 -> 570 NONMATCH (34
+REGALLOC); ratchet OK (`exact 1235 -> 1248, link-selected exact 1238 -> 1251`).

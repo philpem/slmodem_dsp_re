@@ -41,35 +41,27 @@
 int
 V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 {
-	short total;
-	short before;
-	unsigned short left;
+	short total = 0;
 
 	RXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17RX_FLAG_ERROR;
 
-	total = 0;
+	/*
+	 * A do-while, like V27RX_modem and V29RX_modem: the state handler is
+	 * entered once even when the caller offers no samples.  `before` is
+	 * signed and a fresh `*count` is not, which the object states by
+	 * extending the same sixteen bits two different ways; the compiler
+	 * shares the one load across the back edge.
+	 */
 	do {
-		struct v17rx_priv *ctl;
+		short before = (short)*count;
 		short got;
 
-		/*
-		 * `before` is signed and `left` is not, and both are what the
-		 * object encodes: ONE 16-bit load feeds a `movswl` at the top
-		 * of the loop and a `movzwl` after the call, because the
-		 * compiler shared the read across the back edge.
-		 */
-		before = (short)*count;
-
-		ctl = RXCTL(modem);
-		got = ctl->process
-				(modem, in, out, count);
-
-		left = *count;
-		in += before - left;
+		got = RXCTL(modem)->process(modem, in, out, count);
 		out += got;
+		in += before - (unsigned short)*count;
 		total = (short)(total + got);
-	} while (left != 0);
+	} while (*count != 0);
 
 	*count = (unsigned short)total;
 
