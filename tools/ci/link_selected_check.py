@@ -34,34 +34,28 @@ import argparse
 import re
 import sys
 
-# Re-pinned 2026-11-20.  `_ZN9ScramblerIhiE5resetEh` LEFT the disagreement
-# ledger: commit 1ec83de99 made Scrambler<unsigned char,int>::reset EXACT in
-# both defining TUs (V90Phase3Modulator.cpp.o and V92Phase3Modulator.cpp.o), so
-# the pair no longer disagree and the disagreement count fell 3 -> 2.  The
-# denominator (30 names / 62 records) and the other two disagreement names are
-# unchanged.  This is a grade improvement, not drift.  Measured with
-#     make partial-link && TC_OUT=build/tc_repro \
-#       python3 tools/toolchain/byteident.py --link-selected
+# Re-pinned 2026-11-20 (second re-pin).  `_ZN9ScramblerIhiE5resetEh` is a
+# disagreement AGAIN: the generateDIL cursor re-spell (c0f72c071) returned the
+# V90Phase3Modulator.cpp.o copy to REGALLOC while the V92Phase3Modulator.cpp.o
+# copy -- the link-selected one -- stays EXACT, so the pair disagree and the
+# count is back to 3.  The same change recovers Scrambler<unsigned char,h>::reset
+# 's sibling and exitDILEv, so the link-selected metric rises (right place
+# 1247 -> 1248); this is a deliberate ledger update, not drift.
 #
-# Prior re-pin (2026-11-18): the denominator fell from 32 names / 66 records to
-# 30 / 62 between the original measurement (8c59d7a90) and b41a735a5: the two
-# Scrambler<int, unsigned char> methods
-#     _ZN9ScramblerIihE15copyHistoryTailEv
-#     _ZN9ScramblerIihE7processEPKiPhj
-# were defined by BOTH V90Modulator.cpp.o and V92Modulator.cpp.o at the
-# original measurement and are now emitted by V90Modulator.cpp.o alone --
-# V92Modulator.cpp inlines them, so no second record is written.
+# Prior re-pin (2026-11-20): `_ZN9ScramblerIhiE5resetEh` had LEFT the ledger when
+# 1ec83de99 made it EXACT in both defining TUs.
 EXPECTED = {
     "names": 30,
     "records": 62,
     "resolved": 30,
     "unresolved": 0,
-    "disagreements": 2,
+    "disagreements": 3,
 }
 
 EXACT_SELECTED = frozenset({
     "_ZN9ScramblerIhhE5resetEh",
     "_ZN9ScramblerIhhEC1Ejjj",
+    "_ZN9ScramblerIhiE5resetEh",
 })
 
 NEGATIVE_CONTROL = "_Z7hanningIfEvPT_j"
@@ -69,7 +63,7 @@ NEGATIVE_CONTROL = "_Z7hanningIfEvPT_j"
 # Phase 2's correction: names whose SELECTED body is EXACT while the worst
 # per-TU copy is not.  Each one is +1 to link-selected EXACT over per-TU
 # EXACT, so the pinned difference and the report must agree.
-EXPECTED_SELECTED_ONLY = 2
+EXPECTED_SELECTED_ONLY = 3
 
 DENOMINATOR = re.compile(
     r"denominator\s*:\s*(\d+)\s+multiply-defined name\(s\),\s*"
@@ -251,17 +245,18 @@ FIXTURE = """\
     linked      : build/partial/dsplibs.o  sha256 0000000000000000000000000000000000000000000000000000000000000000
     denominator : 30 multiply-defined name(s), 62 definition record(s);
                   30 link-resolved, 0 unresolved
-    disagreements: 2 name(s) whose copies get different verdicts
+    disagreements: 3 name(s) whose copies get different verdicts
     worst-copy  selected    symbol
     REGALLOC    EXACT       _ZN9ScramblerIhhE5resetEh
     BYTES       EXACT       _ZN9ScramblerIhhEC1Ejjj
+    REGALLOC    EXACT       _ZN9ScramblerIhiE5resetEh
     selected linked bodies matching an input copy: 30/30
 """
 
 SUMMARY_FIXTURE = """\
 phase summary (diagnostic)
   functions right   : per-TU grade 0 or 1   1182 / 1852
-  right place       : link-selected EXACT   1148
+  right place       : link-selected EXACT   1149
   per-TU bytes      : EXACT                 1146
   displaced         : 0 reviewed in tools/ci/displaced.json
   end target        : make partial-compare-exact (not yet reached)
@@ -303,8 +298,8 @@ def self_test():
            FIXTURE.replace("30 link-resolved, 0 unresolved",
                            "29 link-resolved, 1 unresolved"), False)
     expect("changed disagreement count rejected",
-           FIXTURE.replace("2 name(s) whose copies get different verdicts",
-                           "1 name(s) whose copies get different verdicts"),
+           FIXTURE.replace("3 name(s) whose copies get different verdicts",
+                           "2 name(s) whose copies get different verdicts"),
            False)
 
     missing = "\n".join(line for line in FIXTURE.splitlines()
@@ -337,21 +332,21 @@ def self_test():
                      if "end target" not in line) + "\n")
     expect("unavailable link-selected metric rejected", FIXTURE, False,
            SUMMARY_FIXTURE.replace(
-               "link-selected EXACT   1148",
+               "link-selected EXACT   1149",
                "link-selected EXACT : unavailable (run make partial-link)"))
     expect("grade-0-or-1 below EXACT rejected", FIXTURE, False,
            SUMMARY_FIXTURE.replace("1182 / 1852", "1145 / 1852"))
     expect("link-selected EXACT below EXACT rejected", FIXTURE, False,
-           SUMMARY_FIXTURE.replace("link-selected EXACT   1148",
+           SUMMARY_FIXTURE.replace("link-selected EXACT   1149",
                                    "link-selected EXACT   1145"))
     expect("selected/exact difference mismatch rejected", FIXTURE, False,
-           SUMMARY_FIXTURE.replace("link-selected EXACT   1148",
+           SUMMARY_FIXTURE.replace("link-selected EXACT   1149",
                                    "link-selected EXACT   1150"))
     two = FIXTURE.replace(
         "    BYTES       EXACT       _ZN9ScramblerIhhEC1Ejjj",
         "    EXACT       EXACT       _ZN9ScramblerIhhEC1Ejjj")
     expect("selected-only disagreement pin rejected", two, False,
-           SUMMARY_FIXTURE.replace("link-selected EXACT   1148",
+           SUMMARY_FIXTURE.replace("link-selected EXACT   1149",
                                    "link-selected EXACT   1147"))
     expect("displaced ledger line missing rejected", FIXTURE, False,
            "\n".join(line for line in SUMMARY_FIXTURE.splitlines()
