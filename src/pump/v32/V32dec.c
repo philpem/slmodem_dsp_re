@@ -111,7 +111,7 @@ fse_differential(struct v32_dec *m, short ib, short qb)
 {
 	int prev = m->prev_sym[(short)m->chan];
 	int found = 0;
-	int quad;
+	unsigned quad;
 	short j;
 
 	for (j = 0; j <= 15; j++)
@@ -384,8 +384,8 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 	best = 0;
 	min = 0x7fff;
 	for (k = 0; k <= 15; k++) {
-		int di = i - DECv32_IMAP16[k];
-		int dq = q - DECv32_QMAP16[k];
+		int di = i - (unsigned short)DECv32_IMAP16[k];
+		int dq = q - (unsigned short)DECv32_QMAP16[k];
 		/* The native metric keeps full-width differences until the final
 		 * signed-short narrowing.  Cast before each multiplication so
 		 * both products and their sum wrap modulo 2**32 in C. */
@@ -421,7 +421,7 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 
 	{
 		int prev = m->prev_sym[(short)m->chan];
-		int quad;
+		unsigned quad;
 		short j;
 
 		for (j = 0; j <= 15; j++)

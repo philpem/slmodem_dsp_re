@@ -148813,3 +148813,20 @@ symdiff 2/169 but delta -2; its single residual is a global-alloc tie-break
 (w pseudo in call-clobbered edx vs call-saved ebx) with no readable allocno_order
 in the extracted tree.  Parked.  Period differentials pass; census unchanged
 (1251/34/567, size 457, bytes 110).
+
+### F12218. V32dec FSE family: the differential index is unsigned and the 16-point metric reads its tables unsigned
+
+`fse_differential` and `FSE_decision_16pt` (`src/pump/v32/V32dec.c`) declared the
+differential index `quad` as `int`, so `((quad - prev) & 0xf) >> 2` compiled to a
+signed `sar $0x2`.  The object's own shift at that site is the logical
+`shr $0x2` (`0x81212` in `FSE_decision_4pt`), so the index is unsigned.  Declaring
+both `quad` variables `unsigned` restores the logical shift byte-for-byte in the
+instruction form (the register still differs, so the byte delta is unchanged).
+
+`FSE_decision_16pt`'s metric loop additionally read the 16-point tables with a
+signed `movswl`; the object reads them with `movzwl` (the selection lookup stays
+signed).  Casting the two loop reads to `(unsigned short)` restores the unsigned
+load.  Affected functions stay NONMATCH (their residue is register allocation),
+but the shift and load forms now match the object.  No sibling regressed; all
+nine instruction counts are unchanged.  Period differentials `t_v32fse`,
+`t_v32d302`, `t_v32nsrng` pass; `make phase` 404/404.
