@@ -155,7 +155,7 @@ CID_process(void *cidp, void *in, int count)
 	for (;;) {
 		int chunk;
 		short n;
-		short res;
+		int res;
 
 		if (count <= 0)
 			break;

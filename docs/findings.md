@@ -148547,3 +148547,53 @@ and keeping the gain with the victim displaced is the current call.
 ratchet passes -- `ratchet OK (exact 1235 -> 1245, legacy protected 1270 ->
 1279, link-selected exact 1238 -> 1248, regalloc 35 -> 34)` with one displacement
 listed.
+
+## F12209. Two single-non-exact TU promotions (GetSNRV21, V21RX_status) and one witnessed partial (CID_process)
+
+A batch over the closest single-non-exact TUs.  Two whole-function
+EXACT promotions landed; the third produced a witnessed type correction
+that improved the run but did not reach EXACT.
+
+### GetSNRV21 -- EXACT (src/fax/V21r_int.c)
+
+The single difference was the loop-entry guard: native `test %bx,%bx;
+jle` (folds the bound), ours `cmp %bx,%bx; jle`-style duplicate of the
+back-edge test.  The mechanism is `copy_loop_headers` in `jump.c`:147,
+which calls `duplicate_loop_exit_test` (jump.c:303) ONLY when
+`NOTE_INSN_LOOP_BEG` is immediately followed by an unconditional jump.
+A top-entered `for` emits that jump, so the exit test is duplicated and
+then forwarded to the loop2 guard; a bottom-tested `do { } while` does
+not, so the explicit `if (n > 0)` guard is the sole entry test and folds
+to the native `test`.  Spelling: `short i = 0; if (n > 0) { do { ...;
+i++; } while (i < n); }` then the empty second loop.  Typed negatives:
+the `for`, `while`, and `if + for` spellings are excluded by the same
+predicate; the empty second loop is real (D1038) and must stay.
+
+### V21RX_status -- EXACT (src/fax/V21r_stc.c)
+
+Two differences: a sched2 store order (native keeps the flag stores
+after the fsd loads) and `add` vs `lea` for `2 * f22`.  Moving the
+`short_12` assignment before the flag stores and inlining the fsd
+member reads (dropping the `short f22, bit_samples` locals) makes the
+loads precede the stores, so sched2 does not hoist them; the shorter
+f22 lifetime also makes reload pick the tied `*ashlsi1` alternative
+(`add`) instead of the out-of-place `lea`.  The doubling-spelling family
+(x+x, x*2, x<<1) is closed by the `simplify-rtx`/`*ashlsi1` predicate:
+the discriminator is the f22 lifetime, not the arithmetic form.
+
+### CID_process -- NONMATCH, witnessed type correction (src/service/cid.c)
+
+Native tests `res == 1` in 32 bits (`cwtl; test %eax`); the committed
+`short res` emitted a 16-bit `dec %ax`.  `res` is `int`.  That correction
+raises the longest run 43 -> 75 of 99 instructions (delta 0) but does not
+reach EXACT: the residual is an expand-time return-value fixpoint
+(`expand_return`/`force_not_mem` plus the shared-return-label reload),
+not a source statement.  Retained as a measured partial; the TU stays
+one short of complete.
+
+### Validation
+
+`make phase` 404/404; period differentials `t_v21hdx`, `t_v21fax`, `t_cid`
+all 1/0.  Census 1245 -> 1247 EXACT / 573 -> 571 NONMATCH (34 REGALLOC).
+Ratchet OK: `exact 1235 -> 1247, legacy protected 1270 -> 1281,
+link-selected exact 1238 -> 1250, regalloc 35 -> 34`, one displacement.

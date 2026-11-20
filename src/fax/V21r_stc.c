@@ -92,7 +92,6 @@ int
 V21RX_status(void *modem, struct v21_status *st)
 {
 	struct v21_rx *rx = (struct v21_rx *)modem;
-	short f22, bit_samples;
 
 	if (st == NULL)
 		return 0;
@@ -106,13 +105,11 @@ V21RX_status(void *modem, struct v21_status *st)
 	st->short_0a = 0;
 	st->short_0e = 0;
 	st->short_10 = 0;
+	st->short_12 = (short)((2 - 2 * (int)rx->dsp->fsd.f22
+			       / (int)rx->dsp->fsd.cfg.bit_samples)
+			       * V21_STATUS_BPS);
 	st->flags1 &= (unsigned char)~V21_STATUS1_BIT0;
 	st->flags = 0;
-
-	f22 = rx->dsp->fsd.f22;
-	bit_samples = rx->dsp->fsd.cfg.bit_samples;
-	st->short_12 = (short)((2 - 2 * (int)f22 / (int)bit_samples)
-			       * V21_STATUS_BPS);
 
 	return 1;
 }

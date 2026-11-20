@@ -105,12 +105,15 @@ GetSNRV21(void *modem)
 	short n = dsp->fsd.last_count;
 	const short *trace = dsp->fsd.trace;
 	short *mag = dsp->mag;
-	short i;
+	short i = 0;
 
-	for (i = 0; i < n; i++) {
-		int v = trace[i];
+	if (n > 0) {
+		do {
+			int v = trace[i];
 
-		mag[i] = (short)__builtin_abs(v);
+			mag[i] = (short)__builtin_abs(v);
+			i++;
+		} while (i < n);
 	}
 
 	for (i = 0; i < n; i++)
