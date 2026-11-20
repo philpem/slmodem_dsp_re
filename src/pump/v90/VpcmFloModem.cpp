@@ -2367,10 +2367,6 @@ VPcmFloModem::getConstellation(int_complex *points, unsigned long maxCount)
 
 	dem = modem.demodulator;
 
-	n = dem->nofSymbols;
-	if (n > maxCount)
-		n = maxCount;
-
 	/*
 	 * `array_254` is a `void *` in V90Demodulator.h because the code that
 	 * ALLOCATES it sizes it at eight bytes an element, and this reader
@@ -2381,6 +2377,10 @@ VPcmFloModem::getConstellation(int_complex *points, unsigned long maxCount)
 	 */
 	values = (const float *)dem->array_254;
 	lane = dem->word_260;
+
+	n = dem->nofSymbols;
+	if (n > maxCount)
+		n = maxCount;
 
 	if (dem->inPhase3 == VPCM_IN_PHASE3) {
 		for (i = 0; i < n; i++) {

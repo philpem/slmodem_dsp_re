@@ -599,9 +599,8 @@ V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 {
 	struct v29_rx_decoder *dec = state->cfg.owner;
 	short st = dec->train_lfsr;
-	unsigned int x = (unsigned int)st;
-	unsigned int odd = x & 1u;
-	unsigned short tc;
+	unsigned int x;
+	unsigned int odd;
 	short idx;
 
 	/* Direct field update preserves the original word comparison (F11879). */
@@ -613,6 +612,8 @@ V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 	state->mu_sel = 0;
 	state->mse = V29RX_TRAIN_MSE;
 
+	x = (unsigned int)st;
+	odd = x & 1u;
 	x = ((((unsigned int)st << 6) & 0x80u) ^ (odd << 7)) | (unsigned int)st;
 	x = (x >> 1) & V29_TRAIN_LFSR_MASK;
 
@@ -625,9 +626,8 @@ V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 	*angle = V29RX_DEC_ANGLE[idx];
 	dec->train_lfsr = (short)x;
 
-	tc = (unsigned short)(dec->train_count + 1);
-	dec->train_count = tc;
-	if (tc == V29_TRAIN_SYMS) {
+	dec->train_count = (unsigned short)(dec->train_count + 1);
+	if (dec->train_count == V29_TRAIN_SYMS) {
 		state->cfg.mu[1] = V29RX_MU_DATA;
 		state->mu_sel = 1;
 		state->lms_force = 0;

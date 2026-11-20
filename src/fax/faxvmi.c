@@ -509,7 +509,7 @@ FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl)
 {
 	struct faxvmi_framer *fr;
 	int ret = 0;
-	int i;
+	unsigned short i;
 
 	if (ctl == NULL)
 		return -1;
@@ -521,10 +521,8 @@ FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl)
 	if (ctl->int_000c != 0 && ctl->short_0010 <= 2) {
 		fr = vmi->framer;
 
-		if (fr->frame_size != 0) {
-			for (i = 0; i < fr->frame_size; i++)
-				fr->frame[i] = 0;
-		}
+		for (i = 0; i < fr->frame_size; i++)
+			fr->frame[i] = 0;
 		fr->pack_frame_left = 0;
 		fr->frame_len = 0;
 		fr->flags_wanted = 2;
@@ -554,10 +552,8 @@ FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl)
 
 	fr = vmi->framer;
 	if (ctl->ptr_0000 != NULL) {
-		if (fr->fifo_size != 0) {
-			for (i = 0; i < fr->fifo_size; i++)
-				fr->fifo[i] = 0;
-		}
+		for (i = 0; i < fr->fifo_size; i++)
+			fr->fifo[i] = 0;
 		fr->rd = 0;
 		fr->wr = 0;
 		fr->count = 0;
