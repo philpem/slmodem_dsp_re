@@ -43,14 +43,14 @@ DTMF_MTD_detect(const short *samples, short count, struct dtmf_rx *rx)
 	 * (low, high) -> keypad code.  Rows are 697 770 852 941 and columns
 	 * 1209 1336 1477 1633, so the last row is * 0 # D.
 	 */
+	unsigned energy[8];
+	const short *coef[8];
 	short digits[16] = {
 		1, 2, 3, 10,
 		4, 5, 6, 11,
 		7, 8, 9, 12,
 		14, 0, 15, 13,
 	};
-	const short *coef[8];
-	unsigned energy[8];
 	unsigned wide = 0;
 	unsigned scale, tight;
 	unsigned best;

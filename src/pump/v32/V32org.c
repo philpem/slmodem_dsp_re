@@ -367,12 +367,12 @@ V32OrgNextState(struct v32_modem *modem)
 		/* SIGNED, and 16-bit: `cmpw $0x48` then `jle`. */
 		if (HDX(modem)->short_a8 > 0x48) {
 			HDX(modem)->state = V32_STATE_D2;
+			HDX(modem)->state_left =
+				(int)HDX(modem)->limit;
 			HDX(modem)->tx_state =
 				(void *)TxHdxNoCarrier;
 			HDX(modem)->rx_state =
 				(void *)RxHdxNoSignal;
-			HDX(modem)->state_left =
-				(int)HDX(modem)->limit;
 		}
 		break;
 
@@ -632,10 +632,13 @@ V32OrgNextState(struct v32_modem *modem)
 		 * flow at 82c57 rather than returning.  See V32_STATUS_17
 		 * above for why the reason code is spelled by value.
 		 */
-		if (DecodeRateSeq(modem, (unsigned short)LoadReg(modem, 3))
-		    == V32_RATE_NONE) {
+		{
+		short decoded = (short)DecodeRateSeq(modem,
+			(unsigned short)LoadReg(modem, 3));
+		if (decoded == V32_RATE_NONE) {
 			modem->flags |= V32_FLAG_FAULT;
 			modem->status = V32_STATUS_17;
+		}
 		}
 		SetAdaptEcV32(modem, V32_ADAPTEC_OFF);
 		InitGenSequence(modem,

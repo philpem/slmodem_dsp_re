@@ -399,7 +399,9 @@ V32AnsNextState(struct v32_modem *modem)
 			 * Rounded UP to even: `and $1` then `cmp $1` /
 			 * `sbb $-1` at 86331..86337, which is n + (n & 1).
 			 */
-			hdx->state_left = n + (n & 1);
+			if ((n & 1) != 0)
+				n++;
+			hdx->state_left = n;
 			SetToneDetect(modem, V32_ANS_TONE_HZ);
 			TONE0(HDX(modem))->cfg.ratio =
 				V32_ANS_TONE_RATIO_LO;
