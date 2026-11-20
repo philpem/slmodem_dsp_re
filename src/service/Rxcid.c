@@ -351,9 +351,9 @@ cid_modem(const short *samples, unsigned short count, struct cid *cid)
 	 * this frame and uses neither; a modern compiler deletes them again,
 	 * which changes nothing observable.
 	 */
-	short hp_8000[5] = { -12971, 12917, 28620, -25834, 12917 };
-	short hp_9600[5] = { -13484, 13194, 29347, -26388, 13194 };
 	short buf[206];
+	short hp_9600[5] = { -13484, 13194, 29347, -26388, 13194 };
+	short hp_8000[5] = { -12971, 12917, 28620, -25834, 12917 };
 	unsigned short recip, shift;
 	short ncount = (short)count;
 	short nsamp = 0;		/* samples in `buf` after resampling */
