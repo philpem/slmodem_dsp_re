@@ -338,9 +338,9 @@ short
 SGD_symbol_gen(struct sgd *s, unsigned short *out, short n)
 {
 	unsigned short data = s->cfg.gen.data_word;
-	int bits = s->cfg.sym_bits;
+	unsigned short bits = s->cfg.sym_bits;
 	int k = s->word_left;
-	short last = (short)(s->cfg.gen.word_syms - 1);
+	unsigned short last = (unsigned short)(s->cfg.gen.word_syms - 1);
 	unsigned short mask = (unsigned short)((1 << (unsigned char)bits) - 1);
 	short i;
 
