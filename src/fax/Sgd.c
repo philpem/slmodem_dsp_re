@@ -337,9 +337,9 @@ SGD_sequence_det(struct sgd *s, const unsigned short *sym, short n)
 short
 SGD_symbol_gen(struct sgd *s, unsigned short *out, short n)
 {
-	unsigned short data = s->cfg.gen.data_word;
-	unsigned short bits = s->cfg.sym_bits;
 	int k = s->word_left;
+	unsigned short bits = s->cfg.sym_bits;
+	unsigned short data = s->cfg.gen.data_word;
 	unsigned short last = (unsigned short)(s->cfg.gen.word_syms - 1);
 	unsigned short mask = (unsigned short)((1 << (unsigned char)bits) - 1);
 	short i;
@@ -348,7 +348,7 @@ SGD_symbol_gen(struct sgd *s, unsigned short *out, short n)
 		short next = (short)(k - 1);
 
 		*out++ = (unsigned short)((data >> (k * bits)) & mask);
-		k = next < 0 ? last : next;
+		{ short nk = next < 0 ? last : next; k = nk; }
 	}
 
 	s->word_left = (short)k;
