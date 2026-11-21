@@ -423,7 +423,7 @@ V34GiveINFO0dBits(void *objp, const short *bits)
 		int ok = 0;
 
 		if (obj->local_v92 != 0)
-			if (obj->remote_v92 != 0)
+			if (remote_v92 != 0)
 				if (obj->local_short != 0)
 					if (remote_short != 0)
 						ok = 1;
