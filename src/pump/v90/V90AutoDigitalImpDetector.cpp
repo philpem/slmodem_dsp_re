@@ -2996,15 +2996,14 @@ V90AutoDigitalImpDetector::setQcLinearMapping()
 	short ci;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (altRbsFlag[phase] != 0)
-			continue;
-
-		if (byte_280c[phase] != 0) {
-			for (ci = 0; ci < V90ADID_CODES; ci++)
-				updateLinMappMeanAndVar(phase, ci);
-		} else {
-			for (ci = 0; ci < V90ADID_CODES; ci++)
-				linMapp[phase][ci] = prevLinMapp[ci];
+		if (altRbsFlag[phase] == 0) {
+			if (byte_280c[phase] != 0) {
+				for (ci = 0; ci < V90ADID_CODES; ci++)
+					updateLinMappMeanAndVar(phase, ci);
+			} else {
+				for (ci = 0; ci < V90ADID_CODES; ci++)
+					linMapp[phase][ci] = prevLinMapp[ci];
+			}
 		}
 	}
 
