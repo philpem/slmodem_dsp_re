@@ -372,10 +372,10 @@ SGD_symbol_gen(struct sgd *s, unsigned short *out, short n)
 short
 SGD_sequence_gen(struct sgd *s, unsigned short *out, short n)
 {
-	int enable = s->cfg.gen.seq_enable;
-	const unsigned short *seq = s->cfg.gen.seq;
 	short i = (short)s->seq_pos;
+	const unsigned short *seq = s->cfg.gen.seq;
 	int active = 0;
+	int enable = s->cfg.gen.seq_enable;
 	unsigned short len;
 	short k;
 
