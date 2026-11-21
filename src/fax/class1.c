@@ -252,18 +252,18 @@ int
 _sym_size(int rate)
 {
 	switch (rate) {
-	case 0x960:
-		return 2;
-	case 0x12c0:
-		return 3;
-	case 0x1c20:
-		return 3;
-	case 0x2580:
-		return 4;
-	case 0x2ee0:
-		return 5;
 	case 0x3840:
 		return 6;
+	case 0x2ee0:
+		return 5;
+	case 0x2580:
+		return 4;
+	case 0x1c20:
+		return 3;
+	case 0x12c0:
+		return 3;
+	case 0x960:
+		return 2;
 	default:
 		return 0;
 	}
