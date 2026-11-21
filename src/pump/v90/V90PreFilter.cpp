@@ -325,14 +325,15 @@ int
 V90PreFilter::autoSelection()
 {
 	const float *measured = phase2->L2;
-	V90RefLoop *loops = dataBase[codecType].loops;
-	long double best = 1.0e10f;
 	float target[6];
 	unsigned int n, k;
 	unsigned int i;
 
 	for (i = 0; i <= 5; i++)
 		target[i] = measured[0x38 / 4] - measured[0x3c / 4 + i];
+
+	V90RefLoop *loops = dataBase[codecType].loops;
+	long double best = 1.0e10f;
 
 	for (n = 0; loops[n].name[0] != '\0'; n++)
 		;
