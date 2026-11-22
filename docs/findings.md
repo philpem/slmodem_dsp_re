@@ -150051,3 +150051,34 @@ shows no EXACT or REGALLOC loss.
 This is the classifier doing what the moves-based screens could not: surfacing a
 genuine arithmetic/semantics defect that a "deficit is all moves" summary would
 have buried.
+
+## F12256. The low-shuffle tail is comparison-heavy, not arithmetic; a positional ARITH-vs-ARITH screen localizes the real ones (small functions only)
+
+Working the four lowest-shuffle rows from F12255's ranking, the reference-only
+multisets are dominated by COMPARISON materialisation, not computation:
+
+	rebuildJMSequence  cmpw 17  setne 14  xor 8  cmpb 7  testb 6  sete 6 ...
+	CALLPROG_Progress  xor 8  setne 5  test 3  ja 2 ...
+	cadence_progress   sub 4  cmp 3  dec 3  jbe 3  jne 2  jg 2  cltd 2 ...
+	initTxSequence     jne 3  cmpl 2  add 2  cmpb 2  incl 2  shr 1  sbb 1 ...
+
+`cmpw`/`cmpb`/`setne`/`sete`/`testb` are the F12236 comparison-materialisation
+class (setcc form and compare width), and `xor`/`inc`/`dec` are zeroing idioms and
+loop counters.  So the classifier's "arith" bucket over-counts; the four are not
+missing computation.
+
+The sharper instrument is positional: at the SAME aligned index, both sides
+ARITH but a DIFFERENT opcode -- the `shr $0x2` vs `and $0xfffffffc` signature
+that F12255 recovered.  Yielding (hits / ref / ours):
+
+	v34handshak 123 -- MISALIGNED NOISE (streams drift; positions pair unrelated ops)
+	_ZN5V90CP12evaluateInfoEv 62, FPM_ECC_cancel 55, receiver 52, modulatevector 51 ...
+	decodeDepth 39  R shl $0x4 | O and $0x1f ;  R and $0xfffffffc | O sar $0x2
+	V34SetINFO1aBits 24  R xor | O and $0x3 ;  R xor | O and $0xf8
+	VPcmV34Progress 30  R add $0x4 | O and $0xfffffffc   (the V90Equalizer pattern)
+
+The screen is only trustworthy on SMALL, well-aligned functions -- on the large
+ones the same frame shift that poisons every other screen drifts the pairing
+(`v34handshak` reports 123).  Its leads are leads, not defects, exactly like
+`width_screen`.  It did, however, find the one real fix this round (F12255), so
+it earns a place beside `blockscreen` as a nominator, restricted to short rows.
