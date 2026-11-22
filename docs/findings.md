@@ -150433,3 +150433,53 @@ Process lesson, and it is the one the rules already state: a single fixture is
 NOT the affected-TU check.  Ten of the project's fixtures exercise the V.90
 length fields, and the change had to be judged against the whole set.  The
 `make phase` gate caught it; the retained-source error was mine, not the gate's.
+
+## F12269. Step 1 (local-alloc tie-break): the instrument works and the tie is live, but V22int.c holds no further instance
+
+Ran Astra's quantity probe as its own instrument (`scratch/cd/qty_probe.py`; cc1
+extracted from the period image and driven under host gdb with `-fpreprocessed
+V22int.i`).  It records every `find_free_reg` selection: the comparator's inputs
+(`n_refs`, `size`, `freq`, `birth`, `death`, `n_calls_crossed`), the integer
+`QTY_CMP_PRI` score, and the register chosen.  79 selections over 14 functions,
+0 errors.
+
+**The tie is live**: `DemodDataV22` offers two quantities at score **447**
+(`refs 3/3, freq 447/447, size 1/1, life 10/10`), the first choosing `-1` (no
+register) and the second `3`.  `ModDataV22` after F12264 offers `qty 1 score
+1500` -> EBX and `qty 0 score 1071` -> ESI, i.e. `count` now outranks and takes
+EBX, which is the reference's allocation -- the fix is visible in the comparator
+output, not only in the bytes.
+
+But V22int.c has no FURTHER instance needing a change (`DemodDataV22` is EXACT),
+so step 1's corpus yield requires running the probe per TU.  The instrument and
+the method are now established; the lever's remaining scope is bounded by how
+often two call-crossing quantities tie, which this TU shows is possible but not
+common.
+
+## F12270. Steps 2 and 3: reload and inlining numbers
+
+**Step 3 (inlining) has its numbers.**  The `-da` cgraph dump for the TU gives,
+against `cgraphunit.c:1068-1076`'s threshold:
+
+	int V90SpectralVerifier::process(...)                74 insns  tree inlinable
+	void V90SpectralVerifier::printSpectrum() const       89 insns  tree inlinable
+	void V90SpectralVerifier::checkSpecialSpectralConditions()  536 insns
+
+All three are called by `process`.  F12238's controlled measurement showed that
+with `--param max-inline-insns-auto=50` our `process` falls from 124 to 64
+instructions -- i.e. the inline decision is what differs, and the estimates are
+89 against a default threshold in the hundreds.  A source edit cannot plausibly
+move 89 past that threshold, which leaves the OWNERSHIP explanation the header
+already hints at: if the original's `printSpectrum` lived in a DIFFERENT
+translation unit, the reference could only CALL it, while ours -- same TU --
+inlines it.  That is a testable ownership experiment (move the definition, or
+mark it non-inlinable at the boundary), and it is the first inlining lead with a
+mechanism rather than a knob.
+
+**Step 2 (reload) remains unprobed**: `reload1.c:1674-1728` minimises
+`this_cost < best_cost` over usable reloads, and the observable -- our spill count
+versus the reference's -- has not yet been paired with a target.  Astra's ledger
+for `modulatevector` (160 local bytes: 32 early homes + 112 from 28 spill homes +
+16 alignment) is the base; the disk instrument is a per-slot caller/return trace
+(`tools/gcc3_uref_stack_gdb.py` already records slot callers and the full frame
+layout).
