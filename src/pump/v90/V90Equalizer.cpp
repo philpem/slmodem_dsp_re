@@ -2997,7 +2997,8 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 	spectralVerifier = sv;
 	preFilter = pf;
 
-	linearEquLength = linearEquLen >> 2;
+	/* `linearEquLen` is a BYTE length; the field holds a float COUNT. */
+	linearEquLength = linearEquLen / sizeof(float);
 	linearEquCoefs = (float *)sysdep_malloc(linearEquLength *
 						sizeof(float));
 
@@ -3008,7 +3009,8 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 						 sizeof(float));
 	dfeWindow = (float *)sysdep_malloc(linearEquLength * sizeof(float));
 
-	dfeLength = dfeLen >> 2;
+	/* Same byte-length-to-float-count conversion as `linearEquLength`. */
+	dfeLength = dfeLen / sizeof(float);
 	dfeCoefs = (float *)sysdep_malloc(dfeLength * sizeof(float));
 	array_44 = (float *)sysdep_malloc(dfeLength * sizeof(float));
 

@@ -150052,6 +150052,13 @@ This is the classifier doing what the moves-based screens could not: surfacing a
 genuine arithmetic/semantics defect that a "deficit is all moves" summary would
 have buried.
 
+Spelled finally as `linearEquLen / sizeof(float)` rather than `>> 2`: the
+operand is a byte length and the field is an element count, so the division by
+the element size states the conversion (and `sizeof(float)` beats a hard-coded
+4).  For an unsigned operand all three spellings emit `shr $0x2`; the retained
+object is byte-identical to the `>> 2` variant (hash `7d015770`), and
+`t_v90eqdata` passes.
+
 ## F12256. The low-shuffle tail is comparison-heavy, not arithmetic; a positional ARITH-vs-ARITH screen localizes the real ones (small functions only)
 
 Working the four lowest-shuffle rows from F12255's ranking, the reference-only
