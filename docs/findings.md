@@ -149811,3 +149811,39 @@ not an allocation/inlining artifact.
 `V8agc` in `src/v8/V8global.c` while the blob has them in `v8handshak`'s
 neighbourhood -- but it is NOT the cause of the deficit, since the call
 structure already matches.)
+
+## F12248. A call-anchored segment compare localizes `v8handshak`'s 140-instruction deficit to specific inlined-helper regions
+
+`v8handshak` calls the same 38 targets, in the same order, in both builds
+(F12247), so the CALLS are reliable anchors even where the aligned diff is not.
+`scratch/cd/callseg.py SYMBOL` splits both padding-stripped streams at each
+`call` and compares segment sizes; the largest reference deficit names the
+short inlined helper.
+
+Applied to `v8handshak` (39 segments on each side, total -140 instructions):
+
+	seg  ref  ours  delta   anchor
+	 28  126    58    -68   dsplibs_debug_printf   (demod path)
+	 24   69    24    -45   v8_dftupdate          (agc path)
+	  3   40     8    -32   v8_fskmodulate
+	 29   38    18    -20   dsplibs_debug_printf
+	  4   36    19    -17   v8_cosread
+	 21   47    32    -15   V8agc
+	 38   13     1    -12   (tail)
+	 36   17     6    -11   rebuildJMSequence
+	 37   22    12    -10   evaluateRxJMSequence
+	  5    4    31    +27   v8_mpyint
+	 13    4    33    +29   v8_getbit
+	 23   33    59    +26   v8_tone_detect
+
+Source map (V8.c): `transmit` 1080, `v8_handshak_agc` 1189 (holds
+`v8_tone_detect` 1214, `v8_dftupdate` 1233, `v8_dftenergy` 1243),
+`v8_hs_drain` 1334, `v8_hs_hunt` 1358, `v8_handshak_demod` 1614,
+`v8handshak` 1709; the comment at 1703-1706 records that `transmit` and the two
+receive paths are `static` and `-O3` inlines them into this body.
+
+So the deficit is body logic distributed across those inlined helpers, weighted
+to the agc and demod paths, with offsetting surpluses elsewhere (so it is not
+one contiguous block).  `callseg.py` turns the 925-instruction eyeball into a
+bounded per-segment task; the work is a multi-session reconstruction, not a
+spelling, and no source was retained here.
