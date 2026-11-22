@@ -7,6 +7,23 @@
     "max_lines": 300,
     "max_bytes": 16384
   },
+  "plugin": [
+    [
+      "opencode-auto-resume",
+      {
+        "readyToContinuePatterns": [
+          "ready to continue with task",
+          "continuing with task",
+          "continue with task",
+          "proceeding with task",
+          "ready to proceed with task",
+          "will continue with task",
+          "moving on to task",
+          "ready to (?:start|begin|proceed)\\b"
+        ]
+      }
+    ]
+  ],
   "agent": {
     "build": {
       "model": "openrouter/deepseek/deepseek-v4.1-flash",
