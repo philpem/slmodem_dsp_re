@@ -150289,3 +150289,23 @@ itself) the cause of these deficits.  Reverted; `V32dec.c` is unchanged.
 The census and the tool are retained: `ordercheck.py` ranks the 53 TUs, and the
 negative is bounded -- the original order is not an automatic win, and any
 adoption of it needs a per-TU measurement like this one.
+
+## F12263. Emission order does NOT universally control codegen: a fully-EXACT TU with a fully-permuted order
+
+F12262's control, verified against the bytes rather than trusted:
+
+	fax/Vmi_v21.c   12 symbols, 12 EXACT bodies, same-address 0/12
+	   ours: v21tx_message, v21rx_message, v21tx_create, v21rx_create, ...
+	   orig: v21tx_create, v21rx_create, v21tx_delete, v21rx_delete, ...,
+	         v21tx_message, v21rx_message
+
+Every body is byte-identical to the blob while the whole function order is
+permuted -- our `message` pair is first, the original's is last.  So the
+emission order is NOT a universal carrier: for this TU the peephole2
+scratch-search cursor either never advances or never selects differently.
+
+That reconciles cleanly with F12262, where reordering `V32dec.c` DID change two
+functions' codegen: the cursor matters only where a function actually offers a
+peephole2 scratch candidate.  So Lever 52's coupling is real but SELECTIVE, and
+adopting the object's order is not a blanket improvement -- it must be measured
+per TU, as F12262's negative and this control now show from both sides.
