@@ -149196,3 +149196,50 @@ multi-block job; none has a single clean missing idiom.  Two worked targets:
 
 The productive unit is therefore one short function driven to completion, not a
 quick edit; the order-lever (Lever 53) remains the exception, not the rule.
+
+## F12229. A structural-distance screen separates codegen noise from genuinely-different functions, but the small high-distance rows are still prologue/allocation-bound
+
+`scratch/cd/deep_screen.py` canonicalises each NONMATCH row (abstracting GP
+registers, local branch offsets, section addends AND the stack (%esp)
+displacement, which is what a frame-size change shifts) and reports the
+multiset distance and its normalisation `dist / (ref+ours)`.  Over the 559
+NONMATCH the split is 61 below 0.10 (pure codegen), 97 at 0.10-0.25, 228 at
+0.25-0.50 and **173 above 0.50** (a genuinely different instruction stream).
+
+The metric is a NECESSARY filter, not a sufficient one.  Reading the bytes of
+the small high-distance rows shows they are still allocation-bound:
+
+- `RxTrained1200` (v22prc.c; 24/19, dist 0.767): the reference keeps `*count`
+  in a 16-bit register and re-zero-extends it at each compare
+  (`movzwl %bx,%ecx`), and parks the argument/limit in the callee-saved
+  `ebx`/`esi`; ours hoists a 32-bit limit into `edx` and stays in caller-saved
+  registers.  Four source variants (`spec_rxtrained.json`,
+  `spec_rxtrained2.json`): dropping the `(int)` casts, or making `n` an `int`,
+  is byte-identical; reading `*count` directly reloads it and overshoots
+  (19 -> 28 instructions); a plain `while` loop reaches -9 bytes but still
+  18/24.  The residual is the register choice, not the source.
+- `FPM_SDM_descrambler`/`SDM_descrambler` (58/53 twins), `V34EqualizerAdapt`
+  (115/102), `_ZN12VPcmFloModem6getDFEE` (45/44) all show the reference
+  RELOADING a pointer argument it could have kept in a register, or spilling a
+  short-lived `in` value ours keeps -- register pressure, not a missing
+  statement.  One `variant_run` batch on the descrambler (`spec_descram.json`:
+  `int in`, an explicit `*data = *data & mask`, both) is **byte-identical to
+  baseline**.
+- `_ZN5V90Jd10unPackDataEi`/`V92Jd::unPackJdData`/`unPackJdPhaseData`
+  (238/232, 251/244, 241/235): identical frame size (`$0x50`), the only
+  prologue difference is the byte-slot of `ones` (`0x7` vs `0x3f`), and the
+  disp-normalised multiset distance is 8-14; the rest is jump-table case
+  reordering.
+- `getbit` (V34hshak.c) ref frame `0x2c` vs ours `0x18`; `SetECRndTripDelayV32`
+  62/74 (ours saves an extra register and has a `sub $0x4`); `V22_SRE_init`,
+  `DataCarrierDetectV17/V29`, `V34EqualizerAdapt` all differ first at the
+  prologue.
+
+So the 173 high-distance rows are where a genuine reconstruction *could* live,
+but the small ones among them are front-loaded with frame/prologue/allocation
+divergence, and the genuine work concentrates in the LARGE rows
+(`getV90Decision` dist 2681, `getV92Decision` 2673, `V90Equalizer::process`
+1649, `probeselect` 1570, `VPcmV34Progress` 1537, `v8handshak` 1256,
+`modulatevector` 966, `DialerProgress` 957).  Those are multi-block
+reconstructions, not edits.  `deep_screen.py` is retained as the queue
+builder; each row still needs the bytes read before work starts.
