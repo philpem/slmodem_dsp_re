@@ -149923,3 +149923,28 @@ So a positional hit is a lead only when the extended half is consumed; the other
 worked case, `QualityDetectV17` (F-batch), is real -- its extended value feeds a
 32-bit `test`.  The screen is now reliable at nominating the site; the
 extension's liveness decides whether it is source at all.
+
+## F12252. The QualityDetectV17 width site is observable, and the obvious type change fails the differential
+
+The positional signedness screen's one confirmed-real hit (F12251) is
+`QualityDetectV17`'s `qcount` load (`+0x4fae`; the header declares
+`short qcount`).  The reference loads it `movzwl 0x4fae(%ecx)` + `test %bx,%bx`;
+ours loads `movswl 0x4fae(%ebx)` + `test %ecx,%ecx`.
+
+Making the local unsigned (`unsigned short n;  n = (unsigned short)rx->qcount;`)
+does reproduce the zero-extended load and lifts the aligned run 12 -> 13 and the
+multiset distance 18 -> 16 -- but it **fails the period differential on
+`t_v17fax` with 10 of 1728 checks**, so the signedness is observable and that
+change is wrong.  Reverted; the baseline differential passes.
+
+The contradiction is informative: the reference loads ZERO-extended yet behaves
+exactly as ours (which loads sign-extended and passes), so the LOAD's extension
+is free at this site while the COMPARES are not.  Matching the object therefore
+needs a form that obtains the unsigned load while keeping the signed compares --
+a structure this reconstruction has not found.  The site is real (the load
+differs); the obvious type change is excluded by the differential, and the
+remaining search space is a spelling that separates the load's extension from
+the compares.
+
+This is the differential doing its job: it turned a plausible metric improvement
+into a proved-wrong change before it reached the tree.
