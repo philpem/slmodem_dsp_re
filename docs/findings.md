@@ -150367,3 +150367,21 @@ does not apply.
 So the lever is real but SPECIFIC, and the nomination must be confirmed against
 the bytes: `ModDataV22` reloads its owner twice (the deferral is correct there),
 `ModDataV32` spills it once (the deferral is not).  Reverted; V32int.c unchanged.
+
+## F12266. The Lever-58 vein is exhausted: the creators already reload their owner at the reference's rate
+
+The remaining Lever-58 nominations were the creators.  Checked against the
+object by counting the owner loads (`mov 0x54(%e...)`, the `struct v22fp` `dsp`
+field) in `V22FP_create`:
+
+	reference 28        ours 28
+
+The reload COUNT matches, so the source's captured `dsp` is already reloaded as
+often as the object reloads `v22->dsp`; there is no deferral to make.
+`V22FP_create` is 2449 against our 2442 (7 short) for other reasons, and
+`B103FP_create` (2151/2159) and `V21RX_create` (1011/1043) likewise.
+
+So Lever 58's reach is exactly the functions where our owner load is NOT already
+reload-matched -- `ModDataV22` was one, and the twin `ModDataV32` and the
+creators are not.  The nomination must be confirmed by the reload count, not by
+the source shape.
