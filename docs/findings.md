@@ -149875,3 +149875,26 @@ flagged at call #3; `VPcmV34Progress` -> flagged (ref 61 segments, ours 64).
 Lesson for the corpus: call-anchored comparison needs an ORDER check, not just a
 multiset match -- two builds can call the same functions, the same number of
 times, in different places.
+
+## F12250. A signedness screen for DISTINCT displacements, with the dead-upper-half caveat
+
+`scratch/cd/width_screen.py` finds, per NONMATCH row, the distinct displacements
+the reference loads with a zero-extension (`movzwl`/`movzbl`) and ours with the
+sign-extension twin (`movswl`/`movsbl`), with the displacement held identical.
+That is a per-site type/signedness difference, which is source, and it is the
+class `QualityDetectV17` is in (F-batch, member 0x4fae).
+
+The counts are small and specific -- `v34handshak` 6 sites, `fskdemodulate` 4
+(0x8, 0x14, 0x6, and one more), `initdigital` 3, `VPcmV34Progress` 3,
+`FPM_SRE_recover` 3, then 1-2 across the tail -- not the hundreds a loose
+version reported (that counted every reference occurrence; the fix is to count
+distinct displacements).
+
+CAVEAT, and why a hit is a lead and not a defect: a signed/zero extension is
+FREE when the extended upper half is dead, which is exactly the F614 case
+("ours emits `movswl` where the object emits `movzwl` on that load, a
+dead-upper-half free extension").  A hit is source only when the upper half is
+consumed.  Checked: `fskdemodulate`'s four hits are downstream of a frame
+difference (reference `sub $0x4c` vs our `sub $0x3c`), so they are free-extension
+noise there; `QualityDetectV17`'s is real (the extended value feeds the `test`).
+So the screen nominates; the bytes decide, as always.
