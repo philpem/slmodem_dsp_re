@@ -150017,3 +150017,37 @@ allocation/spill signature.
 This is the route doing what the screens could not: it shows that the arithmetic
 is present at `.01.rtl`, so no source statement is absent, and it names the
 deficit's nature (moves) rather than only its size.
+
+## F12255. The reference-only OPERATION classifier finds a real one: `V90Equalizer`'s length fields are float COUNTS (`>> 2`), not byte lengths (`& ~3u`)
+
+F12254's route decides per-operation, but per-row it needed a screen.  The
+reference-only classifier (`scratch/cd/refop_screen.py`) buckets each NONMATCH's
+ref-only multiset (ref minus ours) into SHUFFLE (moves/extensions/stack),
+ARITH, BRANCH and TEST, and reports the shuffle fraction.  It is multiset-based,
+so like `blockscreen` it needs no alignment and no call order.  Over the 449
+rows with a ref-only multiset, filtered to a substantial one (>=12 ref-only
+instructions), the top of the ranking -- low shuffle fraction = missing
+ARITHMETIC -- is `_ZN12V90EqualizerC1/C2E...` (14 ref-only, ALL arithmetic,
+shuffle fraction 0.00; ref 190 / ours 182).
+
+The difference is real and repeated: at BOTH length initialisers the reference
+emits `shr $0x2` where our source's `& ~3u` gives `and $0xfffffffc`.  The uses
+settle the semantics -- `for (i = 0; i < linearEquLength; i++)` walks the
+COEFFICIENT arrays, so `linearEquLength`/`dfeLength` are float COUNTS:
+
+	linearEquLength = linearEquLen & ~3u;   ->  and $0xfffffffc   (ours, wrong)
+	linearEquLength = linearEquLen >> 2;    ->  shr $0x2          (reference)
+
+The `& ~3u` form also over-counts the arrays 4x and over-allocates 4x
+(`malloc(linearEquLength * sizeof(float))` with a byte-count field).
+
+Changed both initialisers to `>> 2`.  The object's `shr $0x2` is reproduced, the
+multiset distance falls 28 -> 24, and -- unlike the `QualityDetectV17` width lead
+(F12252) -- this change **passes `make period T=t_v90eqdata`**.  It is
+metric-neutral (still SIZE, delta -16, run 31/190), so it is retained as a
+source-fidelity PARTIAL, reported separately from a promotion; the TU regrade
+shows no EXACT or REGALLOC loss.
+
+This is the classifier doing what the moves-based screens could not: surfacing a
+genuine arithmetic/semantics defect that a "deficit is all moves" summary would
+have buried.
