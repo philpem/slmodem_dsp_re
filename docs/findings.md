@@ -149948,3 +149948,39 @@ the compares.
 
 This is the differential doing its job: it turned a plausible metric improvement
 into a proved-wrong change before it reached the tree.
+
+## F12253. The compiler-tracing route is open: `-da` reproduces the period stage dumps, and pass attribution answers front-end vs post-front-end mechanically
+
+`scratch/cd/rtl_stage.py` runs one source file through the reconstruction
+authority (the Gentoo GCC 3.4.2 docker image the build uses) with `-da`, which
+emits the SAME 31 `.NN.<stage>` dumps prior waves left in the tree root --
+`00.cgraph 01.rtl 02.sibling 04.jump 05.null 06.cse 07.addressof 08.gcse
+09.loop 10.bypass 11.cfg 12.bp 14.ce1 16.loop2 17.web 18.cse2 19.life
+20.combine 21.ce2 22.regmove 24.lreg 25.greg 26.postreload 27.flow2
+28.peephole2 29.ce3 30.rnreg 31.bbro 33.sched2 34.stack 35.mach`.  Dumps go to
+`/tmp/opencode/dumps`, never the repo.  (`-fdump-rtl-all` does not exist in
+3.4.2; `-da` is the form.)
+
+Worked case `ModDataV22` (the row `blockscreen` calls provably codegen-bound,
+mset 0).  At `.01.rtl` -- the FIRST RTL stage, the front end -- the four
+parameter loads already exist and already sit in DECLARATION order
+(`modem`, `data`, `out`, `count`, read from `virtual-incoming-args` into
+pseudos 59/60/61/63).  Stage tracking then shows where the delivered order is
+decided: `.24.lreg` still pseudos, `.25.greg` assigns hard registers
+(`modem`->`bx`, `data`->`ax`, `out`->`ax`), and `.33.sched2` REORDERS them to the
+delivered sequence.  So the object difference is produced by the SCHEDULER,
+after allocation -- confirming the screen's verdict independently.
+
+The route's decisive question, which needs no reference dumps: **does the
+differing operation already exist at `.01.rtl`?**
+
+- yes -> the SOURCE already contains it; the residual is a later pass
+  (allocation / reload / scheduling / peephole / stack-register) and is NOT
+  source-recoverable by a spelling;
+- no -> the front end never produced it, so the source is genuinely missing it.
+
+Limit, stated plainly: the reference is a linked binary, so its intermediate RTL
+is unavailable and this route can only attribute OUR pipeline.  It cannot diff
+RTL against the reference; it decides whether a difference is upstream
+(front-end) or downstream of expand, which is exactly the question the session
+kept having to answer by inference.
