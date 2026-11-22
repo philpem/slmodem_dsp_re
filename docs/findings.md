@@ -149898,3 +149898,28 @@ consumed.  Checked: `fskdemodulate`'s four hits are downstream of a frame
 difference (reference `sub $0x4c` vs our `sub $0x3c`), so they are free-extension
 noise there; `QualityDetectV17`'s is real (the extended value feeds the `test`).
 So the screen nominates; the bytes decide, as always.
+
+## F12251. The positional signedness screen finds 17 rows, and most are dead-upper-half free extensions
+
+`width_screen.py` made positional (same aligned index, same displacement,
+opposite extension) reports only **17 of 557** rows, 1-3 sites each -- far
+cleaner than the set-based version, which paired different bases because
+`fidelity.canonical` abstracts the register.  Head: `v34handshak` 3 sites,
+`fskdemodulate` 2, `V92Phase3Modulator::generateSymbol` 2,
+`V90Phase3Modulator::generateV92Symbol` 2, `V90Equalizer::process` 2,
+`RcFixed_Resample` 2, then 1 each for `txmitquadbit`, `dtmf_modem`,
+`V92Phase4Modulator::generate{CPu,E2u,SUVu}`, `V8GetMessage`, `V27RX_eq_train`,
+`QualityDetectV17`, `FSEv22_decision12`, `FPM_phasor`.
+
+The dominant cause is the **dead-upper-half free extension** (F614): a signed
+or zero extension is free when the extended half is never consumed.  Worked
+case `V27RX_eq_train` (site `tbl[dec->last]`, the angle-table read): spelling the
+table read through an `unsigned short *`
+(`spec_v27eq.json` V1, control reproduces the in-tree object 9e3abe83) is
+**byte-identical** to the baseline -- the load feeds a 16-bit store, so the
+extension is dead and the compiler is free to choose either form.
+
+So a positional hit is a lead only when the extended half is consumed; the other
+worked case, `QualityDetectV17` (F-batch), is real -- its extended value feeds a
+32-bit `test`.  The screen is now reliable at nominating the site; the
+extension's liveness decides whether it is source at all.
