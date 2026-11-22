@@ -150115,3 +150115,45 @@ early frame/register difference shifts the streams, and only the multiset-based
 ones (`blockscreen`, `refop_screen`) escape it.  The working route for a
 positional hit is the one that succeeded: confirm it against the SOURCE and the
 object bytes by hand, not against the alignment.
+
+## F12258. Reference-only ADD counts are POINTER-WALK signatures; `V34EchoFilter`'s dot product recovered
+
+Excluding zero idioms (`xor %r,%r`, `sub %r,%r`) and `inc`/`dec` counters, the
+reference-only REAL arithmetic of the corpus is dominated by `add`:
+
+	fskdetect 188/136  add19 sub3 sar1
+	V34EqualizerAdapt 115/102  add11
+	V34EqualizerFilter 85/78  addl4 add3
+	V34EchoFilter 55/52  add4
+	SMCv32_encoder_dif 111/106  add6 and2
+
+An `add` inside a loop body is the signature of a POINTER WALK -- `*p++` emits an
+increment where indexed addressing (`p[i]`) emits none.  That makes the
+zero-idiom-filtered `add` count a nominator for source SHAPE, not for missing
+computation.
+
+Worked case `V34EchoFilter` (src/pump/v34/v34filters.c:1016).  Ours indexed the
+dot product:
+
+	for (k = 0; k < taps; k++)
+		acc += e->coeff[k] * hist[k];
+
+the reference walks it.  Variant (`spec_v34echofilter.json`, control reproduces
+the in-tree object ef9b9d01):
+
+	V0 baseline                 NONMATCH -2  52 insns  run 10/55  dmn 35
+	V1 dot product pointer walk NONMATCH  0  53 insns  run 15/55  dmn 22
+	V2 shift loop pointer walk  NONMATCH -1  52 insns  run  8/55  dmn 35
+
+V1 makes the BYTE COUNT EQUAL (139/139, delta 0), lifts the aligned run 10 -> 15
+of 55 and cuts the multiset distance 35 -> 22; `make period T=t_v34ec` passes.
+Retained as a source-fidelity PARTIAL (still NONMATCH).
+
+V2 is WORSE, so the history-shift loop stays indexed -- the two loops in one
+function differ, exactly the per-site rule Lever 53 established and F12242
+re-found in `FPM_atan`.  A pointer-walk normalisation of a whole function would
+be wrong.
+
+This adds a nominator (`add`-weighted ref-only arithmetic) and its first win; the
+remaining heads (`fskdetect` add19, `V34EqualizerAdapt` add11,
+`V34EqualizerFilter` add7, `SMCv32_encoder_dif` add6) are the queue.

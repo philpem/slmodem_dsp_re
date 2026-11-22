@@ -1013,8 +1013,13 @@ V34EchoFilter(struct v34_echo *e, short lag)
 		p -= e->dlen;
 	hist[taps - 1] = *p;
 
-	for (k = 0; k < taps; k++)
-		acc += e->coeff[k] * hist[k];
+	{
+		const short *cp = e->coeff;
+		short *hp = hist;
+
+		for (k = 0; k < taps; k++)
+			acc += *cp++ * *hp++;
+	}
 
 	return acc;
 }
