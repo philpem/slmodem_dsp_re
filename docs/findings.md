@@ -150157,3 +150157,34 @@ be wrong.
 This adds a nominator (`add`-weighted ref-only arithmetic) and its first win; the
 remaining heads (`fskdetect` add19, `V34EqualizerAdapt` add11,
 `V34EqualizerFilter` add7, `SMCv32_encoder_dif` add6) are the queue.
+
+## F12259. No NONMATCH has a genuine arithmetic-opcode mismatch at its FIRST divergence; real defects hide behind an earlier frame/order difference
+
+Classifying every NONMATCH by its FIRST differing canonical row:
+
+	same mnemonic, operands differ   248
+	one side arithmetic              168
+	other mnemonic                   132
+	identical canonical (regs only)    7
+	ARITH vs ARITH                     2
+
+and both of the two are artifacts.  `V32FP_control` looked like a missing
+`add %dl,%dl` (a byte doubling the reference has and ours lacks), but the RAW
+dump shows the same four operations with the two live values in SWAPPED byte
+registers:
+
+	REF : shr $0x7,%dl ; add %dl,%dl    ; and $0xfd,%al ; or %dl,%al
+	OURS: shr $0x7,%al ; and $0xfd,%dl  ; add %al,%al  ; or %al,%dl
+
+`fidelity.canonical` maps both byte registers to `%r8l`, so the comparison pairs
+ops on different VALUES.  `EchoCanceler`'s first difference is a stack adjust
+inside the prologue.  So the corpus contains NO row whose first divergence is a
+genuine arithmetic-opcode mismatch.
+
+That does NOT mean there are no arithmetic defects -- it means they sit LATER,
+behind an earlier frame or ordering difference.  `V90Equalizer`'s `& ~3u` vs
+`>> 2` (F12255) is exactly that: its FIRST difference is the frame size at row 3,
+and the real defect is at row 13.  The lesson is that a positional or
+first-difference screen cannot find them; only the ORDER-FREE multiset route can
+(`refop_screen`, F12255/F12258), and each multiset hit must then be confirmed
+against the source and the object bytes.
