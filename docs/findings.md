@@ -148950,3 +148950,111 @@ Applied to `bValidateEnergyValue`: the `--param max-inline-insns-auto=50`
 candidate (delta +300 -> +20) was reverted for this reason. The unresolved
 native call to `FDSP_Kernel_InitObj` remains a typed negative; the source
 explanation (a larger original helper, or a named flag) is not excluded.
+
+## F12224. Tier-1 (same-count) residue is compiler-bound; a statement-ORDER lever recovers two V.90 mask accessors EXACT
+
+The 2026-11-22 baseline census is 1257 EXACT / 34 REGALLOC / 561 NONMATCH
+(1852).  Classifying every NONMATCH row by the grader's own `alpha_why`
+rejection (a `scratch/cd/reasonbreak.py` over `byteident.alpha_why`) splits the
+561 into 430 **COUNT differs** and 131 same-count rows.  The 131 same-count
+rows break down, by the *first differing row's* operand, into 39 mnemonic,
+23 allocation (USE CONFLICT / DEST SHAPE), 22 frame/stack displacement, 16
+branch-offset, 9 struct displacement, 8 section-addend, 5 type/width, 5
+frame-size, 2 named-symbol and 2 immediate.
+
+**A same-count row is NOT evidence of a source error.**  Spot-checking the
+classes with the real bytes shows they are dominated by compiler-internal
+differences:
+
+- `txinit` (V34TX.c) rejects on `REGISTER SHAPE edx=(32,0) vs dx=(16,0)` at row
+  14; the widths are correct (`crc`-style 32-bit and 16-bit stores) and the real
+  difference is that the three zero-stores are *permuted*.  Reversing the three
+  statements in source is **byte-identical** — the period compiler orders the
+  stores itself (`scratch/cd/spec_txinit.json`, V0==V1==V2).
+- `DialerCreate` (`0xb4` vs `0xb0`), `VPcmFloModem::VPcmFloModem` (`$0x63` vs
+  `$0x32`), `FPM_FSE_init` (`rep movsl` placement), `RcFixed_Reset`,
+  `V92Precoder::reset`, `V90SpectralShaper::reset` are all *orderings* of the
+  same instruction multiset.
+- `V27RX_eq_train`'s apparent `±0x8000` swap is a `difflib` alignment artefact
+  past an earlier register difference; the raw bodies differ in allocation at
+  the top (`ebx` vs `esi`/`ecx`).
+- The classifier's `%ebp` pin is **not** costing promotions: a bounded
+  instrument (`scratch/cd/ebp_probe.py`, control: 33/34 known-REGALLOC pass)
+  that unpins `%ebp` promotes **0** rows — `v22_ans_rmloop2`, whose
+  `fidelity.canonical` ratio is 1.000 and whose only rejection is
+  `DEST ... eax vs ebp`, simply moves its conflict from row 207 to row 218.
+  Typed negative: sampled and inert.
+
+The one genuinely source-derivable pattern found is a **statement ORDER that
+induces a copy**: `getConstellationMask` and `getCodecConstellationMask`
+(V90MappingParamsInt.cpp) were each one instruction short.  The reference
+carries `mov %edx,%ebx` (a copy of `k`) because it reads its table *before* its
+length:
+
+	xor  %esi,%esi
+	cmp  $0x6,%esi
+	setl %dl
+	...
+	mov  0x638(%ecx,%esi,4),%edx	; k = distinctIndex[which]
+	mov  %edx,%ebx			; <-- the copy
+	mov  0x604(%ecx,%edx,4),%ebp	; length = constellationSize[k]
+	shl  $0x7,%ebx			; table = constellation[k]
+
+Our source read `length` first and `table` second, so the allocator coalesced
+`k` into one pseudo and the copy vanished.  Reordering the two assignments to
+`table = ...; length = ...` reproduces the reference exactly:
+`scratch/cd/spec_constmask.json` V1 gives `EXACT` (48/48, symdiff 0) for both
+functions, V0 and V2 are byte-identical to the in-tree object.  Both retained.
+Period differential `t_v90cmask` passes.  Census 1257 -> **1259 EXACT**,
+561 -> 559 NONMATCH, zero losses; `displaySpectralParams`,
+`setV92CPpckFromParamsInfo` and `getConstellationsIndex` in the same TU are
+unchanged (a reorder of the purely-order-independent statements in the last is
+inert; its residue is argument-materialisation order plus the `!=` compare
+direction, both codegen ties).
+
+A count-differer screen for missing register-to-register copies
+(`scratch/cd/copyscreen.py`) finds no other high-yield candidate: the largest
+fraction of reference-only `mov %r,%r` is 0.40 (`VPcmV34GetVisualDiagnostics`,
+5 rows).  The retargeted queue is therefore the genuine count-differers whose
+missing block is an *operation*, not a copy.
+
+## F12225. The operation tier (430 COUNT-differers) is dominated by allocation/frame/copy residue, not absent operations
+
+After F12224 the queue was the count-differers whose missing block looks like
+an *operation*.  Screens built for this (`scratch/cd/firstdiff.py` = first
+register-abstracted difference per row; `scratch/cd/mnemscreen.py` = net-missing
+mnemonic multiset) put only 16 of 430 rows in the "first real difference is a
+mnemonic change" class, and sampling them shows they are codegen, not source:
+
+- `V92Phase4Modulator::generateCPu`/`generateE2u`/`generateSUVu` reject on the
+  second arm's tail: reference `movzwl 0x1e(%esp); cwtl` (read the out-param as
+  unsigned short, then sign-extend) versus our single `movswl`.  The first arm
+  is byte-identical.  The mangled callee `processERjPs` fixes `&sym` at
+  `short *`, so the field is `short`; the `movzwl` arises from GCC's 16-bit
+  truncating-subtraction / pseudo-class choice (AGENTS.md's internal HI pseudo),
+  not a declared type.
+- `FPM_MTD_detect` rejects on `movswl 0x14(%edx)` versus our `movzwl` for the
+  `struct fpm_mtd.out_of_band` load (`short` per the header).  Forcing the
+  sign-extended load by hoisting the field into a `short` local
+  (`scratch/cd/spec_mtd.json` V2) fixes that row and lifts the aligned run
+  57->67 of 94, but exposes reload/copy allocations (`mov 0x30(%esp)` reload;
+  `not;mov;sar` copy) and the grade stays NONMATCH.  Not retained: partial only,
+  no promotion, and the hoist claims a local the object does not clearly have.
+- `VPcmV34GetVisualDiagnostics` carries the same missing-copy signature as
+  F12224 (reference has extra `mov %r,%r` at rows 20/24/152) plus `add $0x6bd0`
+  vs our `lea 0x6bd0(%r32)`, but five copies spread across a 255-instruction
+  body are not one statement-order fix.
+- `rxinit`, `rxtiminginit` (`xor`), `_ZN8FloatFIR7processEf` (`flds`),
+  `_ZN9FloatARMA7processEf` (`mov`), `getConstellationsIndex` (`mov`) are the
+  cleanest net-missing-mnemonic rows; align shows frame-size (`sub $0x10` vs
+  `sub $0x14`) and materialisation-order differences underneath, not a missing
+  statement.
+
+Conclusion: the same ORDER lever that recovered
+`getConstellationMask`/`getCodecConstellationMask` (F12224) is the exception,
+not the rule.  The operation tier's residue is the allocator and the scheduler
+(register choice, reload-vs-keep, copy insertion, frame size, sign-extension
+placement).  The productive systematic move is the coupled one AGENTS.md and
+Lever 52 already describe -- process a TU in ASCENDING EMISSION ORDER so the
+peephole2 scratch cursor and register choices a function receives are native --
+rather than chasing these rows one at a time.

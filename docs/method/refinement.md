@@ -5029,6 +5029,36 @@ The worked case is F12208: `enterChannelVerificationEv` (V90Equalizer.cpp) and
 floor baseline yet moved out of EXACT by the 11-19 changes to functions emitted
 before them.
 
+### Lever 53. A same-count NONMATCH is not a source error until its class is read; the recoverable class is a statement ORDER that induces a copy
+
+The grader's `alpha_why` reports the *first differing row*, but that row is a
+symptom.  Classify the whole same-count set first (`scratch/cd/reasonbreak.py`
+over `alpha_why`; `scratch/cd/tier1_rootcause.py` for the finer split).  On the
+2026-11-22 corpus (131 same-count rows) the classes are 39 mnemonic, 23
+allocation, 22 frame/stack, 16 branch-offset, 9 struct-disp, 8 section-addend,
+5 type/width, 5 frame-size, 2 symbol, 2 immediate -- and sampling each shows
+them to be *orderings* of one instruction multiset, not absent operations.
+
+Two tests tell them apart cheaply:
+
+- **A statement reorder that leaves the object byte-identical is INERT.**  Try
+  it (`variant_run.py`): `txinit`'s three zero-stores, `DialerCreate`'s two, and
+  `getConstellationsIndex`'s preamble are all inert -- the period compiler owns
+  the order.  Do not keep reordering those.
+- **A missing `mov %reg,%reg` in the reference (a copy) is the signature of an
+  order the compiler CAN see.**  The worked case is F12224:
+  `getConstellationMask`/`getCodecConstellationMask` were one copy short because
+  the reference read `table = constellation[k]` BEFORE
+  `length = constellationSize[k]`; the reversed source coalesced `k` and dropped
+  the copy.  Reading them in the reference order restores `mov %edx,%ebx` and
+  both are EXACT.  Screen for the pattern with `scratch/cd/copyscreen.py`
+  (fraction of reference-only `mov %r,%r`).
+
+Do NOT reach for the classifier when a row stalls: a bounded probe that unpins
+`%ebp` (`scratch/cd/ebp_probe.py`) promotes **zero** rows, so the `%ebp` pin is
+not a hidden cost -- the ebp-involved rows merely move their conflict.  The
+retargeted residue is the count-differers whose missing block is an OPERATION.
+
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
