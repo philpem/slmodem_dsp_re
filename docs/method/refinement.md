@@ -13953,3 +13953,32 @@ function stays indexed, and `V34EqualizerAdapt`'s attempted walk OVERSHOT
 (delta 19 -> 57), while `V34EqualizerFilter`'s worsened it (-22 -> -27).  A
 `for (k...) sum += a[k]*b[k]` loop is the strong case; a loop that also indexes
 a wrapping delay line usually is not.
+
+### Lever 58. An early capture of a pointer/owner installs scheduler ANTI-dependencies -- evaluate it inside the call instead
+
+`sched-deps.c:569-570` adds a memory anti-dependency (read-before-write) for every
+pending read that may alias a later store:
+
+	if (anti_dependence (XEXP (pending_mem, 0), t))
+	  add_dependence (insn, XEXP (pending, 0), REG_DEP_ANTI);
+
+So a statement that CAPTURES a pointer early -- `dsp = obj->dsp;` before
+`f(&dsp->x, ...)` -- puts the owner LOAD ahead of the outgoing argument stores,
+and the four resulting edges forbid the scheduler from moving those stores
+earlier.  No priority, tie-break, scratch cursor or renaming that preserves the
+edges can produce the object's order.
+
+Worked case F12264: `ModDataV22` (src/pump/v22/V22int.c).  The object stores
+`data` and `count` before loading `v22->dsp`; ours loaded `dsp` first.  Writing
+the call as `FPM_SMC_encoder(&v22->dsp->smc, &v22->dsp->smc_ring, data, count)`
+-- owner evaluated inside the call, so it mixes into argument setup and the
+cheap stores precede it -- is **EXACT** (28/28, delta 0).  A single captured
+local is WORSE (delta +11), so the two independent owner reads are load-bearing.
+
+Where to look next: any function whose source captures `ptr = obj->field;` (or a
+similar owner) in its own statement and then passes `&ptr->...` to a call.  The
+tell in the bytes is our load appearing before the outgoing argument stores
+while the object stores them first.  Companion mechanism in the same function:
+`local-alloc.c:1672-1693` breaks a quantity-score tie by quantity NUMBER
+(`return q1 - q2;`), which decides which of two equal-priority live values gets
+the scarce call-crossing register.
