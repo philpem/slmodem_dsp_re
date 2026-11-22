@@ -150222,3 +150222,32 @@ not the productive move; the remaining routes are per-function reconstruction of
 the large genuinely-short bodies, or the compiler-internal one (`rtl_stage.py`,
 which attributes a divergence to its producing pass -- `.sched2` for
 `ModDataV22`).
+
+## F12261. The TU-order cascade route stalls at its first test: V90AutoDigitalImpDetector::reset is post-front-end
+
+Applying the cascade rule (work a TU in emission order; the FIRST non-native is
+the one to fix, later functions are victims -- Lever 52) to the best live
+candidate.  `scratch/cd/tuorder.py` shows `V90AutoDigitalImpDetector.cpp` has
+seven EXACT functions, then `reset` as the first non-native, then six NONMATCH
+-- the largest live cascade in the corpus.
+
+`reset` is 109 reference instructions against our 95, so there is real missing
+body.  Pass attribution (F12253) settles where it is: at `.01.rtl`, the function
+already carries **82 RTL insns and all four calls**, including the phase/code
+loops and their `mem/SF` stores.  Every operation the source expresses is
+present at the front end, so the 14-instruction deficit is produced later --
+allocation/scheduling -- and NO source fix at `reset` can make it native, hence
+none can trigger the cascade.
+
+Two tooling facts from the same run:
+
+- the period GCC ICEs (`Segment fault`) on `-da` for this TU while the normal
+  build is clean; the partial dumps survive and the tree dump
+  (`-fdump-tree-optimized`) is a working fallback, now built into
+  `rtl_stage.py`;
+- the RTL dumps name functions by their DEMANGLED C++ signature
+  (`V90AutoDigitalImpDetector::reset(unsigned char, PcmType, short int)`), not
+  the mangled symbol, so a lookup must match the source form.
+
+Conclusion: the cascade rule is sound but this TU's head is allocator-bound,
+the same result the ascending sweep found on V90Equalizer early in the session.
