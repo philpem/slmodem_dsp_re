@@ -150529,3 +150529,19 @@ retained and no source changed.
 This is now the fourth class (x87 F12267, block order, inlining F12271/F12272,
 and reload unprobed) where the compiler-internal route named the mechanism
 precisely but the remaining gap is the whole function's body.
+
+## F12273. Step 3, measured: the local-alloc tie-break lever is RARE -- V34RX.c (11 NONMATCH) has zero call-crossing ties
+
+Ran the quantity probe (F12269's instrument, one command) on a second TU.  For
+`src/pump/v34/V34RX.c` -- **11 NONMATCH functions**, a hotspot -- it recorded
+**436 `find_free_reg` selections over 12 functions with ZERO call-crossing
+ties** (0 errors, exit 0).
+
+So the tie-break lever, which F12269 showed is live in V22int.c
+(`DemodDataV22`, score 447), does not reach V34RX.c's residue at all: its
+divergences are decided elsewhere.  Two TUs sampled gives one tie and one empty,
+which is enough to say the lever's corpus scope is small and must be measured,
+not assumed -- and the instrument makes that a one-command measurement per TU.
+
+This is the honest bound on step 1's mechanism: real (F12264 confirmed it by
+construction) but narrow.
