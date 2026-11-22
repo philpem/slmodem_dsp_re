@@ -149631,3 +149631,41 @@ Method note: the discriminator was the emission-order view (each arm identified
 by its `dsplibs_debug_printf` merge-string, F12240), which the register-abstracted
 aligned diff could not supply -- a source ORDER difference, exactly the class
 Lever 53 named.
+
+## F12242. FPM_atan's degenerate-axis arm was written as an arithmetic sign mask, not a `?:` -- recovered as a metric-neutral partial (Lever 55)
+
+`FPM_atan` (src/dsp/fpm_atan.c, ref 114 / ours 108 instructions) opens with the
+`if (x == 0)` arm, and its first difference is a SOURCE-FORM difference, not
+allocation: the reference computes the value with a sign mask
+
+	movswl 0x30(%esp),%esi		; y
+	mov %esi,%eax
+	sar $0x1f,%eax
+	and $0x4000,%eax
+	lea 0x2000(%eax),%edx
+
+i.e. `0x2000 + ((y >> 31) & 0x4000)`, where our `?:` spelling
+`(short)(0x2000 + (y < 0 ? 0x4000 : 0))` compiled to a BRANCH
+(`test %r16,%r16; mov $0x6000; js ...; mov $0x2000`).  Same compiler, so the
+original at that site was arithmetic.
+
+Variant evidence (`spec_fpm_atan.json`, control reproduces the in-tree object):
+
+	V0 baseline                         NONMATCH 0   108 insns  run 15/114  dmn 40
+	V1 line 106 arithmetic sign mask    NONMATCH 0   108 insns  run 15/114  dmn 34
+	V2 line 110 arithmetic sign mask    NONMATCH 38  116 insns  run 15/114  dmn 42
+	V3 both                             NONMATCH 38  116 insns  run 15/114  dmn 38
+
+V1 reproduces the reference's `sar $0x1f; and $0x4000` exactly and is
+byte-identical through that block; the remaining difference in the arm is the
+follow-up (`add $0x2000,%eax` against the reference's `lea 0x2000(%eax),%edx`)
+plus the pointer register -- allocation.  So V1 is the correct source form but
+does not promote.  V2 is WORSE, so line 110's `?:` is genuinely ternary -- the
+two arms of the same function differ, which is exactly why the spelling must be
+derived per site rather than normalised.
+
+V1 is RETAINED as a source-fidelity partial (metric-neutral: NONMATCH either
+way, reported separately from a promotion); `make period T=t_fpm_atan` passes.
+Lever 55 records the shape: a `?:` the reference compiled to a BRANCHLESS sign
+mask (`sar`/`and`, or `setcc`) is a real source difference, and the
+discriminator is the shape (`sar`/`and` vs `test`/`js`), not the value.

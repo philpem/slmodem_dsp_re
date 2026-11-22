@@ -103,7 +103,7 @@ FPM_atan(short y, short x, short *angle)
 	 * along the positive or negative x axis when y is zero.
 	 */
 	if (x == 0) {
-		*angle = (short)(0x2000 + (y < 0 ? 0x4000 : 0));
+		*angle = (short)(0x2000 + ((y >> 31) & 0x4000));
 		return;
 	}
 	if (y == 0) {

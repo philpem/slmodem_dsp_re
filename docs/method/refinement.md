@@ -13897,3 +13897,26 @@ sites in two DATA functions, while eleven attractive screens are closed or
 mispaired. All rows retain their mapping/unknown caveats. The
 [next closure](../nonmatch-vector-triage.md#next-bounded-wave) crosses only the
 MOH carrier width and its witnessed ordered reason chain.
+
+### Lever 55. A `?:` that the reference compiled BRANCHLESS is a real source difference; tell it by the shape, not the value
+
+The first difference in `FPM_atan`'s `if (x == 0)` arm was not allocation: the
+reference computes `0x2000 + ((y >> 31) & 0x4000)` (`sar $0x1f` / `and
+$0x4000` / `lea`), where our `(short)(0x2000 + (y < 0 ? 0x4000 : 0))` compiled
+to a branch (`test` / `mov $0x6000` / `js` / `mov $0x2000`).  Same compiler, so
+the original spelling was arithmetic, not `?:` (F12242).
+
+Read the two shapes, not the computed constant:
+
+- BRANCHLESS: `sar $0x1f` + `and <mask>`, or `setcc` + `neg`/`shl`, or a
+  `cmov` -- the compiler was given an arithmetic expression or a plain select.
+- BRANCH: `test` + `js`/`jns` + two materialised constants -- the compiler was
+  given a `?:` in a context it chose not to if-convert.
+
+They compute the same value, so `fidelity.canonical` (and every value-level
+screen) cannot separate them; only the instruction shape can.  Do not normalise
+a whole function to one spelling: in `FPM_atan` line 106 is arithmetic and line
+110 is genuinely ternary -- the two arms differ, so the form must be derived per
+site.  A spelling change that lands the block but leaves the follow-up `add`
+vs `lea` + register difference is a partial, not a promotion; retain it and say
+so.
