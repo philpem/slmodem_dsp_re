@@ -150385,3 +150385,30 @@ So Lever 58's reach is exactly the functions where our owner load is NOT already
 reload-matched -- `ModDataV22` was one, and the twin `ModDataV32` and the
 creators are not.  The nomination must be confirmed by the reload count, not by
 the source shape.
+
+## F12267. `getMetric`'s x87 swap is an edge-driven stack CORRECTION; the movable input is the live-value set, and F12246's variants did not move it
+
+The x87 case resolved to its predicate.  `getMetric`'s `.34.stack` reports
+
+	Edge 5->6: correcting stack to [ 14 13 15 12 ]
+
+-- a real permutation the pass must perform, from `reg-stack.c`'s top-exchange
+loop (`:2300-2314,2338-2367`), with redundant swaps suppressed at
+`:960-965,995-1020`.  The correction exists because the live x87 values arriving
+at edge 5->6 are in a different order from the one the pass wants; **the movable
+input is therefore the live-value set and ordering at that edge**, not the
+exchange itself (x87 has only top-exchange, and the redundant-swap test is
+fixed).
+
+F12246 already measured the source side: three variants of the diagnostic
+arguments (hoists and a single intermediate) were byte-identical, and the
+remainder was the follow-up `add`-vs-`lea` plus the pointer register.  So for
+`getMetric` no tried source form changes the live-order at that edge, and the
+x87 class is closed there with a mechanism rather than a sample.
+
+What would move it: a source form that changes which values are LIVE and in what
+ORDER at edge 5->6 -- e.g. a genuinely different expression nesting or a
+different number of simultaneously-live intermediates.  The probe Astra specifies
+(record each `emit_swap_insn` caller's old/new value vectors under GDB) is the
+instrument for the next such case; `tools/gcc_x87_eia6_mechanism.py` already
+reads the hash-pinned `reg-stack.c` and RTL dumps and can be retargeted.
