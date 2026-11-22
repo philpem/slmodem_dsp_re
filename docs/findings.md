@@ -150341,3 +150341,29 @@ mechanism recorded in the source comment.  `make period T=t_v22data` passes, and
 the TU regrade shows ModDataV22 NONMATCH -> EXACT with no collateral change.
 
 Census 1260 -> **1261 EXACT**, 557 -> 556 NONMATCH.
+
+## F12265. Lever 58 does not generalise by pattern-matching: `ModDataV32` has the same source shape and is inert
+
+Scanning for Lever 58's source shape (a local capturing an owner pointer, then
+passed as `&local->field` to a call) over the 556 NONMATCH functions nominates
+35 sites, clustered in the creators (`V22FP_create` 19, `B103FP_create`,
+`V21RX_create`) and in `ModDataV32` -- the V.32 twin of the function the lever
+recovered.
+
+`ModDataV32` (src/pump/v32/V32int.c, ref 121 / ours 104, a genuine 17-instruction
+deficit) has the identical shape:
+
+	fp = modem->fp;
+	tbl = fp->encoders;
+	sel = fp->encoder_sel;
+	tbl[sel](&fp->tx_smc, &fp->symout, data, count);
+
+Evaluating the owner in the call (Lever 58's form) is **inert**: still NONMATCH,
+delta -17 unchanged.  The object's prologue stores the incoming `modem` pointer
+to a stack slot (`mov 0x24(%esp),%r32; mov %r32,0x18(%esp)`) rather than
+reloading it, so its argument setup is a different mechanism and the deferral
+does not apply.
+
+So the lever is real but SPECIFIC, and the nomination must be confirmed against
+the bytes: `ModDataV22` reloads its owner twice (the deferral is correct there),
+`ModDataV32` spills it once (the deferral is not).  Reverted; V32int.c unchanged.
