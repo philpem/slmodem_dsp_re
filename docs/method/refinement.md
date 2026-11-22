@@ -13921,22 +13921,24 @@ site.  A spelling change that lands the block but leaves the follow-up `add`
 vs `lea` + register difference is a partial, not a promotion; retain it and say
 so.
 
-### Lever 56. A length FIELD may hold an element COUNT, not a byte length -- check the units, not the mask
+### Lever 56. A length FIELD may hold an element COUNT, not a byte length -- check the units against the field's USES (HYPOTHESIS: unproven)
 
-`V90Equalizer`'s constructor set `linearEquLength = linearEquLen & ~3u`, and the
-reference emits `shr $0x2` at the same two sites (F12255).  The mask and the
-shift are not interchangeable spellings of one idea: `& ~3u` yields a BYTE
-length, `>> 2` a float COUNT, and the field's USES decide which the original
-held -- `for (i = 0; i < linearEquLength; i++)` walks the coefficient array, so
-it is a count, and the byte-length form also over-counted and over-allocated by
-4x.
+A length field can be spelled `len & ~3u` (a byte length) or `len >> 2` (an
+element count), and the two differ whenever the low bits are non-zero.  The
+discriminator is the pair (field, uses), not the instruction alone, and the
+field's consumer settles it -- `for (i = 0; i < n; i++)` over an array means `n`
+is a count.  Where the conversion is a bytes-to-elements one, spell it by the
+type (`len / sizeof(float)`) rather than a literal or a bare shift; all three
+emit the same shift for an unsigned operand.
 
-The discriminator is the pair (field, uses), not the instruction alone.  A
-`& ~(n-1)` mask and a `>> log2(n)` shift differ whenever the low bits are
-non-zero, so reading the field's consumer is what settles it.  Spell the
-conversion by the types where you can -- `len / sizeof(float)` beats a
-hard-coded 4 and both beats `>> 2` -- since all three emit the same shift for an
-unsigned operand.
+**The one candidate was withdrawn.**  F12255 read the reference's `shr $0x2`
+against our `and $0xfffffffc` and concluded `V90Equalizer`'s length fields are
+counts.  That was a MIS-PAIRED alignment -- the reference's shift writes
+`0x4c(%ebx)`, ours the mask `0x48(%ebx)`.  The change was retained on a single
+passing fixture and broke TEN (`make phase`); F12268 records the correction and
+the revert.  So the lever stands as a hypothesis to TEST, with no confirmed
+worked case: check the units against the uses, and judge any change against the
+whole affected fixture set -- one fixture is not the check.
 
 ### Lever 57. Reference-only `add` counts are POINTER-WALK signatures -- but the walk is per-LOOP, never per-function
 

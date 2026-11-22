@@ -150018,7 +150018,7 @@ This is the route doing what the screens could not: it shows that the arithmetic
 is present at `.01.rtl`, so no source statement is absent, and it names the
 deficit's nature (moves) rather than only its size.
 
-## F12255. The reference-only OPERATION classifier finds a real one: `V90Equalizer`'s length fields are float COUNTS (`>> 2`), not byte lengths (`& ~3u`)
+## F12255. [WITHDRAWN -- see F12268] The reference-only OPERATION classifier finds a real one: `V90Equalizer`'s length fields are float COUNTS (`>> 2`), not byte lengths (`& ~3u`)
 
 F12254's route decides per-operation, but per-row it needed a screen.  The
 reference-only classifier (`scratch/cd/refop_screen.py`) buckets each NONMATCH's
