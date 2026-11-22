@@ -111,13 +111,19 @@ void V34EchoCleanUp(struct v34_echo *e);
 void V34EchoUpdateDelayLine(struct v34_echo *e, short sample);
 
 /**
- * @brief Convolve the canceller against its delay line.
+ * @brief Compute the echo replica: convolve the tap coefficients against a
+ * window of the delay line.
+ *
+ * The delay line holds the local transmit signal, so the result is the
+ * predicted echo of this end's own output, which the receiver subtracts
+ * from what it receives.
  *
  * The caller chooses the output scaling; the accumulator is returned
  * unshifted.
  *
  * @param e    The echo canceller.
- * @param lag  How far behind the cursor the newest tap is taken from.
+ * @param lag  How far behind the cursor the newest tap is taken from -- the
+ *             echo path's delay.
  * @return The unshifted 32-bit convolution result.
  */
 int V34EchoFilter(struct v34_echo *e, short lag);

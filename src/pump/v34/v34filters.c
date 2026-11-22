@@ -11,15 +11,25 @@
  * modulator follow.  The functions are written in the object's own order so
  * that a diff against the disassembly stays readable.
  *
- * THE ECHO CANCELLER IS THE INTERESTING ONE.  It is an ordinary LMS
- * adaptive FIR with one unusual property: its coefficients are 32 bits wide,
- * held as two parallel arrays of shorts.  `V34EchoFilter` reads only the high
- * halves, so the filter runs at 16-bit resolution, while `V34EchoAdapt`
- * carries all 32 bits.  A correction far below the filter's own least
- * significant bit therefore accumulates in the low array until it carries
- * into the high one -- which is how a canceller with 16-bit taps converges to
- * better than 16-bit accuracy.  Nothing in the object comments on it and it
- * is easy to mistake the second array for a scratch buffer.
+ * THE ECHO CANCELLER IS THE INTERESTING ONE, and there are two of them, a
+ * near and a far canceller.  Both predict the echo of the LOCAL TRANSMIT
+ * signal that returns in the receive path.  The transmitter writes each
+ * output sample into the canceller's delay line
+ * (`V34EchoUpdateDelayLine`); the receiver convolves a window of that line
+ * with the tap set (`V34EchoFilter`) to get the echo replica, subtracts it,
+ * and lets the residual drive the adaptation (`V34EchoAdapt`).  The `lag`
+ * argument selects how far behind the cursor the window starts, which is the
+ * echo path's delay.
+ *
+ * Each canceller is an ordinary LMS adaptive FIR with one unusual property:
+ * its coefficients are 32 bits wide, held as two parallel arrays of shorts.
+ * `V34EchoFilter` reads only the high halves, so the filter runs at 16-bit
+ * resolution, while `V34EchoAdapt` carries all 32 bits.  A correction far
+ * below the filter's own least significant bit therefore accumulates in the
+ * low array until it carries into the high one -- which is how a canceller
+ * with 16-bit taps converges to better than 16-bit accuracy.  Nothing in the
+ * object comments on it and it is easy to mistake the second array for a
+ * scratch buffer.
  *
  * SCALING IS THE CALLER'S JOB HERE, unlike everywhere else in this
  * reconstruction.  `V34EchoFilter` and `V34HilbertFilter` both hand back
