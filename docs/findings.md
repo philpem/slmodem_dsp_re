@@ -150251,3 +150251,41 @@ Two tooling facts from the same run:
 
 Conclusion: the cascade rule is sound but this TU's head is allocator-bound,
 the same result the ascending sweep found on V90Equalizer early in the session.
+
+## F12262. Emission-order census: 53 of 226 TUs differ from the original's order, and reordering one TU changes codegen -- but not for the better
+
+GCC emits a TU's functions contiguously, so a `.o`'s function ADDRESS order is
+its emission order, and the blob preserves the ORIGINAL's.  Comparing them
+(`scratch/cd/ordercheck.py list`):
+
+	V34hshak.c        29 diffs  17 NONMATCH
+	V90Demodulator    20        8
+	V90Phase3Modulator 19       5
+	V90PreFilter      16        8
+	V90CP             14        5
+	V92EchoCanceller  11        7
+	V34RX.c           10       11
+	v34shell.c         9       10
+	V32dec.c           8        9  (every function)
+
+**53 of 226 TUs differ**, and the top of the list is the NONMATCH hotspots.
+But there is a control: `fax_Vmi_v17/v21/v27/v29.c` each differ by 12 and are
+**fully EXACT** -- so an order difference alone does not force a mismatch.
+
+Worked case `V32dec.c`.  Reordering its nine definitions to the blob's address
+order (`scratch/cd/reorder_tu.py`, regions delimited by top-level `}` so a
+function's `#define`s and documentation travel with it) COMPILED and
+**changed the codegen of two of the nine**:
+
+	FSE_decision_128pt   delta +19 -> -81   (moved 9th -> 2nd)
+	FSE_decision_32pt    delta  +1 -> -96   (moved 8th -> 4th)
+	the other seven      unchanged
+
+That CONFIRMS Lever 52 by measurement -- the peephole2 scratch-search cursor is
+threaded in emission order and a source reorder moves it -- but the derived
+original order made both moved functions WORSE, so the target order is not (by
+itself) the cause of these deficits.  Reverted; `V32dec.c` is unchanged.
+
+The census and the tool are retained: `ordercheck.py` ranks the 53 TUs, and the
+negative is bounded -- the original order is not an automatic win, and any
+adoption of it needs a per-TU measurement like this one.
