@@ -149754,3 +149754,32 @@ reference <= 80 instructions), gives the ranked structural work list the
 This is the missing instrument: it turns a nomination into a measurement.  A row
 with `mset == 0` should never be worked on again; a row with a high `mset` and a
 short length is where genuine reconstruction still lives.
+
+## F12246. `getMetric`'s 11-instruction deficit is x87 `fxch` churn, not the "un-modelled rotation" the source comment implies; the `fxch`-excluded multiset barely re-ranks
+
+The mnemonic-multiset screen (F12245) ranked
+`_ZNK24V90SpectralShapingFilter9getMetricEPKsj` first among tractable rows
+(mset 51, ref 75 / ours 64).  Reading the reference bytes names the deficit
+exactly: at each loop back-edge it emits a four-instruction x87-stack rotation
+
+	fxch %st(3)
+	fxch %st(4)
+	fxch %st(5)
+	fxch %st(3)
+
+three times (`0x33218`, `0x33258`, `0x33265`).  That is what the source comment
+at V90SpectralShapingFilter.cpp:178-182 calls "a four-register rotation that
+comes back to the identity after two passes" -- but it is literal `reg-stack.c`
+churn, not a source construct, and the instruction COUNT deficit is those 12
+`fxch` plus the reordered x87 state loads.  With `fxch` excluded the row stays
+~39 apart, and the difference is the x87 live-value layout (ours spills
+`fstps` where the reference keeps the value on the stack).  So `getMetric` is
+x87-allocation-bound like F12226/F12232, not a recoverable missing block; the
+"not modelled here" note describes an effect the compiler owns.
+
+Refinement kept anyway: `blockscreen.py` now reports the multiset EXCLUDING
+`fxch` (`nox`) as well as with it.  Over the 557 rows only ~10 move (e.g.
+`V90Equalizer::process` 143 -> 139, `V92CP::evaluateInfo` 90 -> 86,
+`V90Demodulator::progress` 94 -> 83) and the 79-row `mset == 0` floor is
+unchanged -- so the mnemonic multiset is dominated by real operation
+differences, not stack churn, and remains the right structural screen.
