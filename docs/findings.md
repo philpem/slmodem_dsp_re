@@ -149716,3 +149716,41 @@ the SMALL rows where the sign idiom is the FIRST divergence (`FPM_atan`,
 divergence and will not yield to a spelling change.  The screen is a nominator;
 read the first difference before spending, exactly as for `deep_screen` and
 `spanrep`.
+
+## F12245. A mnemonic-MULTISET screen proves which NONMATCH rows have no source lever at all, and ranks the rest
+
+Every earlier screen canonises registers but keeps operands, so an early
+frame-size change -- which shifts every stack displacement -- poisons the whole
+comparison (F12233, F12244).  A frame shift changes OPERANDS but not MNEMONICS,
+and a block reorder changes the SEQUENCE but not the MULTISET.  So
+`scratch/cd/blockscreen.py` compares the padding-stripped **mnemonic multiset**
+(the number of times each instruction TYPE occurs), which is frame- AND
+order-independent.
+
+Over the 557 NONMATCH rows:
+
+- **79 rows have `mset == 0`** -- the identical mnemonic multiset.  They differ
+  ONLY in operands and order, so they are provably codegen-bound and no source
+  change can move them.  Examples: `_ZN18V90Phase4Modulator17generateV92SymbolEv`
+  (941/941 instructions, sequence ratio 0.626 -- heavy REORDERING with the same
+  multiset), `ModDataV22`/`V27`/`V29` (28/28), `V90Jd::packData` /
+  `getBitVector`, `CID_MTD_detect` (77/77), `RcFixed_Reset`, `preinitdigital`.
+- Distribution: `0`:79, `1-9`:214, `10-24`:144, `25-49`:68, `>=50`:52.
+
+The SEQUENCE ratio (also reported) is order-sensitive and must not be used
+alone: `generateV92Symbol` scores 0.626 on sequence but 0 on multiset, i.e. it
+is a pure block reordering.
+
+The genuinely-different tail, restricted to tractable sizes (`mset >= 8`,
+reference <= 80 instructions), gives the ranked structural work list the
+157-TU `upstream_screen` queue was missing:
+`_ZNK24V90SpectralShapingFilter9getMetricEPKsj` (mset 51, 75/64),
+`_Z18calculateDilLength7DilType7PcmType` (32, 64/58), `FSE_decision_trn` (30,
+61/63), `_ZN12V92PreFilter7processEPfS0_` (31, 64/65), `V34EchoFilter` (25,
+55/52), `QualityDetectV17` (16, 62/54), `TxNoCarrierV32` (17, 48/53),
+`SMCv17_encoder_abs` (10, 48/44), `V92EchoCanceller::updateEchoHistory` (20,
+80/74).
+
+This is the missing instrument: it turns a nomination into a measurement.  A row
+with `mset == 0` should never be worked on again; a row with a high `mset` and a
+short length is where genuine reconstruction still lives.
