@@ -150188,3 +150188,37 @@ and the real defect is at row 13.  The lesson is that a positional or
 first-difference screen cannot find them; only the ORDER-FREE multiset route can
 (`refop_screen`, F12255/F12258), and each multiset hit must then be confirmed
 against the source and the object bytes.
+
+## F12260. The same-count set is register/branch allocation too; every screening class now resolves to post-front-end
+
+Driving the 51 same-instruction-count rows, smallest first, all confirmed
+allocation:
+
+- `V34nlencoder` (36/36): the reference loads `(%eax)` then `0x2(%eax)`; ours
+  loads `0x2(%edx)` then `(%edx)` -- the two operands swapped AND their
+  registers swapped.  Same four instructions.
+- `DialerAbort` (39/39): `mov 0xd0(%ebx),%ecx` against `(%ebx),%eax` -- a pure
+  register swap, identical everywhere else.
+- `_ZN12V90PreFilter16getV90CapabilityEv` (43/43): ours opens with
+  `xor %eax,%eax; test %ecx,%ecx; js`, the reference moves that guard later
+  (`js .+103`) and runs the same `mov 0x14(%esi),%edx; mov %ecx,%ebx; shl $0x4`
+  sequence first -- a branch/block reorder with identical operations.
+
+So the same-count class, like every other, is post-front-end.  The corpus's
+screening reach is now exhausted, and the classes close as:
+
+	mset == 0 (identical operation multiset)          79  provably codegen
+	no reference-only arithmetic                     133  operands/order/frame
+	same instruction count (mset > 0)                 51  register/branch alloc
+	count differs                                    294  frame/reload/order
+	-----------------------------------------------------
+	                                                 557
+
+Every one of these was probed and resolved against the source and the object
+bytes; the recoverable defects found this session (F12255, F12258, and the
+earlier F12224/F12234/F12241) were rare, and each was found by reading a
+specific VALUE difference, not by a screen.  Further corpus-wide screening is
+not the productive move; the remaining routes are per-function reconstruction of
+the large genuinely-short bodies, or the compiler-internal one (`rtl_stage.py`,
+which attributes a divergence to its producing pass -- `.sched2` for
+`ModDataV22`).
