@@ -149145,3 +149145,54 @@ same-count classification (F12224), the operation probe (F12225) and the
 compiler-flag negatives (F12226), the surviving NONMATCH residue is dominated by
 allocator/scheduler/x87 divergence, and the fraction with a recoverable source
 error is small.
+
+## F12228. The corrected residual picture: small-delta NONMATCH is codegen-bound, but the 42 genuinely-short functions are the reconstruction vein
+
+The earlier F12224-F12227 negatives were drawn from the SMALL-delta sample and
+over-generalised.  Three corpus screens correct that:
+
+- `scratch/cd/pure_rename_screen.py` (canonical: GP registers + local branch
+  offsets + section-relative addends abstracted): of 559 NONMATCH only **7 are
+  canonical-equal** (`_ZN12V90Modulator8progress`, `V92Phase3Modulator::reset`,
+  `V92Phase4Modulator::recivedRt`, `V90Jd::V90Jd`, `v22_ans_rmloop2`,
+  `v8_process`, `voice_command`) and 9 more are ratio >= 0.99.  All 7 reject only
+  on the register-renaming proof; F12227 records V90Jd::V90Jd as a valid
+  register 3-cycle the incremental proof rejects -- no source fix exists for any
+  of them.
+- `scratch/cd/frame_screen.py` (additionally collapses stack-displacement rank):
+  the same 7, so a frame-size-only difference is not a hidden class.
+- `scratch/cd/multiset_screen.py`: **7 sequence-equal, 59 multiset-equal-but-
+  reordered** (a pure scheduler reorder; e.g. CID_MTD_detect, DetSequence,
+  DialerCreate, FPM_FSE_init, ModDataV22/V27/V29, RcFixed_Reset, TxHdxStartV21,
+  VPcmV34InitMOH), and **493 with a genuinely different instruction multiset**.
+
+So the residue splits by SIZE: `|candidate - reference| <= ~8` is codegen-bound
+(the F12224-F12227 class), but the **42 count-differers with
+`candidate_instructions - reference_instructions <= -16` are genuinely short**
+-- real reconstruction work.  Most-short: v34handshak -621 (held separate),
+v8handshak -140, VPcmV34Progress -109, modulatevector -76, DialerProgress -63,
+fskdetect -52, DILdescriptorPacker -48, V90Equalizer::process and
+V90ConnectionEvaluator::evaluateConnection -47, dtmf_modem -44,
+FPM_SRE_recover -42, cadence_create -38, ... down to -16.
+
+`scratch/cd/short_rank.py` ranks these by fragmentation (align blocks with a
+ref/ours span > 2) and ref-only instruction count.  Every one is a sustained
+multi-block job; none has a single clean missing idiom.  Two worked targets:
+
+- **CALLPROG_Create** (callprog/Callprog.c): the reference zero-fills the whole
+  7-int `struct cadence_setup` local (`rep stos`) then writes only w0, w1, w2
+  (and w6, tone) -- our source writes all seven, so GCC elides the zeroing.
+  `= { 0 }` with the seven writes kept moved delta **-80 -> -60**, insns
+  244 -> 254, dmn 156 -> 134, but ~10 diff blocks remain (a 26-instruction
+  ref-only span ref[122:148]) so it does not promote.  **Not retained**
+  (`spec_callprog.json`; the tree was reverted).  The zeroing form is recorded
+  evidence for a future resume.
+- **V34GiveINFO0dBits** (pump/v34/v34info.c): three genuine missing blocks
+  (ref[103:109], [170:177], [181:188]) -- the remote-bit / `is_short` tail and
+  the debug-printf argument marshalling.  A static read suggested the
+  variant->remote_v92 mapping (source 407-413) was inverted, but the empirical
+  swap (`spec_giveinfo0b.json`) made the contiguous run *worse* (70/188 ->
+  69/188): it is NOT inverted.  PARKED.
+
+The productive unit is therefore one short function driven to completion, not a
+quick edit; the order-lever (Lever 53) remains the exception, not the rule.
