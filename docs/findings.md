@@ -150412,3 +150412,24 @@ different number of simultaneously-live intermediates.  The probe Astra specifie
 (record each `emit_swap_insn` caller's old/new value vectors under GDB) is the
 instrument for the next such case; `tools/gcc_x87_eia6_mechanism.py` already
 reads the hash-pinned `reg-stack.c` and RTL dumps and can be retargeted.
+
+## F12268. CORRECTION: F12255 is WITHDRAWN -- the `V90Equalizer` "float count" change was a mis-paired alignment and broke ten fixtures
+
+F12255 read `shr $0x2` in the reference against `and $0xfffffffc` in our build and
+concluded the length fields hold a float COUNT.  That was wrong: the alignment
+**paired different fields**.  The reference's `shr $0x2` writes `0x4c(%ebx)`,
+ours `and $0xfffffffc` writes `0x48(%ebx)`, and F12255's own note recorded the
+offset difference without drawing the consequence.
+
+The change was retained on ONE passing fixture (`t_v90eqdata`).  `make phase`
+then failed **10 fixtures** -- t_v90demctor, t_v90equ, t_v90equnumeric,
+t_v90modemctor, t_v90p4dperiod, t_v90rundemod, t_vpcmctor, t_vpcmdp,
+t_vpcmqcline, t_vpcmrunpcm -- and reverting `src/pump/v90/V90Equalizer.cpp` to
+`a0ad4b2ff` makes **all ten pass again**.  The `& ~3u` byte-length semantics is
+the same as the object's for that field; only the alignment had suggested
+otherwise.
+
+Process lesson, and it is the one the rules already state: a single fixture is
+NOT the affected-TU check.  Ten of the project's fixtures exercise the V.90
+length fields, and the change had to be judged against the whole set.  The
+`make phase` gate caught it; the retained-source error was mine, not the gate's.
