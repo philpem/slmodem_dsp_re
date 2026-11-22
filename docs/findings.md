@@ -149984,3 +149984,36 @@ is unavailable and this route can only attribute OUR pipeline.  It cannot diff
 RTL against the reference; it decides whether a difference is upstream
 (front-end) or downstream of expand, which is exactly the question the session
 kept having to answer by inference.
+
+## F12254. The tracing route decides it per-operation: our front end already carries all the ARITHMETIC the reference has, and the deficit is MOVES
+
+Applied the route (F12253) to the two largest non-held-separate structural rows.
+
+Front-end RTL insn count vs final asm:
+
+	modulatevector  rtl=802  asm ref=807  ours=731
+	v8handshak      rtl=676  asm ref=925  ours=785
+	initdigital     rtl=267  asm ref=292  ours=279
+	demapFrame      rtl=364  asm ref=397  ours=363
+	getFrame        rtl=247  asm ref=256  ours=251
+	decodeDepth     rtl=636  asm ref=518  ours=505
+
+`modulatevector` looked source-thin (our rtl 802 -> asm 731 at ratio 1.10 would
+imply ~888 rtl for the reference's 807).  But the RTL->asm ratio is not stable
+(`decodeDepth` is 636 -> 518), so that ratio is suggestive only.  The decisive
+check is per-operation: the reference's ref-only mnemonic deltas for
+`modulatevector` are
+
+	+63 mov  +15 movzwl  +7 cwtl  +4 sub  +4 add  +4 jae  +4 and
+	+3 dec  +3 jl  +2 jne  +2 xor  +2 or  +2 negl  +2 shll ...
+
+-- essentially all MOVES and EXTENSIONS, with no extra arithmetic.  And our
+front-end RTL already contains the arithmetic the function needs
+(`mult:SI` 53, `div` 27, `mod` 4, `ashift` 53, `ashiftrt` 22, `lshiftrt` 19,
+5 `call_insn`, `zero_extend` 52, `sign_extend` 73).  So the front end is NOT
+missing an operation; the reference's surplus is value shuffle -- the
+allocation/spill signature.
+
+This is the route doing what the screens could not: it shows that the arithmetic
+is present at `.01.rtl`, so no source statement is absent, and it names the
+deficit's nature (moves) rather than only its size.
