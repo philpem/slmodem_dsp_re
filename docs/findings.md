@@ -149576,3 +149576,27 @@ Next step to pin it: enumerate the arms by their `dsplibs_debug_printf`
 merge-string relocations and read the immediate each arm stores, rather than
 trusting the aligned view.  PARKED with the measurement exact; not a
 multi-block reconstruction, so it is a good next Batch-D target.
+
+## F12240. `VOICE_command`'s switch arms are EMITTED in a different order -- reference TX,RX,SPEAKER,COMMAND,..., ours RX,COMMAND,DTMF,BEEP,SPEAKER,TX,...
+
+Re-dumping `VOICE_command` (src/service/voice.c:383) with the
+`dsplibs_debug_printf` merge-string relocations inline identifies each arm
+exactly (the strings name their own case), which the register-abstracted
+`align.py` view cannot:
+
+	reference arm order:  TX, RX, SPEAKER, COMMAND, BEEP, DTMF, ABORT, Unknown
+	ours arm order:       RX, COMMAND, DTMF, BEEP, SPEAKER, TX, ABORT, Unknown
+
+Both builds store the same value per arm (TX -> VOICE_MODE_TX=1, RX -> 0,
+SPEAKER -> VOICE_MODE_DUPLEX=3, COMMAND -> VOICE_MODE_ONLINE=2, ABORT -> 9),
+but a DIFFERENT arm falls through to the shared tail: the reference shares the
+COMMAND path (its tail stores `mov $0x2` = ONLINE), ours shares the TX path
+(ours' tail stores `mov $0x1` = TX).  That is what produced F12239's one
+immediate difference -- it is a block-ordering consequence, not a wrong
+constant.
+
+The arm order is a `bb-reorder` / switch-expansion result driven by the CFG
+probabilities, so the source-side lever is the `case` order (or the arm bodies
+that feed the frequency heuristics), not a value.  PARKED: the next test is a
+case-order permutation toward the reference's emission order; if that does not
+move the order, the residue is `bb-reorder`-internal.
