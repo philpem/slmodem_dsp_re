@@ -149058,3 +149058,90 @@ placement).  The productive systematic move is the coupled one AGENTS.md and
 Lever 52 already describe -- process a TU in ASCENDING EMISSION ORDER so the
 peephole2 scratch cursor and register choices a function receives are native --
 rather than chasing these rows one at a time.
+
+## F12226. The V90Equalizer residue is not a profile-flag artefact, and neither a sequence ratio nor a multiset overlap separates codegen-bound from under-reconstructed
+
+Two bounded negatives from the 2026-11-22 continuation, both against the
+V90Equalizer TU (12 symbols; the first non-native function is
+`setLinearEquBeta`/`setDfeBeta`).
+
+**Profile flags are inert on the grades.**  `scratch/cd/spec_eqprofile.json`
+rebuilds the TU with `-fno-rename-registers`, `-O2`, and `-O2
+-fno-rename-registers` appended after the period profile.  Every function keeps
+its exact grade across all four variants (the two EXACT `freeze`/`enterPhase3`
+stay EXACT, the NONMATCH ones stay NONMATCH); only the byte-delta magnitudes on
+`enterDataPhase`/`convertEqualizerToMmx` move.  `-frename-registers` — the pass
+that most plausibly diverges register assignment — is therefore NOT the cause.
+The baselines reproduce the in-tree object (control OK).  Typed negative:
+sampled and inert, scope = this TU under these two flags.
+
+**Ratio and multiset overlap do not cleanly separate the populations.**
+`scratch/cd/ratio_screen.py` (difflib ratio on register-abstracted rows) and
+`scratch/cd/multiset_screen.py` (Counter overlap) were built to pick out
+genuinely under-reconstructed functions.  Both fail to separate them, because an
+early frame-size difference shifts every stack displacement and tanks both
+scores for functions that are otherwise a pure reorder:
+
+- `setLinearEquBeta` is codegen-bound (source byte-level correct) yet scores
+  ratio 0.75 / overlap 0.76 (x87 `fld`/`fstp` shape and the frame offsets).
+- `enterPhase4` is codegen-bound (frame 0x4c ref vs 0x2c ours; the visible
+  differences are extra `xor`/`mov (%esp)` materialisations) yet scores ratio
+  0.25 / overlap 0.58 — the lowest of the `V90Equalizer` family.
+- `v34handshak`, genuinely structural, scores overlap 0.80 — *higher* than
+  `enterPhase4`.
+
+There is no threshold on either quantity that admits the structural set without
+admitting the codegen set.  The screens are retained as navigation aids only;
+each nominated function must be confirmed by reading its bytes (the method's
+"screenings are navigation, not admissions").  The population split is
+therefore a manual, per-function read.
+
+## F12227. Only 7 of 559 NONMATCH are structure-identical; all 7 are pure register-allocation differences with NO source fix
+
+`scratch/cd/pure_rename_screen.py` compares every NONMATCH against the reference
+after `fidelity.canonical()` — which abstracts the GP registers (width and byte
+lane preserved), local branch byte offsets and section-relative relocation
+addends.  Anything layout- or allocator-only therefore collapses to equality.
+Of **559 NONMATCH, exactly 7 are canonical-equal** (and 9 more score
+`ratio >= 0.99`):
+
+	_ZN12V90Modulator8progressEPiRjPfj
+	_ZN18V92Phase3Modulator5resetEs23V92Phase3ModulatorStatejP5V92JaPK19ta...
+	_ZN18V92Phase4Modulator9recivedRtEv
+	_ZN5V90JdC1EP13V90Parameters
+	v22_ans_rmloop2
+	v8_process
+	voice_command
+
+All 7 are rejected **only** by the register-renaming proof (`USE CONFLICT` /
+`DEST SHAPE/BINDING`).  The worked case is `V90Jd::V90Jd(V90Parameters*)`:
+
+- `byteident --why`: reference 119, candidate 119, delta +0,
+  **longest contiguous instruction run 40 / 40 (100.0%)**, rejection
+  `row 9 USE CONFLICT edx wants ebx, already bound to ebx | blob %bl,%dl`.
+  `align.py` reports `ratio=1.000`: the canonical streams are IDENTICAL.
+- The two bodies differ only in a **3-cycle of physical registers**.  The
+  reference zeroes `%eax`, loads the parameter byte into `%ebx` and copies it to
+  `%dl`; ours zeroes `%edx`, loads into `%eax` and copies to `%bl`.  Both then
+  shift-mask the two bytes identically.  `{ref eax,ebx,edx}` -> `{ours
+  edx,eax,ebx}` is a bijection, but the proof binds incrementally left-to-right
+  (`ref ebx -> ours eax` at the `movzbl`), so at the byte `mov %bl,%dl` the
+  logical `ref edx -> ours ebx` clashes with the already-bound physical `ebx`
+  and `_alpha_live_why` returns `USE CONFLICT` without a liveness model to see
+  that the earlier logical use is dead.
+
+**Consequence.**  These functions have no source error to recover: the
+instruction structure is forced and the only difference is which physical
+register the allocator picked.  `v22_ans_rmloop2` is the same — ratio 1.000, and
+a probe that unpins `%ebp` merely moves its conflict from row 207 to 218
+(F12224).  Promoting any of the 7 requires either reproducing the reference's
+global allocation exactly (equivalent to recovering the original pseudo set,
+which the canonical equality shows is unnecessary for the structure) or a
+liveness-aware renamer — an apparatus change, not source recovery, and one that
+per AGENTS.md needs its own controls.
+
+This is the strongest single measurement of the session's conclusion: after the
+same-count classification (F12224), the operation probe (F12225) and the
+compiler-flag negatives (F12226), the surviving NONMATCH residue is dominated by
+allocator/scheduler/x87 divergence, and the fraction with a recoverable source
+error is small.
