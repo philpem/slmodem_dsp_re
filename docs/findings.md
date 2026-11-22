@@ -149243,3 +149243,130 @@ divergence, and the genuine work concentrates in the LARGE rows
 `modulatevector` 966, `DialerProgress` 957).  Those are multi-block
 reconstructions, not edits.  `deep_screen.py` is retained as the queue
 builder; each row still needs the bytes read before work starts.
+
+## F12230. REGALLOC tolerates any consistent register renaming; the grader's proof lacks LIVENESS, so it rejects some rows that differ only by registers
+
+The owner clarified the grade: REGALLOC means the code differs **only by the
+registers it uses**; it does NOT require the allocator to pick the same
+registers.  That is exactly what `byteident._alpha_live_why` (byteident.py:866)
+implements -- a PER-LIVE-RANGE register bijection with every immediate,
+displacement and relocation held exact.  So a row that differs only in register
+choice should already be REGALLOC, and the "allocation-bound" rows I had parked
+need re-reading: register-choice divergence is not a blocker.
+
+The proof has one gap.  It releases a register's pairing **only when the
+register is REDEFINED**, never when its value simply DIES (there is no liveness
+analysis).  A value the object keeps in `%eax` and ours keeps in `%ebp`, and
+that neither side touches again, therefore leaves the object's `%eax` pairing
+alive for the rest of the function and collides with a later unrelated use.
+Two proven false rejections:
+
+- `v22_ans_rmloop2` rows 207-208: object `mov 0x50(%ebx),%eax` /
+  `movw $0x0,0x8(%eax)`, ours `mov 0x50(%ebx),%ebp` / `movw $0x0,0x8(%ebp)` --
+  a pure `%eax`<->`%ebp` relabel, rejected (the pin at 207, then a stale binding
+  at 218).
+- `voice_command` row 47: object and ours are **operand-identical**,
+  `%eax,0x34(%edi)` against `%eax,0x34(%edi)`, and the proof still rejects it
+  ("eax wants eax, already bound to ebx") -- the earlier `eax->ebx` pairing was
+  dead but never released.
+
+`scratch/cd/live_rename.py` is a liveness-aware variant (backward liveness over
+both padding-stripped streams; release a pairing when the value is dead).
+With "either side dead" pruning it promotes **4** rows
+(`_ZN18V92Phase3Modulator5resetEs...`, `_ZN18V92Phase4Modulator9recivedRtEv`,
+`_ZN5V90JdC1EP13V90Parameters`, `voice_command`); with the conservative "both
+sides dead" rule it promotes 0.  Controls: 2999 random cross-function pairs
+give **0 real false positives** (the only two hits are degenerate
+one-instruction bodies the grader itself calls alpha-equal).
+
+This is an **equivalence-detector change** (apparatus, not source), so it is
+NOT shipped here: a sound version needs exact liveness, the padding rule
+preserved, the `--self-test` negatives re-run and independent review.  The
+prize is small (4-7 rows) but it is a real recognizer under-count, and the
+owner's grade definition says those rows are REGALLOC.
+
+Consequences for the plan: (1) the source-side target for a NONMATCH is
+instruction COUNT / ORDER / operand FORM parity, not register identity;
+(2) the parked "codegen-bound" rows split into *register-only* (should grade
+REGALLOC; recognizer gap) and *order/form/value-flow* (genuine);
+(3) the productive source work remains the large genuinely-short functions.
+
+## F12231. fskdetect's -52 deficit is a stage-1 source-liveness/spill difference: the reference walks `in` and keeps three history base pointers live
+
+First target of the large-high-distance phase: `fskdetect` (src/pump/v34/DPSK.c),
+188 reference instructions against our 136, 114 of them reference-only across 12
+aligned blocks (the largest a contiguous 38 at `ref[117:155]`).
+
+Mechanism located in the bytes:
+
+- The reference WRITES BACK its advanced `in` pointer to its own argument slot
+  (`mov %eax,0x74(%esp)` after `movzwl (%eax),%edi` / `add $0x2,%eax`) -- the
+  signature of a pointer walk (`*in++`).  Ours indexes (`in[i]`,
+  `movzwl (%ebx,%ebp,2)`) and never writes the slot.
+- The reference precomputes and SPILLS three history base pointers -- `hist`
+  (obj+0xaae6), `hist+11` (obj+0xaafc) and `hist+12` (obj+0xaafe) -- saving them
+  to stack slots 0x28/0x24/0x20 and RELOADING them every outer iteration
+  (frame `$0x5c` against our `$0x3c`).  Ours keeps `hist` in `%edi` and
+  re-derives `hist+11` with `lea 0x16(%edi)`.
+- The coefficient addressing is equivalent, not a defect: the reference walks an
+  incrementing pointer (`movswl (%esi); add $0x2,%esi`), ours emits
+  `intcoef1(%ebx,%ebx,1)` = base + `2*k` BYTES = `intcoef1[k]`.
+
+Variant evidence (`spec_fskdetect.json`, `spec_fsk2.json`; control reproduces
+the in-tree object):
+
+	V0 baseline                         NONMATCH -135  136 insns  run 6/188  dmn 144
+	V1 (`hist[0] = *in++;`)             NONMATCH -119  140 insns  run 6/188  dmn 136
+	V2 (hoist hist_r/hist_w + walk in)  NONMATCH  -87  151 insns  run 6/188  dmn 137
+
+Both changes move the byte delta toward the reference -- the spilled-pointer
+instructions and the walk are real -- but the aligned run never improves, so the
+remaining difference is structure/order not yet reproduced.
+
+Conclusion: the deficit is a register-pressure/structure difference driven by
+source liveness (the original held extra history base pointers live and walked
+`in`), recoverable in principle but a multi-iteration reconstruction.  PARKED
+with the mechanism named and V1/V2 recorded as directional partials; no source
+retained.  Reopening: reproduce the three live pointers as the reference spills
+them, then re-check the aligned run -- if it does not move, the residue is
+allocator-internal.
+
+## F12232. The REGALLOC recognizer is NOT under-counting in a way a local liveness rule repairs: "either-dead" release is unsound, "both-dead" is inert-to-negative
+
+F12230 identified a real gap: `_alpha_live_why` releases a register pairing only
+on REDEFINITION, never on DEATH, so a stale binding rejects rows that differ
+only by register choice (`voice_command` row 47 is operand-identical yet
+rejected).  The obvious repair is to release a pairing when the value dies.
+That repair was implemented and measured, and it does not work.
+
+`scratch/cd/alpha_v2.py` transcribes `_alpha_live_why` faithfully -- with the
+release disabled it reproduces the grader on all 38 `SELF_TESTS` exactly -- then
+adds proper backward liveness (live_OUT per row) and a release rule:
+
+- **release when EITHER side's value is dead is UNSOUND.**  It fails 10 of the
+  38 must-reject self-tests: `read-modify-write is NOT a redefinition`,
+  `crossed live ranges rejected`, `xor of DIFFERENT registers reads its
+  source`, `negative_orphaned_mapping`, `negative_conditional_definition`, the
+  three partial-write cases and `a real move between DIFFERENT registers is not
+  padding`.  Those are exactly the cases where one side stops using a value the
+  other keeps -- which is the divergence the check exists to catch.
+- **release only when BOTH sides' values are dead is sound but inert to
+  NEGATIVE.**  It passes all 38 self-tests, yet over the 1852-row corpus it
+  promotes **0** and LOSES one REGALLOC (`_ZN3AgcIfE7processEPKfPfj`).
+  Releasing is not monotone in permissiveness: removing a pairing changes which
+  pairing is later established, which can create a conflict that was not there.
+
+A real bug in the first prototype is worth recording because it produced a
+plausible false reading: it stored live_IN and used it as live_OUT, so the prune
+released values that were still in use.  That bug is what made the earlier
+"either-dead promotes 4 rows" measurement; with correct liveness the number is
+0.  Check the liveness direction before trusting any such prune.
+
+Conclusion (typed negative): the recognizer is not under-counting in a way a
+local liveness rule repairs.  The two candidate rules are respectively unsound
+and inert.  A sound repair needs a full live-range ISOMORPHISM (match live
+ranges as units, with the instruction stream replayed range by range), which
+the 38 must-reject cases show is a delicate rewrite whose risk sits on the
+ACCEPT side.  The grader is retained unchanged and F12230's hoped-for 4-7 rows
+are withdrawn.  Reopening condition: a range-isomorphism design that passes all
+38 `SELF_TESTS` AND the corpus controls with zero losses.
