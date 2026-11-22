@@ -149441,3 +149441,40 @@ The lesson is that a folded constant is a *fidelity* signal, not an
 optimisation: when the object relocates against a table the source must keep the
 access un-foldable (a variable index), because the original's index expression
 is part of the recovered source.
+
+## F12236. Control-flow-divergence census: 250/558 NONMATCH differ in branch structure, dominated by polarity/encoding swaps that are the same post-frontend divergence
+
+`scratch/cd/cf_screen.py` profiles every NONMATCH by its control-flow
+instructions (conditional jumps per mnemonic, unconditional `jmp`, `call`,
+indirect `jmp` = jump table) and reports the deltas; a difference only in branch
+OFFSETS (layout-derived) is excluded.  **250 of 558 NONMATCH rows diverge in
+control flow.**  Three dominant signatures:
+
+- **`je`<->`jne` polarity swap** with equal conditional totals:
+  `getV90Decision` and `getV92Decision` are each `je-27 jne+27`,
+  `v34handshak` `je-31 jne+29`, `DialerProgress` `je-11`,
+  `V90Equalizer::process` `jne-6`.
+- **signed/unsigned swap** `ja/jae`<->`jb/jbe`: `infoToBits`
+  (`ja-10 jae+10 jb+9 jbe-10`), `V92CP::evaluateInfo` (`jbe-10 jle+10`).
+- **branch-COUNT difference**: `v34handshak` cc-5, `probeselect` cc-7,
+  `DialerProgress` cc-13, `V90Equalizer::process` cc-10, `VPcmV34Progress`
+  cc-10, `selectFilter` cc-6, `FSE_decision_64pt`/`FAX_FSE_decision_64pt` cc-8.
+
+Sampling the class shows it OVERLAPS the known post-frontend residue rather
+than being a separate recoverable vein:
+
+- `getV90Decision`'s 27 flips are on the debug-timeout paths:
+  `cmp $0x9c40,%r32; je <target>` (reference) against `... jne <target>` (ours)
+  -- identical semantics, the branch polarity and target layout chosen by GCC's
+  block ordering, not by the source (the source's
+  `else if (samplesInState == 0x9c40)` at V90Phase3Demodulator.cpp:1129 is the
+  reference's semantics).
+- `resetDILGenerator` (117/117, ratio 0.915) differs only in instruction
+  ordering; `selectFilter` (200/193, ratio 0.550) has an extra reference `jle`
+  arm and a `cmp $0x1d` against our `cmp $0x1e` -- an encoding difference of the
+  same test.
+
+So the polarity and encoding differences are NOT source-controllable in the
+sampled cases.  The only place a genuine structural difference could live is the
+branch-COUNT rows (the third class), which need per-function reading.  The
+census itself is retained as a navigation instrument.
