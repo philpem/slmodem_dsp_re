@@ -149513,3 +149513,39 @@ the compare) where the reference emits
 test -- the load-vs-fold is a GCC register/encoding choice, not a source
 difference.  The `SDM_CFG` relocation sits further down the same body.  Not
 source-controllable in the sampled form; nothing retained.
+
+## F12238. The two remaining symdiff inlining hits are a SIZE-THRESHOLD effect: our callee is marginally smaller, so GCC inlines it where the reference called it
+
+Batch C's last two items are the only symdiff hits that are inlining
+differences (ours inlines a callee the reference CALLs):
+`bValidateEnergyValue` -> `FDSP_Kernel_InitObj` and
+`_ZN19V90SpectralVerifier7processEPfj` -> `printSpectrum`.
+
+Controlled experiment (`spec_svinline.json`, the V90SpectralVerifier TU rebuilt
+with `--param max-inline-insns-auto=50`, run with `--control-none` because the
+flag changes codegen by construction):
+
+	process       baseline (in-tree)  ref 76 insns / ours 124   NONMATCH
+	              budget 50                          ours  64   NONMATCH -56
+
+So the reference's `process` (76) sits BETWEEN our over-inlined 124 and the
+no-inline 64.  The driver is the callee's own size: our `printSpectrum` is 70
+instructions against the reference's 71, and the missing one is a
+`mov %r32,%r32` copy (the F12224 order signature) beside a register choice
+(ours `cltd`, the reference `sar $0x1f,%r32` -- the value in `%eax` vs
+elsewhere).  A marginally cheaper callee estimate pushes `printSpectrum` under
+GCC's inline threshold, so ours inlines it into `process` and the reference does
+not.
+
+Prediction and falsifier: bringing `printSpectrum`'s body to native SHAPE
+(count 71 and the same register form) should flip `process`'s inline decision
+and may promote `process` for free -- the ascending-order principle again.  The
+falsifier is `printSpectrum` reaching EXACT with `process` still inlined, which
+would mean the estimate depends on more than the body.
+
+Both items are PARKED with the mechanism named; neither is a source line.
+`bValidateEnergyValue`'s earlier `--param max-inline-insns-auto=50` probe (+300
+-> +20, reverted) is the same effect seen on the other TU.  Batch C is complete:
+its 2 call hits and 3 data hits resolve to one EXACT (`BwChDem_Create`) and four
+negatives with named mechanisms (F12235, F12237, this one, and the withdrawn
+`V90SpectralVerifier::process` re-classification).
