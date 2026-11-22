@@ -150545,3 +150545,22 @@ not assumed -- and the instrument makes that a one-command measurement per TU.
 
 This is the honest bound on step 1's mechanism: real (F12264 confirmed it by
 construction) but narrow.
+
+## F12274. `modulatevector`'s 32-byte frame gap is LIVENESS, not a missing declaration
+
+Enumerated the function's NAMED stack homes from `.01.rtl` (each pseudo's
+`virtual-stack-vars` offset and mode): only ~24-32 bytes -- the `short sub[8]`
+array's elements at -24..-17 and a few SI temporaries.  Against Astra's ledger
+(F12262-era) the frame decomposes as
+
+	24 named/expansion + 8 put_addressof_into_stack + 112 from 28 alter_reg
+	spill homes + 16 reload alignment = 160  (our `sub $0xbc` = 160 + 28)
+
+so the frame is dominated by SPILL HOMES, and the reference's 192-aligned-unit
+requirement (its `sub $0xdc`) is 32 more bytes there.  That is a difference in
+how many values stay live across calls, not a single declaration that could be
+enlarged -- the same liveness wall the inlining alignment hit (F12272).
+
+So the source-locals angle closes with a mechanism rather than a declaration:
+to reach the reference, `modulatevector`'s live-value set must match, which is
+the per-function body reconstruction and not an isolated edit.
