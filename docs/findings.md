@@ -150309,3 +150309,35 @@ functions' codegen: the cursor matters only where a function actually offers a
 peephole2 scratch candidate.  So Lever 52's coupling is real but SELECTIVE, and
 adopting the object's order is not a blanket improvement -- it must be measured
 per TU, as F12262's negative and this control now show from both sides.
+
+## F12264. `ModDataV22` recovered to EXACT: an early owner capture installs four scheduler anti-dependencies -- the compiler-internal route's first source win
+
+`ModDataV22` (src/pump/v22/V22int.c) emitted the DSP-pointer load BEFORE the two
+outgoing argument stores; the object stores `data` and `count` first and loads
+`v22->dsp` afterwards.  The cause is compiler-internal and was pinned down by an
+independent analysis (GPT-6.2 Astra, packet per the escalation rule), then
+validated here against the GCC source and the object:
+
+- `sched-deps.c:569-570` adds a memory ANTI-dependency (read-before-write) for
+  every pending read that may alias a later store:
+  `if (anti_dependence (XEXP (pending_mem, 0), t)) add_dependence (insn, XEXP
+  (pending, 0), REG_DEP_ANTI);`.  With an early `dsp = v22->dsp;` the DSP read
+  precedes both outgoing stores, so FOUR such edges forbid moving the stores
+  earlier -- no scheduler priority or tie-break can reverse them.
+- `local-alloc.c:1672-1693` breaks a quantity-score tie by quantity NUMBER
+  (`return q1 - q2;`), which is why `modem` takes EBX where the object has
+  `count` -- a second, independent divergence in the same function.
+
+**The source lever follows from the predicate**: evaluating the owner inside the
+call (`&v22->dsp->smc`) mixes the load into argument setup, so the cheap `data`
+and `count` stores precede it, the anti-edges are never installed, and the
+object's sequence falls out.
+
+`spec_moddata.json` V1 (inline `v22->dsp`, no early local) is **EXACT** -- 28/28,
+delta 0, symdiff 0 -- against the in-tree object; V2 (a single captured local)
+is worse (delta +11), so the two independent owner reads are load-bearing.
+Retained, with the now-unused `dsp` declaration removed (byte-identical) and the
+mechanism recorded in the source comment.  `make period T=t_v22data` passes, and
+the TU regrade shows ModDataV22 NONMATCH -> EXACT with no collateral change.
+
+Census 1260 -> **1261 EXACT**, 557 -> 556 NONMATCH.

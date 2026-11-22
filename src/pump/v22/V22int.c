@@ -214,20 +214,27 @@ DescrambleDataV22(void *modem, unsigned short *data, unsigned short count)
  * `count` is in DATA WORDS for the encoder and in SYMBOLS for the filter, and
  * the object passes the same value to both because the encoder makes exactly
  * one symbol per word.
+ *
+ * THE CALLS GO THROUGH `v22->dsp`, NOT A CAPTURED LOCAL, and that is forced
+ * (F12264).  With an early `dsp = v22->dsp;` the DSP-pointer load precedes the
+ * outgoing argument stores, and `sched-deps.c:569-570` then adds four memory
+ * ANTI-dependencies (read-before-write) that no scheduler tie-break can
+ * reverse; the emitted order differs from the object's.  Evaluating the owner
+ * inside the call mixes the load into argument setup, so the cheap `data` and
+ * `count` stores precede it, the anti-edges are never installed, and the
+ * object's sequence falls out.  The object still reloads `v22->dsp` for the
+ * second call, which is what the twin `lea 0xa0(%eax),%edx` above records.
  */
 unsigned short
 ModDataV22(void *modem, const unsigned short *data, short *out,
 	   unsigned short count)
 {
 	struct v22fp *v22 = (struct v22fp *)modem;
-	struct v22fp_dsp *dsp;
 
-	dsp = v22->dsp;
-	FPM_SMC_encoder(&dsp->smc, &dsp->smc_ring, data, count);
+	FPM_SMC_encoder(&v22->dsp->smc, &v22->dsp->smc_ring, data, count);
 
-	dsp = v22->dsp;
 	return (unsigned short)V22_PPS_filter(
-			&dsp->pps, &dsp->smc_ring, out, count);
+			&v22->dsp->pps, &v22->dsp->smc_ring, out, count);
 }
 
 unsigned short
