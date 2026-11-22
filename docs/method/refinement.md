@@ -13920,3 +13920,36 @@ a whole function to one spelling: in `FPM_atan` line 106 is arithmetic and line
 site.  A spelling change that lands the block but leaves the follow-up `add`
 vs `lea` + register difference is a partial, not a promotion; retain it and say
 so.
+
+### Lever 56. A length FIELD may hold an element COUNT, not a byte length -- check the units, not the mask
+
+`V90Equalizer`'s constructor set `linearEquLength = linearEquLen & ~3u`, and the
+reference emits `shr $0x2` at the same two sites (F12255).  The mask and the
+shift are not interchangeable spellings of one idea: `& ~3u` yields a BYTE
+length, `>> 2` a float COUNT, and the field's USES decide which the original
+held -- `for (i = 0; i < linearEquLength; i++)` walks the coefficient array, so
+it is a count, and the byte-length form also over-counted and over-allocated by
+4x.
+
+The discriminator is the pair (field, uses), not the instruction alone.  A
+`& ~(n-1)` mask and a `>> log2(n)` shift differ whenever the low bits are
+non-zero, so reading the field's consumer is what settles it.  Spell the
+conversion by the types where you can -- `len / sizeof(float)` beats a
+hard-coded 4 and both beats `>> 2` -- since all three emit the same shift for an
+unsigned operand.
+
+### Lever 57. Reference-only `add` counts are POINTER-WALK signatures -- but the walk is per-LOOP, never per-function
+
+After excluding zero idioms (`xor %r,%r`, `sub %r,%r`) and `inc`/`dec`
+counters, the corpus's reference-only real arithmetic is dominated by `add`, and
+an `add` in a loop body is what `*p++` emits where `p[i]` emits nothing.  That
+makes the filtered `add` count a nominator for source SHAPE (F12258).
+
+`V34EchoFilter`'s convolution is the worked case: indexing the dot product
+(`e->coeff[k] * hist[k]`) against the reference's `acc += *cp++ * *hp++` moved
+the byte delta -2 -> 0, the aligned run 10 -> 15 of 55 and the multiset distance
+35 -> 22, and passes the differential.  The convolution above it in the SAME
+function stays indexed, and `V34EqualizerAdapt`'s attempted walk OVERSHOT
+(delta 19 -> 57), while `V34EqualizerFilter`'s worsened it (-22 -> -27).  A
+`for (k...) sum += a[k]*b[k]` loop is the strong case; a loop that also indexes
+a wrapping delay line usually is not.
