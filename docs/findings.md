@@ -150483,3 +150483,30 @@ for `modulatevector` (160 local bytes: 32 early homes + 112 from 28 spill homes 
 16 alignment) is the base; the disk instrument is a per-slot caller/return trace
 (`tools/gcc3_uref_stack_gdb.py` already records slot callers and the full frame
 layout).
+
+## F12271. The inlining boundary is confirmed but the attribute is not the shape: `printSpectrum` must not be inlined, and the no-inline form is still 56 bytes short
+
+The ownership/inlining lead tested.  Both builds emit `printSpectrum` as an
+out-of-line symbol (reference `T` at 0x45dd0, 0xe7 = 231 bytes; ours `T` at
+0xa40), but the reference's `process` **calls** it (one relocation) while ours
+**inlines** it (baseline `process` 124 insns, and the inlined copy carries a
+merge-string the reference's does not).
+
+`spec_svprint.json` V1 marks the definition `__attribute__((noinline))` as a
+BOUNDARY DISCRIMINATOR:
+
+	V0 baseline                  NONMATCH  +151  124 insns  run 11/76
+	V1 printSpectrum noinline    NONMATCH   -56   64 insns  run 11/76
+
+So the reference does not inline `printSpectrum` -- the direction is confirmed,
+and no-inlining is much closer than inlining.  But it is still 56 bytes SHORT of
+the reference (76 insns against our 64), so inlining is not the whole difference:
+the reference's `process` carries about twelve instructions that our no-inline
+form does not, and the attribute is a crude proxy rather than the original
+shape.
+
+NOT retained: an attribute is not a source-faithful reconstruction of whatever
+made the original non-inlinable, and the residual 56 bytes shows the shape is not
+yet found.  The discriminating experiment is recorded, with the next question
+being what the reference's `process` holds that our no-inline form lacks (the
+cgraph estimates are 74 process / 89 printSpectrum / 536 checkSpecial, F12270).
