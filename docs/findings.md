@@ -150082,3 +150082,29 @@ ones the same frame shift that poisons every other screen drifts the pairing
 (`v34handshak` reports 123).  Its leads are leads, not defects, exactly like
 `width_screen`.  It did, however, find the one real fix this round (F12255), so
 it earns a place beside `blockscreen` as a nominator, restricted to short rows.
+
+## F12257. The positional ARITH screen is valid only inside the aligned PREFIX; its later-row hits are drift
+
+Followed F12256's short-row leads and both were alignment drift:
+
+- `V34SetINFO1aBits`: the reported `and $0xfffffff9` vs `or` mismatch is not a
+  defect.  The SOURCE already carries it -- v34info1a.cpp:286-287 is
+  `bits[3] = (short)(((unsigned short)bits[3] & ~6u) | (law != 0 ? 9u : 0xbu));`
+  -- and the reference's `and $0xfffffff9` is on a 32-bit member at `+0xc`, not
+  the 16-bit `bits[3]`.  The alignment ratio is 0.836, and past the prefix it
+  pairs unrelated rows.
+- `decodeDepth`: the streams diverge at row 10 (reference `mov 0x7c(%esp)` vs
+  our `jne`), so every downstream pairing -- including the reported `shl $0x4`
+  / `and $0x1f` and `and $0xfffffffc` / `sar $0x2` -- is meaningless.
+
+So the positional screen is trustworthy only within the aligned PREFIX, before
+the first drift.  The one real hit it produced (F12255) sat at row 13 of a
+ratio-0.86 alignment -- early.  Used as written it nominates drift as readily as
+defect, and a hit past the first divergence must be discarded, not investigated.
+
+This matches the session's standing lesson (F12233 spanrep, F12244/F12246
+`deep_screen`, F12249 `callseg`): every position-based screen mis-fires once an
+early frame/register difference shifts the streams, and only the multiset-based
+ones (`blockscreen`, `refop_screen`) escape it.  The working route for a
+positional hit is the one that succeeded: confirm it against the SOURCE and the
+object bytes by hand, not against the alignment.
