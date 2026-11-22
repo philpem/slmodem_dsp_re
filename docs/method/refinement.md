@@ -13984,3 +13984,38 @@ while the object stores them first.  Companion mechanism in the same function:
 `local-alloc.c:1672-1693` breaks a quantity-score tie by quantity NUMBER
 (`return q1 - q2;`), which decides which of two equal-priority live values gets
 the scarce call-crossing register.
+
+### Lever 59. Peephole2 scratch-register state is threaded across the whole TU in emission order -- a correct earlier-function fix can rotate a later EXACT function's lanes; repair by matching the earlier function's scratch-search COUNT
+
+`recog.c:2932` `peep2_find_free_register` holds `static int search_ofs;`
+(line 2935), advanced on every successful scratch search (lines 3016-3018) and
+reset to 0 on failure (line 3024).  It persists across ALL functions in the TU,
+so how many scratch searches an earlier function performs shifts the
+scratch-register choice of every later function.  A source correction in
+function A that changes A's scratch-search count -- adding or removing an
+`lea`/`add`/`test` that a peephole2 pattern matches -- can therefore silently
+rotate the register lanes of an already-EXACT function B later in the same TU,
+with no change to B's source.  Confirm the coupling by recompiling the TU with
+`-fno-peephole2` (via `TC_EXTRA`): if A's change and the baseline then emit
+IDENTICAL B lanes (only addresses differ), the scratch cursor is the carrier.
+
+Worked case (this session): `V34SetINFO0aBits` (src/pump/v34/v34info.c).  The
+object reaches members through the "engine view" base at `obj+4`
+(`struct v34_engine *e = (struct v34_engine *)(void *)&obj->progress;`,
+documented include/dsplib/v34fsk.h:399-432), ours used the flat
+`obj->v90_receiver`.  Correcting that ONE access moved 0aBits toward the object
+(align ratio 0.635 -> 0.653) but rotated the neighbour `V34SetINFO0dBits`
+EXACT -> REGALLOC -- a ratchet loss, not an acceptable trade.  The repair was to
+match the EARLIER function's whole representation, in four parts: (1) the `e`
+base for both `v90_receiver` reads in 0aBits; (2) the shared `pcm_name` helper
+also through the `e` base (`e->k56flex_receiver`, not `obj->k56flex_receiver`);
+(3) and (4) both branches restructured so the V.PCM / info0d path is the
+fall-through, matching the reference block order.  Only then did 0aBits's
+scratch-search count match the original and 0dBits fall out EXACT again:
+0aBits NONMATCH -> EXACT (717/717, delta 0) with 0dBits EXACT preserved.
+
+Where to look next: a NONMATCH/REGALLOC function whose PREDECESSORS in emission
+order carry a representation difference (a base pointer, block order, or helper
+inlining) that changes how many peephole2 scratch searches run.  The signature
+is a single-access fix that improves the target yet regresses a later EXACT; do
+not accept the trade -- correct the earlier function's full representation.

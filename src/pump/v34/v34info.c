@@ -36,7 +36,10 @@
 static const char *
 pcm_name(const struct v34_object *obj)
 {
-	return obj->k56flex_receiver != 0 ? "K.56Flex (same as V.34)" : "V.34";
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
+
+	return e->k56flex_receiver != 0 ? "K.56Flex (same as V.34)" : "V.34";
 }
 
 /*
@@ -140,21 +143,54 @@ V34SetINFO0aBits(void *objp, short *bits)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	const void *sess = obj->p3548;
+	struct v34_engine *e =
+		(struct v34_engine *)(void *)&obj->progress;
 
 	if (session_int(sess, SESSION_VARIANT) != 0) {
-		if (obj->v90_receiver == 0) {
+		if (e->v90_receiver != 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"setINFO0aBits - setting info0a " "for %s\n", pcm_name(obj));
+					"setINFO0aBits - setting info0a " "for V.PCM\n");
 			bits[0] = (short)0xff;
 			bits[1] = (short)0x84;
+
+			if (obj->local_short != 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"...requesting short phase2...\n");
+				bits[1] = (short)(bits[1] | 1);
+				obj->prev_bulk_delay = 0x14;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"Setting prev bulk delay = %d\n",
+						0x14);
+			}
+
+			if (*((const char *)session_ptr(sess, SESSION_CAPS) + 0x11)
+			    != 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"...indicating V.92 " "capabilities...\n");
+				bits[1] = (short)(bits[1] | 2);
+			}
+
 			bits[2] = 0;
 			return;
 		}
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"setINFO0aBits - setting info0a " "for V.PCM\n");
+				"setINFO0aBits - setting info0a " "for %s\n", pcm_name(obj));
+		bits[0] = (short)0xff;
+		bits[1] = (short)0x84;
+		bits[2] = 0;
+		return;
+	}
+
+	if (e->v90_receiver != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("setINFO0aBits - setting info0d "
+					     "(Digital) for V.PCM\n");
 		bits[0] = (short)0xff;
 		bits[1] = (short)0x84;
 
@@ -162,83 +198,53 @@ V34SetINFO0aBits(void *objp, short *bits)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"...requesting short phase2...\n");
-			bits[1] = (short)(bits[1] | 1);
-			obj->prev_bulk_delay = 0x14;
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-					"Setting prev bulk delay = %d\n",
-					0x14);
-		}
-
-		if (*((const char *)session_ptr(sess, SESSION_CAPS) + 0x11)
-		    != 0) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf(
-					"...indicating V.92 " "capabilities...\n");
 			bits[1] = (short)(bits[1] | 2);
 		}
+		if (obj->local_v92 != 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"...indicating V.92 capabilities...\n");
+			bits[1] = (short)(bits[1] | 1);
+		}
 
-		bits[2] = 0;
-		return;
-	}
+		/*
+		 * The upstream rate, from a byte the session object holds at +9 of
+		 * its upstream block, bit-reversed over five bits and then split
+		 * across two shorts: three bits into index 2 under a constant 0x30,
+		 * and the remaining two into the top of index 3.
+		 *
+		 * The shift is ARITHMETIC in the object -- `cwtl` then `sar $2` --
+		 * which cannot matter for a five-bit reverse but is kept so it stays
+		 * true if the width ever moves.
+		 */
+		bits[2] = 0x30;
+		{
+			int r = bitreverse((unsigned short)
+					   *((const unsigned char *)
+					     session_ptr(sess, SESSION_UPSTREAM) + 9), 5);
+			int v;
 
-	if (obj->v90_receiver == 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("setINFO0aBits - setting info0 " "(Caller) for %s\n",
-					     pcm_name(obj));
-		bits[0] = (short)0xff;
-		bits[1] = (short)0x84;
-		bits[2] = 0;
+			bits[2] = (short)(((short)r >> 2 & 7) | (unsigned short)bits[2]);
+
+			v = ((short)r << 6) & 0xc0;
+			bits[3] = (short)v;
+			if (*(const int *)((const char *)
+					   session_ptr(sess, SESSION_UPSTREAM) + 0xc) == 1)
+				bits[3] = (short)(bits[3] | 0x20);
+			if (*(const int *)session_ptr(sess, SESSION_UPSTREAM) == 1)
+				bits[3] = (short)(bits[3] | 0x10);
+			bits[3] = (short)(bits[3] | 8);
+		}
 		return;
 	}
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("setINFO0aBits - setting info0d "
-				     "(Digital) for V.PCM\n");
+		dsplibs_debug_printf("setINFO0aBits - setting info0 " "(Caller) for %s\n",
+				     pcm_name(obj));
 	bits[0] = (short)0xff;
 	bits[1] = (short)0x84;
-
-	if (obj->local_short != 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"...requesting short phase2...\n");
-		bits[1] = (short)(bits[1] | 2);
-	}
-	if (obj->local_v92 != 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"...indicating V.92 capabilities...\n");
-		bits[1] = (short)(bits[1] | 1);
-	}
-
-	/*
-	 * The upstream rate, from a byte the session object holds at +9 of
-	 * its upstream block, bit-reversed over five bits and then split
-	 * across two shorts: three bits into index 2 under a constant 0x30,
-	 * and the remaining two into the top of index 3.
-	 *
-	 * The shift is ARITHMETIC in the object -- `cwtl` then `sar $2` --
-	 * which cannot matter for a five-bit reverse but is kept so it stays
-	 * true if the width ever moves.
-	 */
-	bits[2] = 0x30;
-	{
-		int r = bitreverse((unsigned short)
-				   *((const unsigned char *)
-				     session_ptr(sess, SESSION_UPSTREAM) + 9), 5);
-		int v;
-
-		bits[2] = (short)(((short)r >> 2 & 7) | (unsigned short)bits[2]);
-
-		v = ((short)r << 6) & 0xc0;
-		bits[3] = (short)v;
-		if (*(const int *)((const char *)
-				   session_ptr(sess, SESSION_UPSTREAM) + 0xc) == 1)
-			bits[3] = (short)(bits[3] | 0x20);
-		if (*(const int *)session_ptr(sess, SESSION_UPSTREAM) == 1)
-			bits[3] = (short)(bits[3] | 0x10);
-		bits[3] = (short)(bits[3] | 8);
-	}
+	bits[2] = 0;
+	return;
 }
 void
 V34SetINFO0dBits(void *objp, short *bits)
