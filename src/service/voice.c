@@ -394,11 +394,11 @@ VOICE_command(void *obj, unsigned int cmd)
 	info = v->info;
 
 	switch (cmd) {
-	case VOICE_CMD_STATE_COMMAND:
+	case VOICE_CMD_STATE_TX:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-			    "voice: VCE: VOICE_CMD_SET_MODE: COMMAND\n");
-		arg[0] = VOICE_MODE_ONLINE;
+			    "voice: VCE: VOICE_CMD_SET_MODE: TX\n");
+		arg[0] = VOICE_MODE_TX;
 		v->host_count = 0;
 		op = VOICE_SET_MODE_COMMAND;
 		break;
@@ -412,20 +412,20 @@ VOICE_command(void *obj, unsigned int cmd)
 		op = VOICE_SET_MODE_COMMAND;
 		break;
 
-	case VOICE_CMD_STATE_TX:
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "voice: VCE: VOICE_CMD_SET_MODE: TX\n");
-		arg[0] = VOICE_MODE_TX;
-		v->host_count = 0;
-		op = VOICE_SET_MODE_COMMAND;
-		break;
-
 	case VOICE_CMD_STATE_SPEAKER:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "voice: VCE: VOICE_CMD_SET_MODE: SPEAKER\n");
 		arg[0] = VOICE_MODE_DUPLEX;
+		v->host_count = 0;
+		op = VOICE_SET_MODE_COMMAND;
+		break;
+
+	case VOICE_CMD_STATE_COMMAND:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_SET_MODE: COMMAND\n");
+		arg[0] = VOICE_MODE_ONLINE;
 		v->host_count = 0;
 		op = VOICE_SET_MODE_COMMAND;
 		break;

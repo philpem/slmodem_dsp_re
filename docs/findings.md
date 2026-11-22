@@ -149600,3 +149600,34 @@ probabilities, so the source-side lever is the `case` order (or the arm bodies
 that feed the frequency heuristics), not a value.  PARKED: the next test is a
 case-order permutation toward the reference's emission order; if that does not
 move the order, the residue is `bb-reorder`-internal.
+
+## F12241. `VOICE_command` recovered to a 123/123 byte-identical body by reordering the switch `case`s -- grade UNRESOLVED, not EXACT, because a jump table relocates against a section
+
+Batch D's first win.  `VOICE_command` (src/service/voice.c:383) was 22/123
+instructions matching.  The whole defect was the source `case` order: swapping
+the four mode arms from `COMMAND, RX, TX, SPEAKER` to `TX, RX, SPEAKER,
+COMMAND` (V1 in `spec_voicecmd.json`, control reproduces the in-tree object)
+gives delta 0 and a 123/123 aligned run -- the emitted body is byte-identical
+(548/548).
+
+Mechanism: the arm EMISSION order follows the source `case` order through the
+CFG (F12240), and that decides which arm falls through to the shared tail and
+so the block layout; our order produced the wrong one.
+
+The grade is **UNRESOLVED**, and that is inherent, not a shortfall: the
+`jmp *table(,%edx,4)` relocation targets `.rodata` -- a SECTION, not a symbol --
+and `verdict()` (byteident.py:1059-1074) refuses to treat section-tag
+destinations as proved identity, returning UNRESOLVED whenever any surviving
+relocation is section-typed.  A function with a jump table therefore cannot be
+EXACT; 123/123 with a section reloc is the ceiling.  This is the corpus's first
+UNRESOLVED row.
+
+Census (`/tmp/opencode/census_voice.json` vs `census_t1.json`): exact 1259 ->
+1260, nonmatch 559 -> 557, unresolved 0 -> 1; byte delta +0 with an aligned run
+22 -> 123 of 123.  No EXACT or REGALLOC lost; `make period T=t_voiceapi` passes;
+the TU re-grade leaves every other symbol unchanged.
+
+Method note: the discriminator was the emission-order view (each arm identified
+by its `dsplibs_debug_printf` merge-string, F12240), which the register-abstracted
+aligned diff could not supply -- a source ORDER difference, exactly the class
+Lever 53 named.
