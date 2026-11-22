@@ -1331,14 +1331,16 @@ v34handshakinit(void *objp, int mode)
 	delta = e->int_0248;
 	if (delta > 0) {
 		unsigned d = (unsigned)(e->sample_count - delta);
+		int reset;
 
 		if (d <= 0x176ff) {
 			e->sample_count = (int)d;
-			e->int_0248 = 0;
+			reset = 0;
 		} else {
 			e->sample_count = 0;
-			e->int_0248 = (int)0xfff15a00;
+			reset = (int)0xfff15a00;
 		}
+		e->int_0248 = reset;
 	}
 
 	base = e->sample_count;
@@ -1468,7 +1470,7 @@ v34handshakinit(void *objp, int mode)
 		t->tx_flags = (short)((t->tx_flags & ~0x4018) | 0x2000);
 
 		rx->rx_blocks = 0x21e;
-		obj->receiver.short_382 = (short)0x8990;
+		rx->short_382 = (short)0x8990;
 		rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
 
 		obj->vect_idx = 0;
@@ -1497,8 +1499,12 @@ v34handshakinit(void *objp, int mode)
 		hs_set_rxstate(obj, V34HS_WAIT);
 		hs_set_microstate(obj, V34HS_MOH_TONE);
 
-		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
-		obj->msgrec[1].nbits = 8;
+		{
+			struct v34_bitsource *rec = &obj->msgrec[1];
+
+			obj->paa70 = rec;
+			rec->nbits = 8;
+		}
 		obj->paa6c = obj->msgrec;
 
 		VPcmV34SetMohMessageBits(obj, obj->msgrec[0].word);
