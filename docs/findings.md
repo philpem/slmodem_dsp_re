@@ -149549,3 +149549,30 @@ Both items are PARKED with the mechanism named; neither is a source line.
 its 2 call hits and 3 data hits resolve to one EXACT (`BwChDem_Create`) and four
 negatives with named mechanisms (F12235, F12237, this one, and the withdrawn
 `V90SpectralVerifier::process` re-classification).
+
+## F12239. `VOICE_command` differs by exactly one immediate (1 vs 2) -- a real constant difference inside the switch, not yet pinned to an arm
+
+Batch D's first row: `VOICE_command` (src/service/voice.c:383) is 123 reference
+instructions against 123 ours, ratio 0.772, and the ONLY content difference is
+one immediate.  Counting every `mov $imm` / zero idiom in each padding-stripped
+stream:
+
+	reference  ffffffff x3, 2 x2, 0 x3, 1 x4, 3 x1, 9 x2, 0xcccccccd x4
+	ours       ffffffff x3, 2 x3, 0 x3, 1 x3, 3 x1, 9 x2, 0xcccccccd x4
+
+So one place where the reference materialises `1` ours materialises `2`.  The
+source's four mode arms all agree with the header
+(`VOICE_MODE_RX=0`, `VOICE_MODE_TX=1`, `VOICE_MODE_ONLINE=2`,
+`VOICE_MODE_DUPLEX=3` at include/dsplib/voice.h:483-486; ops `BEEP=0`,
+`DTMF=1`, `SET_MODE=2`, `ABORT=9` at :510-519; case values 0..7 at
+include/dsplib/vce.h:208-215), so the difference is one arm's constant
+materialisation and a `mov $0x1` in the reference that we lack.  `align.py`
+shows it on the debug-guarded arm immediately before the DUPLEX/SPEAKER arm
+(reference `mov $0x1` where ours is `xor`), consistent with the STATE_TX arm,
+but `difflib` cannot align a cross-jumped switch reliably, so that attribution
+is a hypothesis.
+
+Next step to pin it: enumerate the arms by their `dsplibs_debug_printf`
+merge-string relocations and read the immediate each arm stores, rather than
+trusting the aligned view.  PARKED with the measurement exact; not a
+multi-block reconstruction, so it is a good next Batch-D target.
