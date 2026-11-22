@@ -149478,3 +149478,38 @@ So the polarity and encoding differences are NOT source-controllable in the
 sampled cases.  The only place a genuine structural difference could live is the
 branch-COUNT rows (the third class), which need per-function reading.  The
 census itself is retained as a navigation instrument.
+
+## F12235. V32FP_recreate's reference-only table relocation is a folded constant, but the row is frame/allocation-bound (negative)
+
+The symdiff hit `V32FP_recreate` -> `V32DiconnectThreshTable` is real: the table
+is `static const short V32DiconnectThreshTable[8] = { 75, 95, 119, 150, 168,
+174, 212, 238 }` (V32.c:141) and `p->disconnect_thresh =
+V32DiconnectThreshTable[3]` (V32.c:460) folds to `movw $0x96,0x28(%r32)` in
+ours, while the reference LOADS it
+(`movswl @R_386_32:('symbol','V32DiconnectThreshTable',6),%r32`, addend 6 = 3*2
+-- a constant index but the load preserved).  The symbol is local `O .rodata`
+in both objects, so linkage is not the difference.
+
+Hypothesis: GCC's front end folds `arr[literal]` but not `arr[var]`, so a
+variable index that constant-propagation later proves to be 3 keeps the load;
+dropping `const` would also force a load.  `spec_v32fp.json` (control reproduces
+the in-tree object): V0 baseline NONMATCH delta 29 (ours 800 insns vs ref 779 --
+ours is 21 instructions / 29 bytes BIGGER); V1 (local `int dc = 3`), V2 (drop
+`const`), V3 (both) all NONMATCH delta 45, 801 insns, aligned run 49/779
+unchanged.  Neither edit helps -- both WORSEN the delta.  The folded constant is
+real but not the leading difference; the row is frame/allocation-bound like the
+rest.  Nothing retained.
+
+## F12237. V17TX_create's reference-only SDM_CFG relocation accompanies a `dsplibs_debug_level` load-vs-fold difference that is not source-controllable (negative)
+
+`V17TX_create` (src/fax/V17tx.c) is flagged by symdiff for a reference-only
+`SDM_CFG` data relocation.  The first aligned difference, however, is the debug
+guard: ours emits `cmpl $0x1,dsplibs_debug_level` (the memory operand folded into
+the compare) where the reference emits
+`mov dsplibs_debug_level,%r32; cmp $0x1,%r32` (load, then register compare).
+`DSPLIB_DEBUG_ON()` is `(dsplibs_debug_level > 1)` with
+`dsplibs_debug_level` an `unsigned int` (include/dsplib/debug.h:86, :35), so the
+`cmp $0x1` is fixed and every equivalent spelling (`>= 2u`) produces the same
+test -- the load-vs-fold is a GCC register/encoding choice, not a source
+difference.  The `SDM_CFG` relocation sits further down the same body.  Not
+source-controllable in the sampled form; nothing retained.
