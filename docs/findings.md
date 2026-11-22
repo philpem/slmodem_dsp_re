@@ -150510,3 +150510,22 @@ made the original non-inlinable, and the residual 56 bytes shows the shape is no
 yet found.  The discriminating experiment is recorded, with the next question
 being what the reference's `process` holds that our no-inline form lacks (the
 cgraph estimates are 74 process / 89 printSpectrum / 536 checkSpecial, F12270).
+
+## F12272. The inlining lead needs the whole `process` body: the no-inline variant is 12 instructions short and differs structurally
+
+Aligned the no-inline variant's `process` against the reference (76 ref / 64
+ours, ratio 0.714).  The difference is not only the call: the reference keeps
+MORE locals in memory (`mov %r32,0x28(%esp)`, `0x1c`, `0x18`, `0x14` -- stores
+our no-inline form does not make) and shows a `setb` against our `seta` (the
+F12236 comparison-materialisation polarity).  So the reference's `process` is a
+different BODY, not our body with `printSpectrum` called out of line.
+
+That closes the inlining lead as a standalone fix: the boundary is real (F12271
+confirms it), but reaching the reference requires the whole function's local
+set, spills and comparison forms to match too -- i.e. the per-function
+reconstruction wall again, not a one-line boundary change.  The attribute is not
+retained and no source changed.
+
+This is now the fourth class (x87 F12267, block order, inlining F12271/F12272,
+and reload unprobed) where the compiler-internal route named the mechanism
+precisely but the remaining gap is the whole function's body.
