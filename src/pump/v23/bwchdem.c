@@ -136,16 +136,16 @@ BwChDem_Create(struct bwchdem *bw, const struct v23_cfg *cfg)
 		bw = sysdep_malloc(sizeof(*bw));
 
 	bw->mark_state[0] = 0;
-	bw->mark_state[1] = 0;
 	bw->space_state[0] = 0;
+	bw->mark_state[1] = 0;
 	bw->space_state[1] = 0;
 	bw->mark_energy = 0;
 	bw->space_energy = 0;
 	bw->r0c = 0;
 	bw->blocks = 0;
 
-	bw->remaining = block_size_table[0];
 	bw->block_index = 0;
+	bw->remaining = block_size_table[bw->block_index];
 	bw->settle = BWCH_SETTLE_ON_CHANGE;
 	bw->last_bit = 1;
 
@@ -157,8 +157,8 @@ BwChDem_Create(struct bwchdem *bw, const struct v23_cfg *cfg)
 	 * on a detector that never looks for reversals.
 	 */
 	tone = FPM_TONE_CFG;
-	tone.freq = BWCH_MARK_HZ;
 	tone.ratio = BWCH_TONE_RATIO;
+	tone.freq = BWCH_MARK_HZ;
 	tone.min_level = BWCH_TONE_MIN_LEVEL;
 	bw->tone = FPM_TONE_create(NULL, &tone);
 	bw->carrier_blocks = 0;

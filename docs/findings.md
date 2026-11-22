@@ -149399,3 +149399,45 @@ the in-tree object) moves the byte delta -216 -> -184 with the aligned run
 16 -> 17 of 510, but does not promote.  Consistent with fskdetect,
 DialerProgress and DILdescriptorPacker: the source is structurally complete and
 the residue is allocator / frame / scheduling.
+
+## F12234. A per-function relocation/symbol diff isolates the genuinely-missing-source rows; BwChDem_Create recovers EXACT from three coupled defects
+
+The alignment-based screens (`spanrep`, `deep_screen`) mis-fire on low-ratio
+bodies (F12233 may report a phantom span).  The relocation set does not:
+`scratch/cd/symdiff.py` collects the named CALL targets and data/merge-string
+targets each NONMATCH row relocates against in the object and in ours, and the
+set difference is unaffected by register choice, frame size or instruction
+order.  Over the 559 NONMATCH only **2 rows have a reference-only CALL target**
+(`V90SpectralVerifier::process` -> `printSpectrum`, `bValidateEnergyValue` ->
+`FDSP_Kernel_InitObj`, both inlining differences) and **3 a reference-only data
+symbol** (`BwChDem_Create` -> `block_size_table`, `V17TX_create` -> `SDM_CFG`,
+`V32FP_recreate` -> `V32DiconnectThreshTable`).  So the corpus carries almost no
+missing calls or globals -- a strong, alignment-independent result.
+
+`BwChDem_Create` (src/pump/v23/bwchdem.c) carries THREE coupled source defects,
+each derived from the bytes and confirmed by `variant_run` (control reproduces
+the in-tree object):
+
+1. **Index form.**  `bw->remaining = block_size_table[0];` folds the `static
+   const` table to the immediate 0x1a at compile time, so our row has no
+   relocation.  The object LOADS the table (`mov 0x8320,%edx`) and relocates
+   against `block_size_table`, which only happens for a non-constant index.  The
+   original is `bw->block_index = 0; bw->remaining =
+   block_size_table[bw->block_index];` -- the index form, not the folded
+   constant.  This alone moves the byte delta -16 -> 0.
+2. **Zero-store order.**  The four initialisers were written mark[0], mark[1],
+   space[0], space[1]; the object emits them interleaved mark[0], space[0],
+   mark[1], space[1] (`movw $0x0,(%ebx)`, `0x4(%ebx)`, `0x2(%ebx)`,
+   `0x6(%ebx)`).  Reordering the source to match lifts the aligned run
+   21 -> 37 of 76.
+3. **`tone` field order.**  `tone.ratio` precedes `tone.freq` in the object
+   (`$0x7148` before `$0x186`), not after.  Swapping the two statements takes the
+   row to **EXACT** (76/76, symdiff 0).
+
+Retained: all three.  `make period T=t_v23bwch` -> 1 passed, 0 failed.
+Census 1259 -> **1260 EXACT**, zero losses; `exact_bytes` +364.
+
+The lesson is that a folded constant is a *fidelity* signal, not an
+optimisation: when the object relocates against a table the source must keep the
+access un-foldable (a variable index), because the original's index expression
+is part of the recovered source.

@@ -5059,6 +5059,28 @@ Do NOT reach for the classifier when a row stalls: a bounded probe that unpins
 not a hidden cost -- the ebp-involved rows merely move their conflict.  The
 retargeted residue is the count-differers whose missing block is an OPERATION.
 
+### Lever 54. Diff the RELOCATION SET to find genuinely-missing source; a folded constant is a fidelity signal
+
+Alignment screens mis-fire on low-ratio bodies (`spanrep.py` reported a phantom
+291-instruction span on `evaluateInfo`, F12233).  The relocation set does not:
+`scratch/cd/symdiff.py` diffs the named CALL targets and data/merge-string
+targets each NONMATCH row relocates against, and is immune to register choice,
+frame size and instruction order.  The worked result (F12234) is that only 2 of
+559 NONMATCH rows have a reference-only CALL target and 3 a reference-only data
+symbol -- the corpus carries almost no missing calls or globals.
+
+The recoverable class is the **folded constant**.  `BwChDem_Create` wrote
+`bw->remaining = block_size_table[0]`, so the `static const` table folded to the
+immediate and our row carried no relocation; the object LOADS the table and
+relocates against the symbol, which only happens for a NON-constant index.  The
+original indexes it (`block_size_table[bw->block_index]`, after
+`bw->block_index = 0`).  When the object relocates against a table the source
+must keep the access un-foldable -- the original's index EXPRESSION is part of
+the recovered source, not an optimisation to be simplified away.  Two further
+coupled defects in the same function (zero-store order and `tone.ratio` before
+`tone.freq`) took it to EXACT.  Check the relocation diff BEFORE spending on an
+alignment-based screen.
+
 ## A detector names a hypothesis; the gate names the answer
 
 `tools/toolchain/extcheck.py` pairs a `movzwl` against a `movswl` **by offset
