@@ -149669,3 +149669,29 @@ way, reported separately from a promotion); `make period T=t_fpm_atan` passes.
 Lever 55 records the shape: a `?:` the reference compiled to a BRANCHLESS sign
 mask (`sar`/`and`, or `setcc`) is a real source difference, and the
 discriminator is the shape (`sar`/`and` vs `test`/`js`), not the value.
+
+## F12243. A Lever-55 screen finds 58 rows with a sign-mask/branch delta; `V92Jd::unPackJdPhaseData`'s abs is one, recovered as a metric-neutral partial
+
+`scratch/cd/branchless_screen.py` counts, per NONMATCH row, the branchless sign
+idiom (`sar $0x1f`, an `and $0x..00` mask, `cmov`) against the branch form
+(`test` + `js`/`jns`) in each stream.  **58 of 557 rows carry a delta**, ranked
+by `sar31` difference; the head is `V90Demodulator::progress` (`sar31` 8 vs 3)
+and `V90Phase3Demodulator::getV90DecisionEf` (41 vs 37).
+
+The smallest clean candidate, `_ZN5V92Jd17unPackJdPhaseDataEi`
+(src/pump/v90/V92Jd.cpp), has the signature exactly: the reference computes
+`|d|` branchlessly (`sar $0x1f`) at the CRC comparison loop, where our
+`sum += d < 0 ? -d : d;` (line 641) emitted a `js` branch.  Variants
+(`spec_v92jd.json`, control reproduces the in-tree object):
+
+	V0 baseline                     NONMATCH -43  235 insns  run 11/241  dmn 54
+	V1 (int m = d >> 31; (d ^ m) - m) NONMATCH -31  235 insns  run 13/241  dmn 48
+	V2 (if (d < 0) d = -d; sum += d;) NONMATCH -31  235 insns  run 13/241  dmn 48
+	V3 ((d + m) ^ m)                  NONMATCH -31  235 insns  run 11/241  dmn 50
+
+V1 and V2 are BYTE-IDENTICAL to each other (hash 97ac2ffe) and move the aligned
+run 11 -> 13 and the delta -43 -> -31; both are valid spellings of the native
+shape, so the reconstruction is "an absolute value without a branch", the
+spelling between them being unobservable.  Retained V2 (the natural form) as a
+source-fidelity PARTIAL; still NONMATCH -- the residual is elsewhere.  `make
+period T=t_v92jd` passes.  Census unchanged.

@@ -638,7 +638,9 @@ V92Jd::unPackJdPhaseData(int bit)
 		for (i = 0; i <= 15; i++) {
 			int d = crc[i] - phaseBits[32 + i];
 
-			sum += d < 0 ? -d : d;
+			if (d < 0)
+				d = -d;
+			sum += d;
 		}
 		if (sum != 0) {
 			unPackJdPhaseReset();
