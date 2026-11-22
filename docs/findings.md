@@ -149695,3 +149695,24 @@ shape, so the reconstruction is "an absolute value without a branch", the
 spelling between them being unobservable.  Retained V2 (the natural form) as a
 source-fidelity PARTIAL; still NONMATCH -- the residual is elsewhere.  `make
 period T=t_v92jd` passes.  Census unchanged.
+
+## F12244. The `branchless_screen` head rows are frame/order-first, not `sar`-site-first: Lever 55's reach is the small rows, not the big ones
+
+Following F12243, the two head rows of the sign-mask/branch screen were probed
+for their Lever-55 site:
+
+- `_ZN14V92Transmitter5resetEP16V92MappingParams` (ref 527 / ours 535, ratio
+  0.904): the first difference is a LOAD REORDER (`mov (%r32),%r32` before vs
+  after `mov 0x18(%r32),%r32`) -- ordering, not a sign mask.
+- `_ZN20V90Phase4Demodulator14getV90DecisionEs` (ref 759 / ours 752, ratio
+  0.797): the first difference is the PROLOGUE -- the reference's frame is
+  `sub $0x4c,%esp` against our `sub $0x3c,%esp`, with an extra store in ours.
+  Frame/allocation-first.
+
+So the `sar31` count delta those rows carry is a downstream consequence of a
+frame/layout difference, not an independent source site.  Lever 55's reach is
+the SMALL rows where the sign idiom is the FIRST divergence (`FPM_atan`,
+`V92Jd::unPackJdPhaseData`); the large rows hide it behind prologue/frame
+divergence and will not yield to a spelling change.  The screen is a nominator;
+read the first difference before spending, exactly as for `deep_screen` and
+`spanrep`.
