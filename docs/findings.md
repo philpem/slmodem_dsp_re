@@ -149847,3 +149847,31 @@ to the agc and demod paths, with offsetting surpluses elsewhere (so it is not
 one contiguous block).  `callseg.py` turns the 925-instruction eyeball into a
 bounded per-segment task; the work is a multi-session reconstruction, not a
 spelling, and no source was retained here.
+
+## F12249. Correction: a matching call-target MULTISET does not imply a matching call ORDER -- F12248's per-segment localization is withdrawn
+
+F12248 localized `v8handshak`'s deficit by splitting both streams at each `call`
+and comparing segment sizes.  That is only valid if both builds call the same
+targets in the same ORDER, and they do not: the target multiset matches (38
+calls, identical counts) but the order diverges from call #3, where ours
+inserts a `v8_getbit` the reference does not have there.  Every positional
+segment past that point compares unrelated code, so F12248's per-segment
+figures (seg 28 -68, seg 24 -45, seg 3 -32, ...) are **withdrawn**.
+
+What survives from F12247 is the part that did not depend on order: the target
+MULTISET matches, so the blob does not inline a callee ours calls, and the
+140-instruction deficit is body logic.
+
+My first order check was itself wrong: `split("'")[1]` on
+`...+0x123 @R_386_PC32:('symbol', 'v8_dftupdate', ...)` returns `'symbol'` for
+every call on both sides, so it "matched" all 38 vacuously.  The corrected check
+reads the second quoted token; it reports the first mismatch.
+
+`callseg.py` is hardened to fail loudly rather than mis-report: it verifies the
+call ORDER and, if it diverges, reports only the reliable prefix and refuses the
+rest; it also refuses when the segment counts differ.  Controls: `v8handshak` ->
+flagged at call #3; `VPcmV34Progress` -> flagged (ref 61 segments, ours 64).
+
+Lesson for the corpus: call-anchored comparison needs an ORDER check, not just a
+multiset match -- two builds can call the same functions, the same number of
+times, in different places.
