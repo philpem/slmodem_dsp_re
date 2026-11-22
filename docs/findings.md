@@ -149370,3 +149370,32 @@ the 38 must-reject cases show is a delicate rewrite whose risk sits on the
 ACCEPT side.  The grader is retained unchanged and F12230's hoped-for 4-7 rows
 are withdrawn.  Reopening condition: a range-isomorphism design that passes all
 38 `SELF_TESTS` AND the corpus controls with zero losses.
+
+## F12233. `spanrep.py`'s "largest contiguous reference-only span" is only valid at a high alignment ratio; on a switch/loop-heavy body it reports a phantom span
+
+`spanrep.py` ranks functions by the longest contiguous reference-only span after
+register canonicalisation, on the theory that a long contiguous span is missing
+logic.  That holds only when the alignment is good.  On
+`_ZN5V90CP12evaluateInfoEv` (510 ref / 473 ours, difflib ratio 0.346) it reports
+a 291-instruction contiguous reference-only tail, `ref[219:510]` -- but every
+one of those reference rows is PRESENT in our stream a score of rows earlier:
+
+	movzbl 0xcd8(%r32),%r32          ref[219]  ours[197]
+	movzbl 0xcb8(%r32,%r32,1),%r32   18 ref    18 ours
+	mov    %r32,0x18(%r32,%r32,8)    ref[282]  ours[257]
+
+So the tail is a difflib mis-alignment on a seven-arm switch (`sub $0x3` /
+`cmp $0x8` / `jmp *0xe50(,%eax,4)`; cases 3,5,6,7,8,10,11 with 4 and 9 holes),
+not missing code.  The screen's ranking for the large functions
+(`evaluateInfo`, `modulatevector`, `FPM_SRE_recover`, `VTB_decoder`,
+`CALLPROG_Progress`) is therefore unreliable: use it to nominate, then confirm
+by reading bytes, exactly as with `deep_screen.py`.
+
+The one real difference found in `evaluateInfo`: the reference UNROLLS the
+`nof_58[0..3] = 0` zeroing (four explicit dword stores) where ours emits a
+four-iteration loop.  Unrolling the case-7 zero loop and the case-10
+`word_c70[0..5]` zero loop together (`spec_cpinfo.json` V3; control reproduces
+the in-tree object) moves the byte delta -216 -> -184 with the aligned run
+16 -> 17 of 510, but does not promote.  Consistent with fskdetect,
+DialerProgress and DILdescriptorPacker: the source is structurally complete and
+the residue is allocator / frame / scheduling.
