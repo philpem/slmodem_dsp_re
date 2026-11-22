@@ -149783,3 +149783,31 @@ Refinement kept anyway: `blockscreen.py` now reports the multiset EXCLUDING
 `V90Demodulator::progress` 94 -> 83) and the 79-row `mset == 0` floor is
 unchanged -- so the mnemonic multiset is dominated by real operation
 differences, not stack churn, and remains the right structural screen.
+
+## F12247. Correction: `v8handshak`'s 140-instruction deficit is absent BODY logic, not an inlining difference
+
+A standing note (carried in session memory) explained `v8handshak`'s deficit as
+"the blob inlines its callees (transmit, v8_rxreadqueue, V8agc, ...) and ours
+does not".  The evidence contradicts it.
+
+`v8handshak` (src/v8/V8.c; ref 925 / ours 785 instructions, mnemonic-multiset
+distance 220) has the SAME CALL STRUCTURE in both builds: exactly **38 calls**
+each, with identical target sets and counts --
+`v8_rxreadqueue` x1, `V8agc` x3, `v8_txwritequeue` x3, `v8_mpyint` x3,
+`v8_cosread` x3, `v8_getbit` x2, `v8_fskmodulate` x2, `dsplibs_debug_printf`
+x10, and one each of `v8_V21_Init`, `v8_tone_detect`, `v8_phase_rev_detect`,
+`v8_fsktxfilter`, `v8_fskdemodulate`, `v8_dftupdate`, `v8_dftenergy`,
+`v8_absfn`, `rebuildJMSequence`, `evaluateRxJMSequence`,
+`checkSignalStability`.
+
+So the blob does NOT inline a callee ours calls.  The out-of-line copies exist
+in both (ours' `v8_rxreadqueue` is 0x5e bytes, byte-identical in size to the
+blob's 0x5e), and the call sites match.  The 140-instruction deficit is
+therefore **body code**: ~140 instructions of inline logic are absent from our
+reconstruction.  `v8handshak` is a genuine multi-block reconstruction target,
+not an allocation/inlining artifact.
+
+(The TU-ownership split is also real -- ours defines `v8_rxreadqueue` and
+`V8agc` in `src/v8/V8global.c` while the blob has them in `v8handshak`'s
+neighbourhood -- but it is NOT the cause of the deficit, since the call
+structure already matches.)
