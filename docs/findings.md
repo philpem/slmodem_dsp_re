@@ -150898,3 +150898,42 @@ Consequence for `period.mk`: the two NUMERIC per-TU overrides (`TC_V90P4_FLAGS`,
 `TC_V90DEMOD_FLAGS`) are anomalies under this evidence and should be audited
 (revert to default, re-grade those two TUs).  The two NAMED overrides (dcr
 `-O2 -fno-rerun-cse-after-loop`; fax proc `-fno-gcse`) are permitted by F12223.
+
+## F12285. Audit of the two numeric per-TU override profiles: `TC_V90P4_FLAGS=80` BUYS 6 EXACT; `TC_V90DEMOD_FLAGS=50` is grade-neutral
+
+The audit F12284 asked for.  Built a copy of the period tree with both overrides
+emptied (`make -f period.mk TC_OUT=build/audit_noflag TC_V90P4_FLAGS=
+TC_V90DEMOD_FLAGS= <two objects>`) and re-graded the whole corpus.
+
+Baseline (overrides active): 1,263 EXACT / 33 REGALLOC / 555 NONMATCH (1,852).
+Overrides emptied: **1,257 EXACT / 37 REGALLOC / 557 NONMATCH** -- **6 EXACT lost**.
+
+`TC_V90P4_FLAGS := --param max-inline-insns-auto=80` (V90Phase4Modulator.cpp)
+is **load-bearing**: emptying it loses six exact functions in that TU --
+
+	recivedE2u                    EXACT -> REGALLOC
+	recivedCPtag                  EXACT -> REGALLOC
+	setRdRtSymbols                EXACT -> REGALLOC
+	recivedFirstRrnE2u            EXACT -> REGALLOC
+	setRfSymbols                  EXACT -> NONMATCH  (d +10,  run 50/262)
+	recivedPartTwoSilenceRrnSUV   EXACT -> NONMATCH  (d +159)
+
+`TC_V90DEMOD_FLAGS := --param max-inline-insns-auto=50` (V90Demodulator.cpp) is
+**grade-neutral**: every symbol in that TU keeps its grade; the only change is
+`V90Demodulator::progress`'s byte delta, +74 (with the override) -> +546 (without),
+and it is NONMATCH either way.  So the discount buys no exact function -- it only
+narrows one already-non-matching body (F12109: the demod profile "does not close
+its progress body").
+
+Reading against F12223 ("retain a per-TU `--param` only when no named flag or
+source form reaches the same boundary, and say so explicitly"):
+
+- `TC_V90P4_FLAGS=80` stays as a QUALIFIED profile hypothesis: it buys 6 EXACT and
+  no named flag or source form has yet reproduced that boundary.  Its source
+  explanation is an OPEN inlining-family target -- a helper whose estimate should
+  be larger (authoritative body, estimate in (80,100]), or a helper that belongs
+  to another translation unit; the same shape as F12280's `FDSP_Kernel_InitObj`.
+- `TC_V90DEMOD_FLAGS=50` is the weakest-justified override (grade-neutral, no
+  witness).  Keeping it narrows a partial; removing it returns the TU to the
+  default profile at no cost in grade.  Left in place pending the owner's
+  decision (documented as a partial-improvement profile, not an exactness lever).
