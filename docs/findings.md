@@ -151009,3 +151009,35 @@ source form reaches the same boundary, and say so explicitly"):
   witness).  Keeping it narrows a partial; removing it returns the TU to the
   default profile at no cost in grade.  Left in place pending the owner's
   decision (documented as a partial-improvement profile, not an exactness lever).
+
+## F12287. CORRECTION: the lever-2 "pointer-walk" head (V34TimingFilter) is base-ADDRESS HOISTING, not a loop pointer-walk -- an allocation-coupled case, not a source-shape lever
+
+`scratch/cd/missrank.py`'s only-ref rows for `V34TimingFilter`
+(src/pump/v34/v34filters.c:1296; ref 231 / ours 199, delta -100) show `add $0xc`,
+`add $0x6`, `add $0x24` beside `movswl (%r32,%r32,2)` and `mov %r16,(%r32)`,
+which reads as a Lever-57 pointer walk.  The disassembly shows otherwise: **all
+those `add`s are in the PROLOGUE**, precomputing six row bases (`t+6`, `t+0xc`,
+`t+0x12`, `t+0x18`, `t+0x1e`, `t+0x24`) into stack slots (0x34-0x58).  The loops
+themselves are ROLLED and INDEXED exactly like ours:
+
+	REF   mov 0x5c(%esp),%ecx ; movswl (%ebx,%ecx,2),%eax   ; incl 0x5c(%esp) ; cmpl $0x2,0x5c(%esp)
+	OURS  movswl 0x0(%ebp,%edi,2),%esi                      ; inc %edi
+
+So the difference is register pressure / loop-invariant **address hoisting**: the
+reference spills the loop counter (`k` at 0x5c(%esp)) and reloads the precomputed
+bases, while ours keeps `k` in `%edi` and folds each base into
+`disp(%ebp,%edi,2)` (frame 0x4c against the reference's 0x60).  `short iir[6][3]`
+occupies +0x000..+0x023 (`hist` at +0x024), so the precomputed `t+0x24` is
+`&t->hist[0]`.
+
+A source edit that reproduces that hoisting has not been derived, and the
+precomputed bases arise from the address expressions the source already writes, so
+this is not a missing/extra-source case.  Disposition: **V34TimingFilter is PARKED
+as allocation-coupled** (the same class as F12267's x87 stack, F12272's inlining
+body, and F12274's `modulatevector` frame) until a discriminator for its
+live-value set appears.
+
+Method note: before treating a lever-2 "pointer-walk" nomination as a source
+shape, check whether the `add`/`(%r32)` rows are in the PROLOGUE (address
+precomputation) or inside the loop body (a real walk).  `maskalign` shows the
+rows but not their position.
