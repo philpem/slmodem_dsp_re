@@ -150963,10 +150963,13 @@ no call) needs the same +11 -- the same code-invisible, estimate-visible class.
 
 Disposition: `TC_V90P4_FLAGS=80` remains a qualified profile (F12223 clause) until
 (a) or (b) is found; the 88/82 pair proves no named global flag reproduces the
-boundary.  `TC_V90DEMOD_FLAGS=50` is grade-neutral (F12285) and has no witness --
-recommended for removal.  Next discriminators: in `recivedSUVtag`, look for an
-accessor/setter call the original would have made where our source writes a
-direct store; or test (b) by relocating the definition to another TU.
+boundary.  `TC_V90DEMOD_FLAGS=50` is grade-neutral but is NOT a fit to discard:
+it recovers `V90Demodulator::progress`'s native call boundary (byte delta +546
+without it, +74 with it; F12109), so it falls under the same F12223 clause -- no
+named global flag reproduces it either.  Next discriminators: in
+`recivedSUVtag`, look for an accessor/setter call the original would have made
+where our source writes a direct store; or test (b) by relocating the definition
+to another TU.
 
 ## F12285. Audit of the two numeric per-TU override profiles: `TC_V90P4_FLAGS=80` BUYS 6 EXACT; `TC_V90DEMOD_FLAGS=50` is grade-neutral
 

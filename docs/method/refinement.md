@@ -14067,3 +14067,26 @@ missing source statement: read the estimate in the dump and the reference's
 inline/call decision BEFORE touching the callee's body.  Where a budget profile
 leaves a residual (F12280's +20), that residual is the next lever, not evidence
 against the profile.
+
+#### Addendum to Lever 61. Prove "global parameter" false with a counter-witness PAIR, not a sweep
+
+A whole-tree sweep only tells you the best global value; it cannot show that a
+per-callee boundary is unreachable by ANY global value.  That needs two inlined
+callees with OPPOSITE outcomes and inverted sizes:
+
+	V92Modulator::reset                  est 88   INLINED by the blob
+	V90Phase4Modulator::recivedSUVtag    est 82   NOT inlined by the blob
+
+88 > 82, so no single `max-inline-insns-auto` produces both (a limit above 88
+inlines the 82-callee too; at or below 88 it drops the 88-callee).  One pair of
+EXACT counter-witnesses therefore kills the global-parameter explanation for the
+whole inlining family, where four sweeps (100/80/50/`-O2`) could not (F12286).
+
+Read the estimates straight out of the cgraph dump (`Considering X with N insns`)
+at two budgets; the flipped callee is the diff.  Then decide the per-callee
+cause: `cgraph_default_inline_p` (`cgraphunit.c:1069-1077`) withholds only on
+`!DECL_INLINE || !DECL_SAVED_TREE` (a TU boundary) or the size gate; a
+code-invisible statement (a call the compiler folds, e.g. an accessor written
+where the source could use a direct store) raises the estimate without changing
+the bytes -- the estimate weights are 10 per CALL, 10 per div/mod, ~4 per `int`
+assignment, 1 otherwise (`c-common.c:5663-5788`).
