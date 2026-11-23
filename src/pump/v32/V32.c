@@ -539,8 +539,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	sdm->regmask = ~mask;
 
 	/* The transmit symbol coder, from the four-byte template. */
-	SMC_TX(fp)->mode = smccfg.mode;
-	SMC_TX(fp)->pad02 = smccfg.pad02;
+	*(struct v32_smc_cfg *)(void *)&SMC_TX(fp)->mode = smccfg;
 	for (i = 0; (short)i <= 1; i++)
 		SMC_TX(fp)->state[i] = 0;
 	SMC_TX(fp)->quad = 0;
@@ -635,8 +634,7 @@ V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *
 	VTBv32_init(&DEC(fp)->vtb, sel, fresh);
 
 	/* The receive symbol coder, from the same template as the transmit. */
-	SMC_RX(fp)->mode = smccfg.mode;
-	SMC_RX(fp)->pad02 = smccfg.pad02;
+	*(struct v32_smc_cfg *)(void *)&SMC_RX(fp)->mode = smccfg;
 	for (i = 0; (short)i <= 1; i++)
 		SMC_RX(fp)->state[i] = 0;
 	SMC_RX(fp)->quad = 0;
