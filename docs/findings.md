@@ -150634,3 +150634,62 @@ unprobed.  No source/type change moves the front-end form, so this is a
 reload-lane specimen rather than a source lever; the missing measurement is
 reload's `find_reloads` cost/inheritance decision for this operand.  Both
 functions remain NONMATCH (-1) and are the reload lane's first concrete target.
+
+## F12278. M2 first retained partial: `_hdlc_receive_look_carrier_state`'s ternary ARM ORDER sets the fall-through (run 18/205 -> 21/205)
+
+The lever-2 head (`scratch/cd/missrank.py`) is ranked by the largest contiguous
+reference-only block, and its top rows carry two confounds the summary rank does
+not separate: a FRAME-SIZE difference (the reference's larger frame shifts every
+`0xNN(%esp)` row, so the masked view is required) and, in several C files, a
+POINTER-WALK source shape (Lever 57).  `_hdlc_receive_look_carrier_state`
+(src/fax/cHDLCrx.c:474) is the first row with a clean, isolated source lever.
+
+Its `limit` initialiser was a ternary:
+
+	limit = (*rx_count == 0) ? ctx->s7_timeout * 50
+	                         : ctx->s7_timeout * 8000 / *rx_count;
+
+The object's `je`-guarded arm is the `* 50` one and the DIVISION arm is the
+fall-through (`imul $0x1f40,0x12b4(%r32); cltd; idiv`), i.e. the reference's
+THEN is the division and the ELSE is the multiply.  Writing the condition as
+`!= 0` with the division first is semantically identical and makes the division
+the THEN, so it lands as the fall-through:
+
+	limit = (*rx_count != 0) ? ctx->s7_timeout * 8000 / *rx_count
+	                         : ctx->s7_timeout * 50;
+
+Measured out of tree (`tools/toolchain/variant_run.py`): V1 (`!= 0`, division
+first) and V2 (the equivalent `if`/`else`, division arm first) are BYTE-IDENTICAL
+to each other (md5 f649ef67) and both move the longest run 18/205 -> 21/205 with
+symdiff 26 -> 24 and no size change; the baseline control reproduced the in-tree
+object byte for byte.  Retained in tree; the whole-TU regrade moves ONLY this
+symbol (run 18 -> 21, delta -63 unchanged) with no neighbour and no corpus change
+(1,263 EXACT / 33 REGALLOC / 555 NONMATCH).
+
+Scope: a supported PARTIAL, not a closure.  The function is 205 reference
+instructions against our 195 and its scan loop re-reads the pointer chain
+differently (src/fax/cHDLCrx.c:525-540).  The mechanism is the ternary ARM ORDER
+-- the C analogue of the retained fax branch-order restructures (142d5ae30,
+85a364463): the reference's fall-through is the arm the original wrote as the
+THEN.  See Lever 60.
+
+## F12279. Two `fidelity.canonical` warts inflate the M2 screens
+
+While screening the short rows, two normalisation gaps produce phantom
+differences that the diff and multiset views report as real rows:
+
+- a ZERO displacement is kept, so the object's `movl $0xa0,0x0(%r32)` and ours
+  `movl $0xa0,(%r32)` count as different (seen in `_hdlc_receive_look_carrier_state`
+  and `maskalign`'s multiset for it);
+- OPERAND ORDER is kept, so `cmp GAIN_THRESHOLD_TABLE(%r32,%r32,1),%r16` and our
+  `cmp %r16,GAIN_THRESHOLD_TABLE(%r32,%r32,1)` differ textually although they are
+  the same comparison.
+
+Neither is a real code difference.  A `missrank`/`longrank` block or a
+`maskalign` multiset must be read with these in mind; the frame-offset and
+pointer-walk confounds (F12278) are separate and larger.
+
+New M2 apparatus (gitignored, under `scratch/cd/`): `longrank.py` (the
+counterpart to `missrank.py` for the over-long rows -- largest candidate-only
+block) and `maskalign.py` (stack-masked per-symbol alignment plus a canonical
+multiset diff).

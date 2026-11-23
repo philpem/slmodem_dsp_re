@@ -483,8 +483,8 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 
 	(void)word4;
 
-	limit = (*rx_count == 0) ? ctx->s7_timeout * 50
-				: ctx->s7_timeout * 8000 / *rx_count;
+	limit = (*rx_count != 0) ? ctx->s7_timeout * 8000 / *rx_count
+				: ctx->s7_timeout * 50;
 	ctx->countdown++;
 
 	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,

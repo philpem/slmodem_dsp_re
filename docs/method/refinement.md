@@ -14019,3 +14019,25 @@ order carry a representation difference (a base pointer, block order, or helper
 inlining) that changes how many peephole2 scratch searches run.  The signature
 is a single-access fix that improves the target yet regresses a later EXACT; do
 not accept the trade -- correct the earlier function's full representation.
+
+### Lever 60. A `?:`'s ARM ORDER picks the fall-through -- the arm the original wrote as the THEN is the one that falls through
+
+For `x = (cond) ? A : B;` GCC 3.4.2 expands the THEN as the fall-through and
+branches around to the ELSE (the test is `je`/`jne` to the ELSE label).  So when
+the object's fall-through arm is the one our source wrote as the ELSE, the
+condition is inverted in the original: rewriting `(c) ? B : A` as `(!c) ? A : B`
+-- or as `if (c) A; else B;` with the object's arm first -- restores the layout
+without changing behaviour.
+
+Worked case (F12278): `_hdlc_receive_look_carrier_state`'s `limit` initialiser.
+Our `(*rx_count == 0) ? s7*50 : s7*8000/rx_count` put the `* 50` arm as the
+fall-through; the object falls through to the division.  Writing
+`(*rx_count != 0) ? s7*8000/rx_count : s7*50` moves the longest run 18/205 ->
+21/205, symdiff 26 -> 24, no size change, and the two equivalent spellings
+(ternary and `if`/`else`) measured byte-identical.  This is the C-ternary
+analogue of the branch-order restructures used for `if` bodies (Lever 46/47):
+read which arm the object falls through to, and make that arm the THEN.
+
+Where to look next: a `short` (lever-2) row whose largest block contains a
+ternary or a two-arm `if` whose fall-through is the arm our source wrote second,
+once the frame-offset and pointer-walk confounds are set aside.
