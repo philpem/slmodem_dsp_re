@@ -752,7 +752,7 @@ main(void)
 		memcpy(&obj_b, &obj_a, sizeof(obj_a));
 		/* Sweep the two dead bands and the armed flag. */
 		obj_a.rx.level = obj_b.rx.level = (short)(k * 163 - 32000);
-		obj_a.rx.energy_hi = obj_b.rx.energy_hi = (short)(k * 71);
+		obj_a.rx.energy = obj_b.rx.energy = k * 71;
 		obj_a.rx.accum = obj_b.rx.accum = (short)(k * 37 - 1200);
 		obj_a.rx.adapt_rate = obj_b.rx.adapt_rate = (short)(k * 29 - 4000);
 		obj_a.rx.gain = obj_b.rx.gain = (short)(k * 211);

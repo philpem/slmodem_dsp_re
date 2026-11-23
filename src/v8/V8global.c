@@ -210,7 +210,7 @@ v8_agcadapt(struct v8 *v)
 	short acc;
 	short mag;
 
-	level = ((r->level * 0x6ccd) >> 15) + (unsigned short)r->energy_hi;
+	level = ((r->level * 0x6ccd) >> 15) + (unsigned short)(r->energy >> 16);
 
 	/*
 	 * Accept the new estimate only when it has not run away: the top
@@ -362,8 +362,7 @@ V8agc(struct v8 *v)
 	energy = 0;
 	for (i = 0; i < V8_QUEUE_BLOCK; i++)
 		energy += v->rx_stage[i] * v->rx_stage[i];
-	r->energy_lo = (short)energy;
-	r->energy_hi = (short)(energy >> 16);
+	r->energy = energy;
 
 	return v8_agcadapt(v);
 }
@@ -613,11 +612,7 @@ v8_rxinit(struct v8 *v)
 
 	rx->buf = v->rx_stage;
 	rx->level = 0;
-	/*
-	 * One 32-bit store in the original, covering both halves.  They are
-	 * two shorts here because v8_agcadapt reads the upper one on its own.
-	 */
-	*(int *)&rx->energy_lo = 0;
+	rx->energy = 0;
 	rx->clip_count = 0;
 
 	return 0;

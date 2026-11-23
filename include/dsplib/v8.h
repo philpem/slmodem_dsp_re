@@ -382,13 +382,11 @@ struct v8_rx {
 	unsigned char	pad0c[4];
 	short		*buf;			/* +0x10  -> v8.rx_stage  */
 	/*
-	 * The band-filtered energy of the four samples just scaled, as one
-	 * 32-bit int split across two shorts because v8_agcadapt reads only
-	 * the upper half on its own -- V8agc's own comment: "They are the two
-	 * halves of one int, which is why that field is a short of its own".
+	 * The band-filtered energy of the four samples just scaled, stored as
+	 * one 32-bit int.  v8_agcadapt reads only its upper 16 bits on its own
+	 * (`energy >> 16`); V8agc stores the whole word in one go.
 	 */
-	short		energy_lo;		/* +0x14 */
-	short		energy_hi;		/* +0x16 */
+	int		energy;			/* +0x14 */
 	unsigned char	pad18[2];
 	/* The smoothed level estimate v8_agcadapt feeds back into itself. */
 	short		level;			/* +0x1a */
