@@ -151109,3 +151109,30 @@ Residue (both +5, supported partials not closures): ONE leaf still converts (our
 `cmp $0xdfff ; setle ; lea 0x10(,%r32,4)` where the reference keeps
 `cmp $0xe000 ; jge` and a plain `mov $0x10`), plus a `cwtl` vs `movswl`
 sign-extend (the reload lane, F12277) and register transport.
+
+## F12290. `rebuildJMSequence`'s 22-setcc gap is NOT the `all_flags` local -- inlining it regresses the body; the function is parked as allocation-coupled at a 2.1% run
+
+`rebuildJMSequence` (src/v8/V8.c:289) is the mirror of Lever 62: the object has
+**48** setcc, ours **26** (delta -22, `scratch/cd/setcc.py`), i.e. the object
+materialises 22 flags that ours branches.  The function's only value-context
+`&&` is
+
+	all_flags = (cm->b0 & 8) && v90_mod != 0 && digital_connection != 0
+		    && pcm_indication == 1;
+
+used at three `if (all_flags)` sites, with the source comment claiming the object
+"recomputes this expression at each of its uses".  Tested by inlining the
+expression at all three uses and deleting the local (in tree, `git checkout`
+revert; `variant_run.py` cannot build this TU because its variant copy loses the
+local header `v8int.h`):
+
+	before   delta  -8   (753 insns, setcc 26)
+	after    delta +57   (787 insns, setcc 33)
+
+So inlining recovers only 7 of the 22 setcc while adding 34 instructions -- a net
+regression, reverted.  The remaining ~15 setcc are not located; the reference's
+excess is not this local.
+
+Longest run is 16/748 = **2.1%**, so the body differs throughout: the function is
+allocation/layout-coupled (same class as `V22_FSE_receive`, 2.0%), not a clean
+structural target.  PARKED.
