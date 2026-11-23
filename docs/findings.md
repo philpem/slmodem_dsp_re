@@ -150783,3 +150783,70 @@ Consequences:
   fall under this policy.  They are flagged for re-examination -- each needs an
   independent witness for the original flag value, or a return to default with
   the affected functions re-graded as negatives.  Not changed here.
+
+## F12283. Historical research: tweaking `--param max-inline-insns-auto` was NOT normal period practice; the numeric overrides in `period.mk` are the only outliers
+
+Owner question (2026-11-23): was it common to tweak `max-inline-insns-auto` when
+this object was built, and did the build use one option set for the whole
+executable or per-function `inline` directives from profiling?
+
+**Answer: no, and the flag was not the normal lever.**  Evidence:
+
+- The GCC 3.4.6 manual (the period version, `gcc.gnu.org/onlinedocs/gcc-3.4.6`)
+  documents `--param name=value` as an INTERNAL interface: "The names of specific
+  parameters, and the meaning of the values, are tied to the internals of the
+  compiler, and are subject to change without notice in future releases."
+  `max-inline-insns-auto` appears only in that internals table (default **100**;
+  `max-inline-insns-single` default **500**).  The documented USER-facing inlining
+  controls are named options: `-finline-functions` (what `-O3` adds, and what
+  opens auto-inlining at all), `-finline-limit=n` (global; "particularly useful
+  for programs that use inlining heavily such as those based on recursive
+  templates with C++"), `-fno-inline`, `-fno-default-inline`, and source-level
+  `inline` / in-class definitions.  `-finline-limit=n` is the ONE global knob
+  that moves `max-inline-insns-auto` (it sets it to n/2); it appears nowhere in
+  this tree.
+- In-repo precedent, already settled: **F12223** (owner, 2026-11-20) -- "Reaching
+  into a numeric weight factor such as `--param max-inline-insns-auto=N` is a
+  GCC-developer move, not a user move.  Prefer a named flag or a source
+  explanation."  A period user plausibly changes the optimisation LEVEL or turns
+  NAMED optimisations on/off for a file that misbehaves, not a weight factor.
+- **F11515** exhausted ten per-file profiles on `V34hshak.c` (including
+  `-finline-limit=20000` and `--param max-inline-insns-auto=20000`): all
+  zero-gain, exact set unchanged -- "the object gives no evidence for" a per-file
+  rule.
+
+**The two hypotheses, evaluated.**
+
+- *One option set for the whole executable.*  Consistent with the manual (the
+  global knob is `-finline-limit`, a named flag).  Consequence: our **1,263
+  EXACT** functions were produced with the DEFAULT params.  A globally different
+  inline limit perturbs every caller of every mid-size function across all 226
+  TUs and would not leave 1,263 exact; so the global inline configuration is
+  almost certainly the default (100).  The FDSP anomaly (F12280) is therefore NOT
+  a flag -- it is source or TU membership.
+- *Per-function `inline`/`always_inline` directives from profiling.*  Plausible
+  in general but the DIRECTION is wrong here: marking a callee `inline` (or
+  defining it in-class, or `__attribute__((always_inline))`) moves it from
+  `max-inline-insns-auto` (100) to `max-inline-insns-single` (500) and makes it
+  inline MORE while still emitting the symbol (Lever 10, F8001).  A directive can
+  only ADD inlining; it cannot explain a callee our build inlines and the object
+  does not.  Under one flag set, withholding that inline requires the callee to
+  be >= the limit (a BIGGER body) or to have no saved tree (defined in another
+  TU).  The named-flag candidates for LESS C++ inlining are `-fno-default-inline`
+  (in-class members drop from 500 to 100) and a global `-finline-limit`.
+
+**The outliers in this tree.**  `period.mk` has four per-file overrides: two
+NAMED-flag ones -- `src/service/dcr.c` (`-O2 -fno-rerun-cse-after-loop`) and the
+fax proc sources (`-fno-gcse`) -- and exactly two NUMERIC ones,
+`TC_V90P4_FLAGS := --param max-inline-insns-auto=80` and
+`TC_V90DEMOD_FLAGS := --param max-inline-insns-auto=50`.  F12223 permits the
+named-flag form ("turns named optimisations on/off for a particular file") and
+does not permit the numeric form without a witness.  The two numeric overrides
+are therefore the only configurations inconsistent with period practice, and an
+audit (revert to default, re-grade `V90Phase4Modulator.cpp` and
+`V90Demodulator.cpp`, report exact gains/losses) is the direct policy test.
+
+Sibling named-flag hypothesis for a bounded test: a global `-fno-default-inline`
+would reproduce the C++ over-inlining class from the flag side (Lever 10's
+manual member-moves are its source-level equivalent).  It is a documented,
+global, named flag, so it fits "one option set for the whole executable".
