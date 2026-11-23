@@ -151071,3 +151071,41 @@ the suspect rows become a frame-size investigation (a larger original frame is
 itself a source fact -- more or larger locals -- but the `missrank` block must not
 be read as missing code until the frame is explained).  Output:
 `scratch/residual-analysis/framesize.out`.
+
+## F12289. The 64-point FSE region trees are an if-CONVERSION difference: a "default assignment + one conditional override" leaf blocks `noce_try_store_flag_constants` and closes 35 of the 39-byte gap
+
+`FAX_FSE_decision_64pt` (src/fax/V17rxdec.c) and its twin `FSE_decision_64pt`
+(src/pump/v32/V32dec.c) pick one of sixteen `base` constants (`4*t`) with a
+four-by-four region tree.  Our source wrote the eight inner leaves as conditional
+expressions (`base = (short)(q > 0x1fff ? 0x28 : 0x2c);`), but the reference has
+**0 setcc** where ours had **8**: GCC's if-conversion (`ifcvt.c`,
+`noce_try_store_flag_constants`) rewrote each pair to `base = C2 + (cond)*diff`,
+emitted as `setl %cl ; lea 0x20(,%ecx,4)`.
+
+Diagnostic: rebuilding the TU with `-fno-if-conversion` (out of tree) removes all
+8 setcc and moves `FAX_FSE_decision_64pt` from delta -30 to **+9**, proving the
+mechanism.  `-fif-conversion` is on at -O/-O2/-O3, so the original had it on and
+the SOURCE must block the conversion.
+
+Source forms tested out of tree (`variant_run.py`):
+- ternary -> `if`/`else`: BYTE-IDENTICAL (both convert -- if-conversion sees the
+  same arms);
+- `{ base = C2; if (cond) base = C1; }` (else-first default + override): 7 of 8
+  leaves stop converting; delta -30 -> +5, symdiff 62 -> 23;
+- `{ base = C1; if (!cond) base = C2; }` (THEN-first default, matching the
+  reference's emitted `mov $0x28,%ecx ; jle`): delta +5, symdiff **15**,
+  run 15 -> 18.
+
+So the original wrote each leaf as a **default assignment followed by a single
+conditional override**, which keeps the arms out of the form
+`noce_try_store_flag_constants` requires (Lever 35's no-else shape).  Retained
+for both functions.
+
+Census vs the M0 baseline: `FAX_FSE_decision_64pt` -30 -> **+5** (run 15 -> 18),
+`FSE_decision_64pt` -34 -> **+5**; no other symbol changes (the census's third
+delta is `_hdlc_receive_look_carrier_state`, from the earlier F12278 commit).
+
+Residue (both +5, supported partials not closures): ONE leaf still converts (ours
+`cmp $0xdfff ; setle ; lea 0x10(,%r32,4)` where the reference keeps
+`cmp $0xe000 ; jge` and a plain `mov $0x10`), plus a `cwtl` vs `movswl`
+sign-extend (the reload lane, F12277) and register transport.

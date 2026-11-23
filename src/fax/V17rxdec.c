@@ -361,26 +361,26 @@ FAX_FSE_decision_64pt(struct fpm_fse *state, short *angle, short *mag)
 	if (i > 0) {
 		if (q > 0) {
 			if (i > 0x2000)
-				base = (short)(q > 0x1fff ? 0x28 : 0x2c);
+				{ base = 0x28; if (q <= 0x1fff) base = 0x2c; }
 			else
-				base = (short)(q > 0x1fff ? 0x20 : 0x24);
+				{ base = 0x20; if (q <= 0x1fff) base = 0x24; }
 		} else {
 			if (i > 0x2000)
-				base = (short)(q >= -0x2000 ? 0x38 : 0x3c);
+				{ base = 0x38; if (q < -0x2000) base = 0x3c; }
 			else
-				base = (short)(q >= -0x2000 ? 0x30 : 0x34);
+				{ base = 0x30; if (q < -0x2000) base = 0x34; }
 		}
 	} else {
 		if (q > 0) {
 			if (i > -0x2000)
-				base = (short)(q > 0x1fff ? 0x08 : 0x0c);
+				{ base = 0x08; if (q <= 0x1fff) base = 0x0c; }
 			else
-				base = (short)(q > 0x1fff ? 0x00 : 0x04);
+				{ base = 0x00; if (q <= 0x1fff) base = 0x04; }
 		} else {
 			if (i > -0x2000)
-				base = (short)(q >= -0x2000 ? 0x18 : 0x1c);
+				{ base = 0x18; if (q < -0x2000) base = 0x1c; }
 			else
-				base = (short)(q >= -0x2000 ? 0x10 : 0x14);
+				{ base = 0x10; if (q < -0x2000) base = 0x14; }
 		}
 	}
 
