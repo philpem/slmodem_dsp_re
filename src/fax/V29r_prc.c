@@ -395,33 +395,33 @@ RxHdxPrtcolV29(void *modem, short *in, short *out, unsigned short *count)
 	DescrambleDataV29(modem, (unsigned short *)(void *)out, n);
 	*count = 0;
 
-	if (!CarrierDetectV29(modem)) {
-		((struct v29_rx *)modem)->det->handler = RxHdxErrorV29;
-		((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
-		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;
-		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
-		return 0;
+	if (CarrierDetectV29(modem)) {
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
+		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_TRAIN;
+
+		((struct v29_rx *)modem)->det->state_count =
+			(short)(((struct v29_rx *)modem)->det->state_count - 1);
+		if (((struct v29_rx *)modem)->det->state_count > 0)
+			return 0;
+
+		((struct v29_rx *)modem)->result.byte.status =
+			((unsigned short)((struct v29_rx *)modem)->det->rate) != V29_RATE_7200
+				? V29RX_STATUS_DATA_9600 : V29RX_STATUS_DATA_7200;
+
+		if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
+			((struct v29_rx *)modem)->result.word |= V29_STATUS_LOW_SNR;
+
+		RxNextStateV29(modem);
+
+		return (short)n;
 	}
 
-	((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
-	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_TRAIN;
-
-	((struct v29_rx *)modem)->det->state_count =
-		(short)(((struct v29_rx *)modem)->det->state_count - 1);
-	if (((struct v29_rx *)modem)->det->state_count > 0)
-		return 0;
-
-	((struct v29_rx *)modem)->result.byte.status =
-		((unsigned short)((struct v29_rx *)modem)->det->rate) != V29_RATE_7200
-			? V29RX_STATUS_DATA_9600 : V29RX_STATUS_DATA_7200;
-
-	if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
-		((struct v29_rx *)modem)->result.word |= V29_STATUS_LOW_SNR;
-
-	RxNextStateV29(modem);
-
-	return (short)n;
+	((struct v29_rx *)modem)->det->handler = RxHdxErrorV29;
+	((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;
+	((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
+	return 0;
 }
 
 /*
