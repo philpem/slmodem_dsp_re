@@ -150850,3 +150850,51 @@ Sibling named-flag hypothesis for a bounded test: a global `-fno-default-inline`
 would reproduce the C++ over-inlining class from the flag side (Lever 10's
 manual member-moves are its source-level equivalent).  It is a documented,
 global, named flag, so it fits "one option set for the whole executable".
+
+## F12284. The original global profile is MEASURED: `-O3` with DEFAULT inlining parameters -- a global `-O2` loses 196 EXACT and a global `max-inline-insns-auto=50` loses 7
+
+Owner hypothesis (2026-11-23): "most likely there were global optimisation
+parameters and we need to find out what they are".  Tested by two whole-tree
+control builds into SEPARATE output trees (`TC_OUT` must be separate -- the build
+stamp covers the flags), graded with `byteident` against `ref/slmodemd/dsplibs.o`.
+Baseline = the retained `-O3` profile: 1,263 EXACT / 33 REGALLOC / 555 NONMATCH /
+1 UNRESOLVED (1,852 compared).
+
+| global profile | EXACT | REGALLOC | NONMATCH | gained | lost |
+|---|---:|---:|---:|---:|---:|
+| retained `-O3` (defaults) | **1,263** | 33 | 555 | -- | -- |
+| `-O2` | 1,067 | 40 | 743 | +2 | **-198** |
+| `--param max-inline-insns-auto=50` (global) | 1,256 | 33 | 561 | **+0** | **-7** |
+
+So the original used **`-O3`** (with `-finline-functions`): `-O2` loses 196 exact
+functions, the whole auto-inline population (`DemodDataV17/V22/V27/V29`,
+`FPM_*_init`, `FPM_lmsupd`, `MakeTxData`, `RxHdxEpoch`...), for 2 trivial gains.
+And the global inline budget is the **default 100**: a global 50 gains **zero**
+functions and loses seven that need auto-inline in the (50,100) band --
+`IsDialStringInvalid`, `VPCMXF_Delete`, both `V92Modulator` constructors,
+`V90ConstellationPower::getPower`, `V92CP::evaluateCRC`, `dp_wrapper_create`.
+
+Independent corroboration: the call-edge census (F12284-era) gives blob 7,698 vs
+ours 7,693 call instructions with only 3 differing callers (4 edges), all "we
+call / the blob inlined"; a different global inliner would move that by hundreds.
+
+The residual is therefore NOT a global parameter.  Over the 555 non-exact
+functions the aggregate byte delta is **-11,280** (negative rows -14,383,
+positive +3,103), concentrated in `V34hshak` -3,285, `V8.c` -821, `v34shell`
+-744, `V90ConstellationDesigner` -512, `Dialer` -443.  A changed global option
+moves every function the same way; this is a concentrated missing-source
+shortfall against 1,263 functions that are already byte-exact.
+
+Note the denominator falls 1,852 -> 1,851 in both variants: `src/dialer/Dialer.c`
+emits `GetNextDigitAndReturnNextState` at `-O3` but INLINES it at `-O2` /
+global-50 (the small helpers `begin_next`, `dial_gap`, `digit_finished`,
+`emit_gap`, `emit_silence` are the reverse -- emitted at `-O2`, inlined at
+`-O3`).  The retained `-O3` default reproduces the blob's pattern; the variants
+do not.  Also measured: `bValidateEnergyValue` moves +300 -> +20 under global-50
+and is STILL non-exact, confirming F12280's residual is independent of the budget
+(even a global flag would not close it).
+
+Consequence for `period.mk`: the two NUMERIC per-TU overrides (`TC_V90P4_FLAGS`,
+`TC_V90DEMOD_FLAGS`) are anomalies under this evidence and should be audited
+(revert to default, re-grade those two TUs).  The two NAMED overrides (dcr
+`-O2 -fno-rerun-cse-after-loop`; fax proc `-fno-gcse`) are permitted by F12223.
