@@ -1867,6 +1867,7 @@ initdigital(void *obj)
 {
 	struct v34_object *o = (struct v34_object *)obj;
 	struct v34_ratecfg *cfg = &o->ratecfg;
+	struct v34_engine_control *ec = &o->engine_control;
 	unsigned info = (unsigned short)o->msgrec[4].word[0];
 	int tx, rx, lim_tx, lim_rx;
 	int level;
@@ -2021,17 +2022,17 @@ initdigital(void *obj)
 		div = cfg->divtab[(short)bits + 14 * (short)umax - 1];
 
 		if ((short)bits != 0) {
-			o->nof_tx_bits =
-			    (int)(((short)bits * o->ptc) >> 6) + 6;
+			ec->nof_tx_bits =
+			    (int)(((short)bits * ec->ptc) >> 6) + 6;
 		} else {
-			o->nof_tx_bits = 0;
+			ec->nof_tx_bits = 0;
 		}
 
 		if (level > 1) {
 			dsplibs_debug_printf("V34DATARATE, for tx data rate -"
 					     " %d, PTC - %d, setting nofTxBits" " to %d\r\n",
-					     (short)bits, o->ptc,
-					     o->nof_tx_bits);
+					     (short)bits, ec->ptc,
+					     ec->nof_tx_bits);
 			bits = (unsigned short)cfg->txbits;
 			umax = cfg->use_max;
 		}
@@ -2092,7 +2093,7 @@ initdigital(void *obj)
 		return;
 
 	o->tx_bps = 2400 * (short)cfg->txbits;
-	if (o->v90_receiver != 0 || o->k56flex_receiver != 0)
+	if (ec->v90_receiver != 0 || ec->k56flex_receiver != 0)
 		return;
 
 	o->rates_latched = 1;

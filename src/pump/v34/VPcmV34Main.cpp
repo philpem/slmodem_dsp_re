@@ -4599,6 +4599,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	struct v34_tx *txb = &obj->tx;
 	struct v34_engine *eng =
 		(struct v34_engine *)(void *)&obj->progress;
+	struct v34_engine_control *ec = &obj->engine_control;
 	struct v34_receiver *rxp = &obj->receiver;
 
 	/*
@@ -4625,7 +4626,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		if (nwords > 0) {
 			int src = 0;
 			int done = 0;
-			int idx = obj->tx_n;
+			int idx = ec->tx_n;
 
 			do {
 				unsigned int w = 0;
@@ -4634,8 +4635,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				for (b = 0; b <= 15; b++)
 					w += (unsigned int)
 					     (txbits[src++] & 1) << b;
-				obj->tx_data[idx] = (int)w;
-				obj->tx_n = ++idx;
+				ec->tx_data[idx] = (int)w;
+				ec->tx_n = ++idx;
 				done++;
 			} while ((*nbits >> 4) > done);
 		}
@@ -4716,14 +4717,14 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 		/* 0xc172, the transmit queue compaction. */
 		{
-			int rd = obj->tx_rd;
-			int wr = obj->tx_n;
+			int rd = ec->tx_rd;
+			int wr = ec->tx_n;
 			int k = 0;
 
 			while ((unsigned int)wr > (unsigned int)rd)
-				obj->tx_data[k++] = obj->tx_data[rd++];
-			obj->tx_rd = 0;
-			obj->tx_n = k;
+				ec->tx_data[k++] = ec->tx_data[rd++];
+			ec->tx_rd = 0;
+			ec->tx_n = k;
 		}
 
 		if (ret <= 3) {
@@ -4732,7 +4733,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			int avail = obj->nof_tx_bits;
 
 			if (avail != 0) {
-				avail -= obj->tx_n;
+				avail -= ec->tx_n;
 				if (avail <= 0)
 					avail = 0;
 				else
@@ -4746,8 +4747,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			int *p = rxbits;
 			unsigned int k = 0;
 
-			while ((unsigned int)obj->rx_n > k) {
-				unsigned int w = (unsigned int)obj->rx_data[k];
+			while ((unsigned int)ec->rx_n > k) {
+				unsigned int w = (unsigned int)ec->rx_data[k];
 				int b;
 
 				for (b = 15; b >= 0; b--) {
@@ -4756,8 +4757,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				}
 				k++;
 			}
-			*nrx = obj->rx_n << 4;
-			obj->rx_n = 0;
+			*nrx = ec->rx_n << 4;
+			ec->rx_n = 0;
 		}
 
 		if ((unsigned int)ret > 0x10)
@@ -4773,7 +4774,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int len;
 
 				PROG_U8(obj, O_P2STATE) = 0;
-				obj->p2_delay_cntr = 0;
+				ec->p2_delay_cntr = 0;
 				if ((obj->pac3c->unnamed_0003
 				     & CFG_FLAG3_PHASE2) != 0
 				    && obj->pcm_chosen != 0
@@ -4804,8 +4805,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					k56->k56FlexEnterPhase3();
 				}
 			}
-			t = obj->p2_delay_cntr + n;
-			obj->p2_delay_cntr = t;
+			t = ec->p2_delay_cntr + n;
+			ec->p2_delay_cntr = t;
 			r = PROG_U8(obj, O_P2STATE);
 			if (r == 0) {
 				if (t <= 0x5f) {
@@ -4818,7 +4819,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Indicating First P2 " "COMPLETE... (after %d)\r\n",
-					    obj->p2_delay_cntr);
+					    ec->p2_delay_cntr);
 				return 1;
 			}
 			if (r == 1) {
@@ -4826,14 +4827,14 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int sil = obj->pac3c->addedDelay;
 
 				t += sil;
-				obj->p2_delay_cntr = t;
+				ec->p2_delay_cntr = t;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "On PHASE2_COMPLETE: added Silence" " = %d, p2DelayCntr = %d\r\n",
 					    obj->pac3c->addedDelay,
 					    t);
 			}
-			if (obj->p2_delay_cntr <= 0x240) {
+			if (ec->p2_delay_cntr <= 0x240) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Wait (after P2 " "COMPLETE)...\r\n");
@@ -4861,7 +4862,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
-				obj->dc_count = 0;
+				ec->dc_count = 0;
 			}
 			goto reload;
 
@@ -4885,7 +4886,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
-				obj->dc_count = 0;
+				ec->dc_count = 0;
 			}
 			goto reload;
 
@@ -5000,11 +5001,11 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in;
 				adaptecho(obj);
 				s = obj->echo_residual;
-				if (obj->dc_count != 0) {
+				if (ec->dc_count != 0) {
 					int acc = obj->dc_acc + s;
 
-					obj->dc_count--;
-					if ((obj->dc_count & 0x7f) == 0) {
+					ec->dc_count--;
+					if ((ec->dc_count & 0x7f) == 0) {
 						int e = (obj->dc_est
 							 >> 1) + (acc >> 8);
 
@@ -5191,11 +5192,11 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in;
 				adaptecho(obj);
 				s = obj->echo_residual;
-				if (obj->dc_count != 0) {
+				if (ec->dc_count != 0) {
 					int acc = obj->dc_acc + s;
 
-					obj->dc_count--;
-					if ((obj->dc_count & 0x7f) == 0) {
+					ec->dc_count--;
+					if ((ec->dc_count & 0x7f) == 0) {
 						int e = (obj->dc_est
 							 >> 1) + (acc >> 8);
 
@@ -5461,14 +5462,14 @@ wrongstate:
 
 compact:
 	{
-		int rd = obj->tx_rd;
-		int wr = obj->tx_n;
+		int rd = ec->tx_rd;
+		int wr = ec->tx_n;
 		int k = 0;
 
 		while ((unsigned int)wr > (unsigned int)rd)
-			obj->tx_data[k++] = obj->tx_data[rd++];
-		obj->tx_rd = 0;
-		obj->tx_n = k;
+			ec->tx_data[k++] = ec->tx_data[rd++];
+		ec->tx_rd = 0;
+		ec->tx_n = k;
 	}
 	ret = eng->progress;
 	if (ret <= 3) {
@@ -5477,7 +5478,7 @@ compact:
 		int avail = obj->nof_tx_bits;
 
 		if (avail != 0) {
-			avail -= obj->tx_n;
+			avail -= ec->tx_n;
 			if (avail <= 0)
 				avail = 0;
 			else
