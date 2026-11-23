@@ -150564,3 +150564,73 @@ enlarged -- the same liveness wall the inlining alignment hit (F12272).
 So the source-locals angle closes with a mechanism rather than a declaration:
 to reach the reference, `modulatevector`'s live-value set must match, which is
 the per-function body reconstruction and not an isolated edit.
+
+## F12275. Emission-order cascade census: 194 of 248 TUs carry a live cascade, but the heads are STRUCTURAL, not cursor-bound -- the lever is a selection aid, not a bulk fix
+
+New whole-corpus tool `scratch/cd/cascadehead.py <census.json>`: for every TU it
+reads `objdump -t` emission order, prints each function's grade, and reports the
+FIRST non-native function (the cascade head of Lever 52) plus the cascade size
+(the non-native functions after it).  On the 2026-11-23 census (1,263 EXACT / 33
+REGALLOC / 555 NONMATCH / 1 UNRESOLVED, 1,852 functions):
+
+	194 of 248 TUs have a live cascade (a head plus >=1 non-native follower);
+	54 TUs are fully native.
+
+Ranked heads: `V34hshak` getbit (17 followers), `V90Equalizer`
+setLinearEquBeta (16), `VPcmV34Main` retrainDetector (13),
+`V90AutoDigitalImpDetector` reset (13), `V34RX` V34demodulate (11), `Beepgen`
+GetGain (10).
+
+The heads' longest-run is 13-40% of the reference, i.e. they carry their OWN
+missing/extra source, so recovering a head is ordinary per-function source work
+(M2/M3), not a cheap cursor correction.  The followers that ARE near-native turn
+out to be register-renaming rejects (allocation), not clean cursor victims.  So
+Lever 52's cascade is a SELECTION rule -- which TU to work, and in emission order
+-- not a bulk source fix.  This agrees with F12261 (V90ADID `reset` is
+post-front-end), F12262 and F12263 (order is a selective carrier).
+
+## F12276. The last-mile tier is register allocation: every NONMATCH function at 100% instruction run is a renaming rejection whose instruction text already matches
+
+The census has 7 NONMATCH functions at a 100.0% longest run: `v22_ans_rmloop2`,
+`voice_command`, `V90Modulator::progress`, `v8_process`,
+`V92Phase3Modulator::reset`, `V92Phase4Modulator::recivedRt`, `V90Jd::C1`.  All
+seven fail `byteident`'s renaming proof with a USE-CONFLICT or DEST-BINDING
+rejection, and the flagged row's TEXT is identical in both objects:
+
+	voice_command     row 47 USE CONFLICT  blob %eax,0x34(%edi) / ours %eax,0x34(%edi)
+	V92P3M::reset     row 70 USE CONFLICT  blob %eax,0x10(%esi) / ours %eax,0x10(%esi)
+
+so the divergence is elsewhere in the register lanes, not at the flagged row.
+Worked `V90Jd::C1` in full (40/40): the ONLY difference is the register pair
+holding the zero constant and the byte temporary -- the object zeroes %eax and
+keeps the byte in %ebx (`mov %bl,%dl; shr $1,%bl`), ours zeroes %edx and keeps
+the byte in %eax (`mov %al,%bl; shr $1,%al`).  Same semantics, same statement
+order; the choice is allocator-internal.  So the 100%-run tier is not a near-miss
+to be finished by an operand edit -- it is the allocation column.
+
+## F12277. `V92Phase4Modulator::generateCPu`/`generateSUVu`: the -1 byte is a RELOAD load-fold, not a front-end form -- the first specimen for the unprobed reload lane (F12270)
+
+Both 304-byte functions are 95 reference / 94 candidate instructions and differ
+in exactly one row: the object returns
+
+	movzwl 0x1e(%esp),%eax ; cwtl     (zero-extend load, then sign-extend)
+
+ours
+
+	movswl 0x1e(%esp),%eax            (sign-extending load)
+
+At `.01.rtl` (expand) ours already carries the source's form:
+
+	(insn 106 (set (reg:HI 92) ...)             ; short sym = ...
+	(insn 107 (set (reg:SI ?) (sign_extend:SI (reg:HI 92))))
+
+`sym` is a memory pseudo (`&sym` is taken by `V92BitsToSymbol::process(n,&sym)`),
+and `(sign_extend:SI (reg:HI))` is exactly what `short sym; return sym;` must
+produce -- the front-end form is already the object's.  The two encodings are the
+two legal realisations of that RTL: reload may reload `(sign_extend:SI (mem:HI
+loc))` directly (`movswl`) or reload the HImode part and extend
+(`movzwl`+`cwtl`).  The choice is in `reload1.c`, the lane F12270 recorded as
+unprobed.  No source/type change moves the front-end form, so this is a
+reload-lane specimen rather than a source lever; the missing measurement is
+reload's `find_reloads` cost/inheritance decision for this operand.  Both
+functions remain NONMATCH (-1) and are the reload lane's first concrete target.
