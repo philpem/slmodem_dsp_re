@@ -150899,6 +150899,75 @@ Consequence for `period.mk`: the two NUMERIC per-TU overrides (`TC_V90P4_FLAGS`,
 (revert to default, re-grade those two TUs).  The two NAMED overrides (dcr
 `-O2 -fno-rerun-cse-after-loop`; fax proc `-fno-gcse`) are permitted by F12223.
 
+## F12286. The inlining-family boundary is NOT a global parameter -- proved by a counter-witness pair (88 inlined, 82 not); the source difference must be an estimate-visible statement that emits NO code, or a TU boundary
+
+Global sweeps (whole-tree builds in separate `TC_OUT` trees, graded against the
+blob): default `-O3`+100 = **1,263** EXACT; global `--param
+max-inline-insns-auto=80` with BOTH per-TU overrides removed = **1,260** (gained
+0, lost 3: both `V92Modulator` constructors and `dp_wrapper_create`); global 50 =
+1,256 (gained 0, lost 7, F12284); `-O2` = 1,067.  The global budget is the
+default.  See F12284, F12285.
+
+**The helper isolation.**  Diffing the cgraph at 100 vs 80 names the callee whose
+decision flips in each affected TU:
+
+	V90Phase4Modulator.cpp  recivedSUVtag: 82 insns -> inlined at 100, not at 80
+	                        (this is exactly what TC_V90P4_FLAGS=80 buys back)
+	V92Modulator.cpp        V92Modulator::reset(): 88 insns -> inlined at 100
+	                        into both ctors, not at 80
+	dp_wrapper.c            no local flip (its affected inline is in another TU)
+
+**The counter-witness.**  `V92Modulator::reset` (estimate **88**) IS inlined by the
+blob -- both ctors are EXACT (188/188) at default 100 and REGALLOC at 80.
+`V90Phase4Modulator::recivedSUVtag` (estimate **82**) is NOT inlined -- the
+reference keeps `recivedPartTwoSilenceRrnSUVtag` as a 5-byte `jmp recivedSUVtag`.
+Since 88 > 82: a limit above 88 would also inline `recivedSUVtag`; a limit at or
+below 88 would not inline `reset`.  **No single global `max-inline-insns-auto`
+can produce both.**  So the original's inlining is not one global budget, and it
+is not the level (`-O2` is a 196-function loss).
+
+**The estimate weights** (period GCC: `c-common.c:5663-5788`, the
+`estimate_num_insns` lang hook invoked at `cgraphunit.c:333`; the value the dump
+prints as "N insns"): `CALL_EXPR` = **10**; `TRUNC_DIV/MOD`, `RDIV` = **10**;
+`MODIFY_EXPR`/`CONSTRUCTOR` ~= size (an `int` assignment ~4; `+10` when the size
+is incomplete or > `MOVE_MAX_PIECES*MOVE_RATIO`); everything else (comparisons,
+arithmetic, `?:`, `SWITCH_EXPR`) = **1**; containers (`CASE_LABEL`, `EXPR_STMT`,
+`RETURN_STMT`, `COMPOUND_STMT`, `SAVE_EXPR`, `NOP_EXPR`, ...) = **0**.  Arithmetic
+on our `recivedSUVtag` (2 `edprintf` calls = 20, 2 `%` = 20, ~8 scalar
+assignments ~= 32, ~10 other nodes) gives ~82, matching the dump.
+
+**The predicate** (`cgraphunit.c:1069-1077` `cgraph_default_inline_p`): requires
+`DECL_INLINE(n) && DECL_SAVED_TREE(n)`; else `global.insns <
+(DECL_DECLARED_INLINE_P ? MAX_INLINE_INSNS_SINGLE : MAX_INLINE_INSNS_AUTO)`.  The
+caller-side gate `cgraph_check_inline_limits` (`:1018-1066`) refuses only when
+`newsize > large-function-insns` (3000) AND `newsize > 3*max(self sizes)` -- not
+reached here (93 and 408 insns), so it does not differentiate.  Inlinability
+(`tree-inline.c:1155-1229`) refuses on `DECL_UNINLINABLE`, no saved tree, or
+`inline_forbidden_p` (alloca, nested function, nonlocal goto).
+
+**Conclusion.**  With the global profile pinned at the defaults and both bodies
+byte-EXACT, the remaining explanations are source/ownership, not flags:
+
+- (a) the original's `recivedSUVtag` estimate was >= 89 (while the default limit
+  100 leaves `reset` at 88 inlined) -- i.e. a statement worth ~10 estimate units
+  that emits NO object code: a CALL the compiler folded away entirely (e.g. an
+  accessor/setter the original called where our source writes the direct field
+  store), or a dead/pure call; or
+- (b) the callee's tree was not saved in the caller's TU -- it lived in another
+  translation unit (the F11351/F11358 ownership class).
+
+A difference in EMITTED body size is excluded: the body is byte-EXACT and ten
+units of emitting code would be visible.  Cross-check: with the limit pinned above
+88 by `reset`, `FDSP_Kernel_InitObj` (estimate 78, object -17, only-ref 4 rows,
+no call) needs the same +11 -- the same code-invisible, estimate-visible class.
+
+Disposition: `TC_V90P4_FLAGS=80` remains a qualified profile (F12223 clause) until
+(a) or (b) is found; the 88/82 pair proves no named global flag reproduces the
+boundary.  `TC_V90DEMOD_FLAGS=50` is grade-neutral (F12285) and has no witness --
+recommended for removal.  Next discriminators: in `recivedSUVtag`, look for an
+accessor/setter call the original would have made where our source writes a
+direct store; or test (b) by relocating the definition to another TU.
+
 ## F12285. Audit of the two numeric per-TU override profiles: `TC_V90P4_FLAGS=80` BUYS 6 EXACT; `TC_V90DEMOD_FLAGS=50` is grade-neutral
 
 The audit F12284 asked for.  Built a copy of the period tree with both overrides
