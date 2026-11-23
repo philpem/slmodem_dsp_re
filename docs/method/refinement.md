@@ -14041,3 +14041,29 @@ read which arm the object falls through to, and make that arm the THEN.
 Where to look next: a `short` (lever-2) row whose largest block contains a
 ternary or a two-arm `if` whose fall-through is the arm our source wrote second,
 once the frame-offset and pointer-walk confounds are set aside.
+
+### Lever 61. The AUTO-INLINE budget is a per-TU profile: read the cgraph dump's `N insns` against `max-inline-insns-auto` (default 100), never against the source
+
+`cgraph_default_inline_p` (`cgraphunit.c:1068-1077`) inlines a callee that is
+not declared `inline` iff `estimate_num_insns(callee) <
+PARAM_MAX_INLINE_INSNS_AUTO`.  The parameter's `DEFPARAM` default is **100**
+(`params.def:63-66`; the neighbouring doc comment's "150" is a stale bug).  The
+`-da` cgraph dump prints the estimate directly (`NAME: N insns needed tree
+inlinable`) and the decision (`Considering NAME with N insns / Estimated growth
+is +G insns / Inlined into CALLER`), so the number is measured, not inferred.
+
+Two native witnesses settle whether the ORIGINAL budget differed from 100: a
+callee the reference DID inline sets a lower bound, and a callee it did NOT
+inline sets an upper bound.  Worked case (F12280/F12281): the FDSP kernel TU
+inlines `zFLTUTL_FloatMemSet` (8) into `FDSP_Kernel_InitObj` but does NOT inline
+`FDSP_Kernel_InitObj` (78) into `bValidateEnergyValue`, bounding the budget to
+[8, 78); a `--param max-inline-insns-auto=50` profile for that TU moves
+`bValidateEnergyValue` +300 -> +20 with zero collateral.  This is the same lever
+as `TC_V90P4_FLAGS` (=80) and `TC_V90DEMOD_FLAGS` (=50) at
+`period.mk:176-185` (F12108/F12109).
+
+Do NOT read "our helper is larger than the reference inlined" as proof of a
+missing source statement: read the estimate in the dump and the reference's
+inline/call decision BEFORE touching the callee's body.  Where a budget profile
+leaves a residual (F12280's +20), that residual is the next lever, not evidence
+against the profile.

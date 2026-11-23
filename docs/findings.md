@@ -150693,3 +150693,65 @@ New M2 apparatus (gitignored, under `scratch/cd/`): `longrank.py` (the
 counterpart to `missrank.py` for the over-long rows -- largest candidate-only
 block) and `maskalign.py` (stack-masked per-symbol alignment plus a canonical
 multiset diff).
+
+## F12280. `bValidateEnergyValue`'s +300 is cgraph AUTO-INLINING of `FDSP_Kernel_InitObj`; the discriminator is the TU's inline budget (a qualified profile, TC_V90P4/DEMOD class), not a missing source statement
+
+Mechanism (quoted): `cgraphunit.c:1068-1077` `cgraph_default_inline_p` returns
+`n->global.insns < MAX_INLINE_INSNS_AUTO` for a function not declared `inline`,
+and `params.def:63-66` `PARAM_MAX_INLINE_INSNS_AUTO` defaults to **100** (the
+preceding doc comment's "150" is stale).  `n->global.insns` is set at
+`cgraphunit.c:351` to `local.self_insns` = `estimate_num_insns`
+(`cgraphunit.c:333`).
+
+The `-da` cgraph dump (`scratch/cd/rtl_stage.py src/service/Fdspkrnl.c`) records:
+
+	FDSP_Kernel_InitObj: 78 insns needed tree inlinable
+	zFLTUTL_FloatMemSet: 8 insns needed tree inlinable
+	Considering FDSP_Kernel_InitObj with 70 insns
+	Estimated growth is +60 insns
+	Inlined into bValidateEnergyValue which now has 175 insns
+
+so our `FDSP_Kernel_InitObj` (78 < 100) is auto-inlined into
+`bValidateEnergyValue` (+60 growth), and that is +280 of the +300 excess.
+
+Controls (out of tree, spec `scratch/residual-analysis/m3/initobj_spec.json`):
+`__attribute__((noinline))` on `FDSP_Kernel_InitObj`, and
+`--param max-inline-insns-auto=50`, both move `bValidateEnergyValue` +300 -> **+20**
+(94 insns) with `FDSP_Kernel_InitObj` (-17) and `EchoCanceler` (+0) unchanged.
+`-fno-inline-functions` also gives +20 but breaks `zFLTUTL_FloatMemSet`'s inlining
+into `FDSP_Kernel_InitObj` (-17 -> -33), which the reference does NOT do (its
+InitObj has four memset loops and no call), so the original TU had
+`-finline-functions` and this is a **budget**, not a missing flag.
+
+Excluded explanations: a different calling convention (both regparm(2)); no
+`-finline-functions` (above); a larger original InitObj body (its object is only
++4 insns, and `maskalign.py FDSP_Kernel_InitObj` shows only-ref
+`push`/`mov 0x14(%r32),%r32`/`pop` -- register transport, no missing statement).
+
+The remaining discriminator is the **inline-insns budget of the FDSP kernel TU**,
+a per-TU qualified profile exactly like `TC_V90P4_FLAGS`
+(`--param max-inline-insns-auto=80`) and `TC_V90DEMOD_FLAGS` (=50) at
+`tools/toolchain/period.mk:176-185` (F12108/F12109).  The native witness bounds
+it: `zFLTUTL_FloatMemSet` (8) IS inlined into InitObj and `FDSP_Kernel_InitObj`
+(78) is NOT inlined into `bValidateEnergyValue`, so the budget is in [8, 78).
+Measured: budget 50 for `src/service/Fdspkrnl.c` is **zero-collateral** across
+the whole TU (`bValidateEnergyValue` +300 -> +20; `EchoCanceler` +0,
+`FDSP_Kernel_InitObj` -17, `FDSP_Kernel_Loop` -36, `SetInternalBeepInProgress`
+and `FloatMemSet` both EXACT) -- but it leaves a stable **+20** that is a real
+second difference (ours spills the divisor -- `divl 0xSTK(%esp)` -- where the
+reference keeps it in a register, `div %r32`).  So the profile would be a
+supported PARTIAL, not a closure, and changing `period.mk` is a build-profile
+decision for the owner; NOT retained here (period flag unchanged).
+
+## F12281. CORRECTION: the auto-inline threshold is 100, not "hundreds" (F12270); the `printSpectrum` paradox is the same budget question
+
+F12270 read `void V90SpectralVerifier::printSpectrum() const  89 insns` against
+"a default threshold in the hundreds" and concluded a source edit "cannot
+plausibly move 89 past that threshold".  The threshold is
+`PARAM_MAX_INLINE_INSNS_AUTO`, whose actual `DEFPARAM` value is **100**
+(`params.def:63-66`; the neighbouring comment's "150" is stale), so 89 and 78 are
+both BELOW the default.  The reference inlines neither -- the same discriminator
+as F12280: the original TUs used a qualified per-TU inline budget below the
+default, not a source size difference.  F12270's "threshold in the hundreds" is
+withdrawn; the inlining-family cases (F12271/F12272, F12280) should be re-read as
+budget/TU-profile questions.
