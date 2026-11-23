@@ -55,11 +55,13 @@
 static unsigned
 scram_input(struct v34_object *obj)
 {
-	if (obj->data_enable != 0
-	    && (unsigned)obj->tx_rd < (unsigned)obj->tx_n) {
-		unsigned v = (unsigned short)obj->tx_data[obj->tx_rd];
+	struct v34_engine_control *ec = &obj->engine_control;
 
-		obj->tx_rd++;
+	if (obj->data_enable != 0
+	    && (unsigned)ec->tx_rd < (unsigned)ec->tx_n) {
+		unsigned v = (unsigned short)ec->tx_data[ec->tx_rd];
+
+		ec->tx_rd++;
 		return v;
 	}
 	return 0xffff;
@@ -75,9 +77,11 @@ scram_input(struct v34_object *obj)
 static void
 scram_output(struct v34_object *obj, unsigned word)
 {
-	if (obj->data_enable != 0 && (unsigned)obj->rx_n <= 0x3f) {
-		obj->rx_data[obj->rx_n] = (int)word;
-		obj->rx_n++;
+	struct v34_engine_control *ec = &obj->engine_control;
+
+	if (obj->data_enable != 0 && (unsigned)ec->rx_n <= 0x3f) {
+		ec->rx_data[ec->rx_n] = (int)word;
+		ec->rx_n++;
 	}
 }
 
