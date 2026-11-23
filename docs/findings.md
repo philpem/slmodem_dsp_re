@@ -151041,3 +151041,33 @@ Method note: before treating a lever-2 "pointer-walk" nomination as a source
 shape, check whether the `add`/`(%r32)` rows are in the PROLOGUE (address
 precomputation) or inside the loop body (a real walk).  `maskalign` shows the
 rows but not their position.
+
+## F12288. The lever-2 short-row queue splits 24/24: half its biggest "missing block" heads are FRAME-SIZE artifacts, and the genuine missing-body targets are a DIFFERENT list
+
+`scratch/cd/framesize.py` over the frozen census separates the short rows by
+whether the frame differs (first `sub $0xN,%esp` plus the push count before it),
+because `fidelity.canonical` keeps the displacement, so a frame difference makes
+every stack access read as missing/extra.
+
+- **24 DISPLACEMENT SUSPECTS** (frame differs -- the `missrank` block is an
+  artifact): `decodeDepth` -64, `getV90Decision` -48,
+  `adjustConstellationsToNew` -48, `v34handshak` +32, `modulatevector` -32,
+  `RcFixed_Resample` -32, `getV92Decision` -32, `fskdetect` -32,
+  `FPM_FSD_demodulate` -48, `V34TimingFilter` -20, `DialerProgress` -16, ...
+- **24 GENUINE CANDIDATES** (same frame -- the shortfall is real):
+  `VPcmV34Progress` -349, `V90Equalizer::process` -250, `cadence_create` -223,
+  `V22_FSE_receive` -181, `VTB_decoder` -175, `V92ModulusEncoder::progress` -112,
+  `V90ConnectionEvaluator::evaluateConnection` -90, `V34GiveINFO0dBits` -85,
+  `receiver` -74, `modem_serrint` -72, `generateV92Symbol` -68,
+  `porcessSecondStudy` -64, `_hdlc_receive_look_carrier_state` -63, `voice_tx`
+  -60, `V34demodulate` -54, `data_formatted_output` -54, `dtmf_detect` -51,
+  `generateDILEv` -48, `_hdlc_emulate_receive_state` -48, ...
+
+Every top `missrank` head (getV90Decision, adjustConstellationsToNew, v34handshak,
+V34TimingFilter, modulatevector, RcFixed_Resample) is a SUSPECT: its large
+"reference-only block" is the frame displacement, not missing source.  The
+genuine-shortfall set is a different list, so the M2 queue is re-targeted to it;
+the suspect rows become a frame-size investigation (a larger original frame is
+itself a source fact -- more or larger locals -- but the `missrank` block must not
+be read as missing code until the frame is explained).  Output:
+`scratch/residual-analysis/framesize.out`.
