@@ -276,27 +276,27 @@ RxHdxWaitV21(void *modem, short *in, short *out, short *count)
 	nbits = DemodDataV21(modem, in, out, (unsigned short)*count);
 	*count = 0;
 
-	if (!CarrierDetectV21(modem)) {
-		rx->hdx->handler = RxHdxErrorV21;
-		rx->hdx->state = V21RX_STATE_ERROR;
-		rx->status.byte.status = V21RX_STATUS_ERROR;
-		rx->status.byte.flags = (unsigned char)
-			((rx->status.byte.flags | V21RX_FLAG_ERROR)
-			 & ~V21RX_FLAG_CARRIER);
-		return 0;
+	if (CarrierDetectV21(modem)) {
+		rx->status.byte.flags |= V21RX_FLAG_CARRIER;
+		rx->status.byte.status = V21RX_STATUS_WAIT;
+
+		rx->hdx->countdown = (unsigned short)(rx->hdx->countdown - 1);
+		if ((short)rx->hdx->countdown > 0)
+			return 0;
+
+		rx->status.byte.status = V21RX_STATUS_TIMEOUT;
+		RxNextStateV21(modem);
+
+		return (short)nbits;
 	}
 
-	rx->status.byte.flags |= V21RX_FLAG_CARRIER;
-	rx->status.byte.status = V21RX_STATUS_WAIT;
-
-	rx->hdx->countdown = (unsigned short)(rx->hdx->countdown - 1);
-	if ((short)rx->hdx->countdown > 0)
-		return 0;
-
-	rx->status.byte.status = V21RX_STATUS_TIMEOUT;
-	RxNextStateV21(modem);
-
-	return (short)nbits;
+	rx->hdx->handler = RxHdxErrorV21;
+	rx->hdx->state = V21RX_STATE_ERROR;
+	rx->status.byte.status = V21RX_STATUS_ERROR;
+	rx->status.byte.flags = (unsigned char)
+		((rx->status.byte.flags | V21RX_FLAG_ERROR)
+		 & ~V21RX_FLAG_CARRIER);
+	return 0;
 }
 
 /*

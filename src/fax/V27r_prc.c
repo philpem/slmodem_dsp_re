@@ -362,7 +362,26 @@ RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 	DescrambleDataV27(modem, (unsigned short *)(void *)out, (short)n);
 	*count = 0;
 
-	if (CarrierDetectV27(modem) == 0) {
+	if (CarrierDetectV27(modem) != 0) {
+		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_CARRIER;
+		sh = ((struct v27_rx *)modem)->shared;
+		((struct v27_rx *)modem)->result.byte.status = V27_STATUS_TRAINING;
+
+		left = (unsigned short)(sh->countdown - 1);
+		sh->countdown = left;
+		if ((short)left > 0)
+			return 0;
+
+		((struct v27_rx *)modem)->result.byte.status = (unsigned char)
+			(sh->rate == V27SH_RATE_2400
+			 ? V27_STATUS_ENTER_DATA_2400
+			 : V27_STATUS_ENTER_DATA_4800);
+		RxNextStateV27(modem);
+
+		return (short)n;
+	}
+
+	{
 		unsigned char flags;
 
 		sh = ((struct v27_rx *)modem)->shared;
@@ -375,23 +394,6 @@ RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 			 & (unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER);
 		return 0;
 	}
-
-	((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_CARRIER;
-	sh = ((struct v27_rx *)modem)->shared;
-	((struct v27_rx *)modem)->result.byte.status = V27_STATUS_TRAINING;
-
-	left = (unsigned short)(sh->countdown - 1);
-	sh->countdown = left;
-	if ((short)left > 0)
-		return 0;
-
-	((struct v27_rx *)modem)->result.byte.status = (unsigned char)
-		(sh->rate == V27SH_RATE_2400
-		 ? V27_STATUS_ENTER_DATA_2400
-		 : V27_STATUS_ENTER_DATA_4800);
-	RxNextStateV27(modem);
-
-	return (short)n;
 }
 
 /*
