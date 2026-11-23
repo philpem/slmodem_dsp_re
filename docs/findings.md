@@ -150755,3 +150755,31 @@ as F12280: the original TUs used a qualified per-TU inline budget below the
 default, not a source size difference.  F12270's "threshold in the hundreds" is
 withdrawn; the inlining-family cases (F12271/F12272, F12280) should be re-read as
 budget/TU-profile questions.
+
+## F12282. Owner decision: the FDSP kernel TU keeps the DEFAULT inline budget -- per-TU flag tuning is not adopted without need
+
+The owner declined the `--param max-inline-insns-auto=50` profile proposed in
+F12280 (2026-11-23).  The rationale is a source-plausibility prior: most
+developers would not have tweaked the inline budget at all, so a per-TU
+inline-budget value is not evidence of the original build unless there is an
+independent witness for it (the owner's note: such a flag in an original build
+would most plausibly be a verbatim copy from an optimisation article, not a
+deliberate choice).
+
+Consequences:
+
+- `bValidateEnergyValue` remains at **+300** and is PARKED.  F12280's mechanism
+  (the callee is auto-inlined because its self-estimate 78 is below the default
+  `MAX_INLINE_INSNS_AUTO` = 100) stands as the explanation, but the remedy is
+  declined, so no partial is taken and `period.mk` is unchanged.
+- F12281's "the original TUs used a qualified per-TU inline budget" remains the
+  *mechanism*, not an adopted *remedy*: an inlining-family difference must now be
+  explained by source/TU structure (function ownership, TU membership, body size)
+  rather than by a flag, unless a witness for the flag's value exists.
+- The retained per-TU inline budgets in `tools/toolchain/period.mk:176-185`
+  (`TC_V90P4_FLAGS := --param max-inline-insns-auto=80`,
+  `TC_V90DEMOD_FLAGS := --param max-inline-insns-auto=50`; F12108/F12109, kept as
+  "a supported interior of the measured interval") are the SAME class of knob and
+  fall under this policy.  They are flagged for re-examination -- each needs an
+  independent witness for the original flag value, or a return to default with
+  the affected functions re-graded as negatives.  Not changed here.
