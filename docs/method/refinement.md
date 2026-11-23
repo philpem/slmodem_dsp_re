@@ -14090,3 +14090,36 @@ code-invisible statement (a call the compiler folds, e.g. an accessor written
 where the source could use a direct store) raises the estimate without changing
 the bytes -- the estimate weights are 10 per CALL, 10 per div/mod, ~4 per `int`
 assignment, 1 otherwise (`c-common.c:5663-5788`).
+
+### Lever 62. A reference `setcc` count of 0 where ours has N: the original wrote a DEFAULT assignment plus one conditional OVERRIDE, not a ternary
+
+`-fif-conversion` (`ifcvt.c`, `noce_try_store_flag_constants`) rewrites
+`v = cond ? A : B;` into a materialised flag (`setcc`) plus an arithmetic or
+`lea` combination.  When the object shows a plain `mov $C,%reg ; jcc` pair and
+its `setcc` count is 0 where ours is N, the original did not write a ternary: it
+wrote a default assignment followed by ONE conditional override, so the two arms
+are separate stores that if-conversion will not merge into a flag:
+
+	v = C;                 /* C = the object's emitted default */
+	if (!cond) v = D;
+
+(the mirror `v = D; if (cond) v = C;` is the same shape with the other default --
+pick the one whose default matches the object's `mov $C,%reg`).
+
+Worked case (F12289): `FAX_FSE_decision_64pt` / `FSE_decision_64pt` region trees.
+Per leaf `base = (short)(q > 0x1fff ? 0x28 : 0x2c);` ours emitted
+`cmp $0x2000,%si ; setl %cl ; lea 0x20(,%ecx,4)` while the object emitted
+`cmp $0x1fff,%si ; mov $0x28,%ecx ; jle`.  Rewriting every leaf as
+`{ base = 0x28; if (q <= 0x1fff) base = 0x2c; }` removed the conversion:
+delta -30 -> +5 and -34 -> +5, symdiff 62 -> 15, run 15 -> 18.  A plain `if`/`else`
+(V1) is BYTE-IDENTICAL to the ternary -- the difference is the single-assignment
+path, not the branch shape.
+
+READ THE SIGN: `scratch/cd/setcc.py` prints `ref/ours`.  `ours > ref` (the object
+has FEWER setcc) means our source over-materialised -- a ternary or `&&` where
+the object branches: apply THIS lever.  `ours < ref` (the object has MORE) is the
+opposite direction -- the source needs a conditional VALUE (`?:`, `&&`) or a
+mask, per Lever 32/40.
+
+Where to look next: `rebuildJMSequence` (src/v8/V8.c) ref 48 / ours 26 -- the
+object materialises 22 flags that ours branches; the reverse lever.
