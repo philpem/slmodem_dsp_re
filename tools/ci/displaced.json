@@ -1,17 +1,29 @@
 {
-  "version": 1,
-  "displaced": [
-    {
-      "symbol": "_ZN12V90Equalizer24enterChannelVerificationEv",
-      "metric": "cascade",
-      "from": "MATCHED",
-      "to": "NONMATCH",
-      "upstream": "_ZN12V90Equalizer8enterRRNEv",
-      "phase": "neighbour-codegen",
-      "cause": "Per-TU peephole2 emission-order cascade. The body is byte-identical to the floor baseline, and building the baseline revision of src/pump/v90/V90Equalizer.cpp makes it EXACT (28/28). The 11-19 change to enterRRN (emitted immediately before it) moves the victim's return value into %edi, freeing %eax; the peephole2 scratch search then takes the %eax slot and advances the cursor to 51 instead of 3. ~50 re-spellings of enterRRN keep the gain but none restores the victim.",
-      "recovery": "Respell enterRRN so it keeps its gain without freeing %eax at its second const0 split, or work the TU in ascending emission order once enterRRN stabilises; remove this entry when the symbol returns to grade 0/1.",
-      "evidence": "docs/findings.md",
-      "body_sha256": "00ff908e274ba4c01ad8c859a3ccd9039ac769c9771312ead7b67aafe8d824b6"
-    }
-  ]
+ "version": 1,
+ "displaced": [
+  {
+   "symbol": "_ZN12V90Equalizer24enterChannelVerificationEv",
+   "metric": "cascade",
+   "from": "MATCHED",
+   "to": "NONMATCH",
+   "upstream": "_ZN12V90Equalizer8enterRRNEv",
+   "phase": "neighbour-codegen",
+   "cause": "Per-TU peephole2 emission-order cascade. The body is byte-identical to the floor baseline, and building the baseline revision of src/pump/v90/V90Equalizer.cpp makes it EXACT (28/28). The 11-19 change (commit 2f72f5a41) restructured enterRRN -- emitted immediately before it -- to a single-exit form (`int ret = 0; if (state != STATE) { ... } return ret;`), which gained enterRRN (delta -28 -> 0, longest run 23/90 -> 40/90) but moves the victim's return value into %edi, freeing %eax; the peephole2 scratch search then takes the %eax slot and advances the cursor from 3 to 51.  CORRECTION (F12297/F12298): the `mmx` local and the loop spelling are INERT -- three respellings of the local and six of the clearing loop are byte-identical -- so the carrier is the single-exit restructure itself.",
+   "recovery": "Converge enterRRN's own body (387/387 size-correct but only 40/90 run; its residual is a register-allocation/loop-rotation artifact, form-insensitive) so the TU's peephole2 cursor matches the original, or work the TU in ascending emission order once enterRRN stabilises; remove this entry when the symbol returns to grade 0/1.",
+   "evidence": "docs/findings.md",
+   "body_sha256": "00ff908e274ba4c01ad8c859a3ccd9039ac769c9771312ead7b67aafe8d824b6"
+  },
+  {
+   "symbol": "_Z7hammingIfEvPT_j",
+   "metric": "exact",
+   "from": "EXACT",
+   "to": "REGALLOC",
+   "upstream": "_ZN12V90Equalizer8enterRRNEv",
+   "phase": "neighbour-codegen",
+   "cause": "Per-TU peephole2 emission-order cascade from the upstream V90Equalizer::process change (the BLL-state ternary rewritten as the original's `if`/`else`, F12293). The two-call form performs one more peephole2 scratch search than the ternary, which shifts the register the weak-template COMDAT copy uses for its final `pop` (blob `pop %eax`, ours `pop %ecx`); the other two copies -- src_dsp_psd.cpp.o and src_pump_v90_Resampler.cpp.o -- stay EXACT. Proven a cursor effect: with -fno-peephole2 the baseline and the change emit byte-identical hamming<float>. The TU's cursor is ALREADY displaced upstream (see the enterChannelVerificationEv cascade entry), and no two-call source form avoids it (F12296).",
+   "recovery": "Land the coupled repair: converge V90Equalizer::enterRRN so the TU's peephole2 cursor matches and this COMDAT copy returns to EXACT, or converge V90Equalizer::process (delta -207); then remove this entry.",
+   "evidence": "docs/findings.md",
+   "body_sha256": "b5ea2fcfc79c830044c683c87ede21f8f35ff1d445a8f14384a1b1b23afed1f3"
+  }
+ ]
 }

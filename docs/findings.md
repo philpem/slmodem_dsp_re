@@ -151397,3 +151397,32 @@ Therefore the verified-correct `V90Equalizer::process` BLL-state `if`/`else`
 in-source coupled repair in this TU**: its only landing path is a reviewed
 `tools/ci/displaced.json` entry (metric `exact`, phase `neighbour-codegen`,
 upstream `enterRRN`), which is the mechanism F12296 already recorded as the plan.
+
+## F12299. LANDED: the V90Equalizer::process BLL-state `if`/`else` banks with a REVIEWED displacement entry (ratchet OK, floors rise)
+
+The verified-correct `if`/`else` (F12293: `process` delta -250 -> -207; TU
+`setBllState` relocations 9 -> 10 = the blob's) is applied, with the coupling
+landed as a reviewed exception rather than silently:
+
+- `tools/ci/displaced.json` gains a `metric: "exact"` entry for `_Z7hammingIfEvPT_j`
+  (from EXACT to REGALLOC, phase `neighbour-codegen`, upstream
+  `_ZN12V90Equalizer8enterRRNEv`, `body_sha256` pinning the current WORST per-TU
+  copy), and the pre-existing `enterChannelVerificationEv` cascade entry's CAUSE
+  is corrected -- the carrier is the single-exit restructure, not the `mmx` local
+  (F12297/F12298).
+- `tools/ci/link_selected_check.py` re-pinned: COMDAT `disagreements` 3 -> 4,
+  `EXACT_SELECTED` gains `_Z7hammingIfEvPT_j`, `EXPECTED_SELECTED_ONLY` 3 -> 4,
+  fixture rows/counts and the self-test targets updated; self-test 24/24 pass.
+- `byteident --ratchet`: **OK** -- exact 1235 -> 1262, legacy protected
+  1270 -> 1297, link-selected exact 1238 -> 1266, regalloc 35 -> 34.  The
+  displacement is evidence-pinned and the aggregate floors RISE (the stored floor
+  is 1235, well below today's 1262), so the cascade escape is not being used to
+  hide an aggregate fall.
+- `make phase`: 404 passed / 0 failed.
+
+Census with the change: 1,262 EXACT / 34 REGALLOC / matched 1,296 (the
+`hamming<float>` symbol scores its worst COMDAT copy, which is the V90Equalizer
+one; the two other copies stay EXACT).  The entry's recovery note names the real
+repair: converge `V90Equalizer::enterRRN` (387/387 size-correct but only 40/90
+run) so the TU's peephole2 cursor matches and this copy returns to EXACT, or
+converge `process` (delta -207); then remove the entry.

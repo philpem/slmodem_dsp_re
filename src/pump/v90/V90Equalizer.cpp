@@ -2173,9 +2173,10 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 						setDfeBeta(params->EIA6_DFE_TRN2D_FAST_BETA);
 					} else
 						setDfeBeta(params->DFE_TRN2D_BETA);
-					resampler->setBllState(quickConnect
-					    ? V90_BLL_TRN2 : V90_BLL_TRN2_INITIAL,
-					    1);
+					if (quickConnect)
+						resampler->setBllState(V90_BLL_TRN2, 1);
+					else
+						resampler->setBllState(V90_BLL_TRN2_INITIAL, 1);
 				} else if (st == 0x18) {
 					if (spectralVerifier->word_28 == 2) {
 						edprintf("V90Equalizer: middle of TRN2d\r\n");
