@@ -151136,3 +151136,34 @@ excess is not this local.
 Longest run is 16/748 = **2.1%**, so the body differs throughout: the function is
 allocation/layout-coupled (same class as `V22_FSE_receive`, 2.0%), not a clean
 structural target.  PARKED.
+
+## F12291. `V92Phase4Modulator::generateCPu`/`generateSUVu`: the -1 byte is a combine/reload merge on `extendhisi2`, not a source form (both candidate spellings inert)
+
+Reference 304 B / 95 insns, ours 303 B / 94; the bodies are byte-identical except
+the tail:
+
+	reference:  movzwl 0x1e(%esp),%eax ; add $0x20,%esp ; pop %ebx ; cwtl ; pop %esi ; pop %edi ; ret
+	ours:       movswl 0x1e(%esp),%eax ; add $0x20,%esp ; pop %ebx ; pop %esi ; pop %edi ; ret
+
+Both load the same `short sym` (address-taken by `bitsToSymbol->process(n, &sym)`,
+so a memory home) and sign-extend it to the `int` return.  Ours folds the extend
+into the load (`movswl` -- the memory form of `extendhisi2`); the reference loads
+the HImode value into `%eax` (`movzwl`, the canonical HImode load) and keeps
+`extendhisi2` as a separate register insn (`cwtl`), which `sched2` then
+interleaved between the pops.
+
+The stage dump puts the divergence BEFORE reload: our `.25.greg` already holds
+`(sign_extend:SI (mem/f:HI ...)) {extendhisi2}`, so the HImode load and the
+sign-extend were merged earlier (combine / reload alternative selection), while
+the object kept them apart.
+
+Two semantics-preserving source forms were tested (`variant_run`, spec
+`scratch/residual-analysis/v92reload/spec.json`): V1 `{ int r = sym; return r; }`
+and V2 `return (short)sym;`.  Both are BYTE-IDENTICAL to the baseline candidate
+(md5 0034c7fc), so the merge is not reachable from the return expression.
+
+Disposition: mechanism named (the HImode-load + sign-extend merge happens for us
+and not for the object); no source shape found and the obvious forms are inert.
+PARKED at -1 byte per function (2 symbols).  Per the escalation rule this is an
+Astra candidate -- the instrument is the combine/reload decision for
+`(sign_extend:SI (mem:HI))` and why the merge is rejected in the original.
