@@ -151277,3 +151277,40 @@ performs a 4-sample `dftupdate` first -- either that goto/annotation is off, or 
 statement is missing there.  NOT attempted: `v34handshak` is 61,541 bytes at a
 4.0% run, so it cannot close and its control flow is heavily reconstructed.
 Recorded as a bounded lead with exact addresses.
+
+## F12295. The V90Equalizer::process fix cost one EXACT through a TU-cursor rotation: hamming<float>'s V90Equalizer.cpp.o COMDAT copy fell EXACT -> REGALLOC (caught by the CI COMDAT pin, not by a TU regrade)
+
+The `V90Equalizer::process` BLL-state fix (F12293, 9c9fedbe0) corrected a ternary
+to the blob's two-armed `if`/`else`.  It is a genuine source-fidelity gain -- the
+TU's `setBllState` relocation count now matches the blob (10) -- and moves
+`process` -250 -> -207.
+
+COST, found by the `Gentoo Partial Link` CI job: `_Z7hammingIfEvPT_j`
+(`hamming<float>`) is a COMDAT emitted in three TUs, and the copy in
+`V90Equalizer.cpp.o` fell from EXACT to REGALLOC (a 1-byte raw difference; the
+`src_dsp_psd.cpp.o` and `src_pump_v90_Resampler.cpp.o` copies stay EXACT).  The
+per-TU census scores the WORST copy, so:
+
+	per-TU            EXACT 1,263 -> 1,262 ; REGALLOC 33 -> 34 ; matched 1,296 unchanged
+	link-selected     EXACT 1,265 -> 1,266 (the selected copy is EXACT)
+
+Mechanism: peephole2 scratch state is threaded across a TU in emission order
+(Lever 59), so a change in `process` rotates a later function's lanes.  This is
+compiler-state coupling, not a source error in `hamming`.
+
+PROCESS LESSON (why the earlier check missed it): the post-edit verification was a
+TU-scoped regrade keyed on the census's `object` field, which for a
+multiply-defined name points at the WORST copy's object.  `hamming<float>`'s
+attributed object was `src_dsp_psd.cpp.o`, so the `V90Equalizer` copy was not in
+the regraded set.  A COMDAT symbol's per-TU grade can move without any single-TU
+regrade seeing it: any change to a TU that defines a multiply-defined name must
+check the COMDAT/link-selected ledger, i.e. re-run the `--link-selected` view, not
+only `--why` on the edited TU.
+
+DISPOSITION: retained -- the source is now more faithful, the ratchet floor
+(`exact: 1235` in `tools/toolchain/byteident_ratchet.json`) is unaffected, and the
+COMDAT pin in `tools/ci/link_selected_check.py` is re-pinned 3 -> 4 deliberately,
+per that file's documented procedure ("a deliberate update to this file in the
+same change that causes it, not silent drift").  Recovery plan: the rotation will
+shift again as `process` (delta -207) converges, so re-check the COMDAT ledger on
+each such change.
