@@ -14123,3 +14123,26 @@ mask, per Lever 32/40.
 
 Where to look next: `rebuildJMSequence` (src/v8/V8.c) ref 48 / ours 26 -- the
 object materialises 22 flags that ours branches; the reverse lever.
+
+### Lever 63. A `?:` whose two arms are the SAME CALL with different constant arguments collapses to ONE call with a computed argument -- the object's TWO calls mean `if`/`else`
+
+`f(c ? A : B, x)` with constant A/B becomes ONE call whose argument is computed
+(`cmp ; sbb ; add`), because the argument is a conditional value, not a branch.
+When the object instead shows TWO literal calls -- one per arm -- the original
+wrote the control flow out:
+
+	if (c) f(A, x);
+	else   f(B, x);
+
+Worked case (F12293): `V90Equalizer::process`.  The ternary folded the condition
+into the state argument (ours: `cmp $0x1 ; sbb %edi,%edi ; add $0x9,%edi`),
+while the blob has literal-8 and literal-9 calls sitting on the two arms of a
+`jne`.  Rewriting it as `if`/`else` moved delta -250 -> -207, insns 2039 -> 2046,
+symdiff 987 -> 980, and the TU's `setBllState` relocation count 9 -> 10 (the
+blob's).
+
+The tell is the ARGUMENT: a ternary folds the condition into the VALUE; two calls
+cannot.  Screening signal: a relocation-count shortfall of one per
+`f(cond ? A : B)` site.  This is the mirror of Lever 62 (there a ternary had to
+become default+override to stop an if-conversion; here it had to become `if`/`else`
+to stop a call merge).
