@@ -151201,3 +151201,45 @@ The -250 is mostly other body difference (one call plus its argument setup is
 against our 7 in emission order (distinctive neighbour instructions and the state
 enum arguments), i.e. find the state transition where the original set the
 resampler's BLL state and our source does not.
+
+## F12293. `V90Equalizer::process`: the TRN2 BLL-state TERNARY was an `if`/`else` in the original -- its two literal calls are the "missing" eighth `setBllState` (delta -250 -> -207)
+
+`V90Equalizer::process` is reference 9,364 / ours 9,114 bytes (delta -250) and the
+call-edge census named one missing `V90Resampler::setBllState` (F12292).  Our
+source wrote the state set as a ternary:
+
+	resampler->setBllState(quickConnect
+	    ? V90_BLL_TRN2 : V90_BLL_TRN2_INITIAL,
+	    1);
+
+which compiles to ONE call whose state argument is computed
+(`mov 0x148(%edx),%esi ; cmp $0x1,%esi ; sbb %edi,%edi ; add $0x9,%edi` -- 8 or 9).
+The blob instead has THREE calls in that region: literal state **8** (0x3afc9),
+literal state **9** (0x3b08e) and literal state **9** (0x3b0f2), with the
+`jne` at 0x3afac targeting the 0x3b0d4/0x3b0f2 site -- so the state-8 call and one
+state-9 call are the two ARMS of an if/else.
+
+Rewriting it as the two-armed `if`/`else`:
+
+	if (quickConnect)
+	    resampler->setBllState(V90_BLL_TRN2, 1);
+	else
+	    resampler->setBllState(V90_BLL_TRN2_INITIAL, 1);
+
+measures (`variant_run.py`, spec scratch/residual-analysis/eqbll/spec.json;
+control reproduced):
+
+	                      delta  insns  run      setcc  dset  symdiff
+	V0 ternary (current)   -250   2039  25/2086   4/4     4      987
+	V1 if/else split       -207   2046  25/2086   4/4     0      980
+
+and the TU's `setBllState` relocations go **9 -> 10**, the blob's count.  Applied
+in tree; the whole-TU regrade changes ONLY `process` (33 symbols compared).  So
+the original did not write the ternary: two calls that differ only in their
+argument cannot be if-converted into one, and the ternary was a reconstruction
+shortcut.  This is the mirror of Lever 62 -- there a ternary had to become a
+default+override to STOP a conversion; here it had to become `if`/`else` to STOP
+a call merge.
+
+Scope: a supported partial (delta still -207, the rest of the body); no grade
+change.
