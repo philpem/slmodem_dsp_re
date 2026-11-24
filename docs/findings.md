@@ -151167,3 +151167,37 @@ and not for the object); no source shape found and the obvious forms are inert.
 PARKED at -1 byte per function (2 symbols).  Per the escalation rule this is an
 Astra candidate -- the instrument is the combine/reload decision for
 `(sign_extend:SI (mem:HI))` and why the merge is rejected in the original.
+
+## F12292. `V90Equalizer::process` is missing exactly ONE `V90Resampler::setBllState` call (blob 8, ours 7) -- a concrete call-boundary gap, and a grep-truncation trap that nearly produced the opposite claim
+
+`V90Equalizer::process` (src/pump/v90/V90Equalizer.cpp:1825) is reference 9,364 /
+ours 9,114 bytes (delta -250).  The call-edge census (F12284 era) reported the
+single edge difference "missing x1 `V90Resampler::setBllState`".  Verified by
+counting the relocations to `_ZN12V90Resampler11setBllStateE11V90BllStatej` and
+attributing each to its owning symbol in the blob:
+
+	V90Demodulator::progress                 10
+	V90Equalizer::process                     8
+	V90Demodulator::enterDataPhase             1
+	V90Resampler::reset                        1
+	V90Resampler::C1/C2 (x4)                   4
+	V90Equalizer::enterPhase4                  1
+	V90Equalizer::enterChannelVerification     1
+
+Our source has **9** calls -- `enterPhase4` 1, `enterChannelVerification` 1, and
+`process` **7**.  So the missing call is exactly ONE, in `process`, and the
+census's per-caller attribution is CORRECT.
+
+Why the census looked wrong at first: `objdump -dr` lists relocations in
+address order, so the first `setBllState` rows printed (0x1beae, 0x1d4a9, ...)
+belong to `V90Demodulator`, not to the equaliser at 0x38d80; and
+`grep -rn setBllState src/ include/ | head -20` truncated before the
+`V90Equalizer.cpp` hits, which reads as "zero calls".  Attribute relocations to
+their owning symbol (bisect over `nm -n`) and count with `grep -c` per file
+before concluding either way.
+
+The -250 is mostly other body difference (one call plus its argument setup is
+~5-10 bytes).  Next: locate the eighth call by matching the blob's 8 sites
+against our 7 in emission order (distinctive neighbour instructions and the state
+enum arguments), i.e. find the state transition where the original set the
+resampler's BLL state and our source does not.
