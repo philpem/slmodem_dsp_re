@@ -151314,3 +151314,24 @@ per that file's documented procedure ("a deliberate update to this file in the
 same change that causes it, not silent drift").  Recovery plan: the rotation will
 shift again as `process` (delta -207) converges, so re-check the COMDAT ledger on
 each such change.
+
+## F12296. CORRECTION: the V90Equalizer::process BLL-state fix is REVERTED -- source-correct, but it cost an EXACT with no promotion
+
+The F12293 fix is proven source-correct (the TU's `setBllState` relocation count
+matches the blob, 10) and moves `process` -250 -> -207, but it is a supported
+PARTIAL with no grade change, and it cost one EXACT -- F12295's COMDAT rotation
+of `_Z7hammingIfEvPT_j` in `V90Equalizer.cpp.o`.  The CI phased byte-identity
+floor treats an unexplained EXACT loss as a failure ("never re-bless a floor to
+silence a regression"), and the standing direction is whole-function
+EXACT/REGALLOC promotions over partial byte progress.
+
+REVERSED: `src/pump/v90/V90Equalizer.cpp` returns to the ternary
+(`git checkout 9c9fedbe0^`) and the COMDAT pin returns to 3 in
+`tools/ci/link_selected_check.py`.  Verified: `hamming<float>`'s three copies are
+EXACT again and the COMDAT disagreement count is back to 3.
+
+Retained as a recorded, re-appliable candidate: re-apply it -- with a
+`tools/ci/displaced.json` entry for `_Z7hammingIfEvPT_j`, or with a coupled
+repair -- once `process` (delta -207) converges and the TU's emission-order
+cursor stabilises.  F12292's census result (the missing call) and F12293's
+discovery (the ternary translation, states 8/9) stand as history.
