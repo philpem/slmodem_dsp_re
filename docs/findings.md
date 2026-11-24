@@ -151335,3 +151335,41 @@ Retained as a recorded, re-appliable candidate: re-apply it -- with a
 repair -- once `process` (delta -207) converges and the TU's emission-order
 cursor stabilises.  F12292's census result (the missing call) and F12293's
 discovery (the ternary translation, states 8/9) stand as history.
+
+## F12297. CORRECTION: the `enterRRN` <-> `enterChannelVerification` trade is the SINGLE-EXIT RESTRUCTURE, not the `mmx` local -- and the single-exit form IS native
+
+The sole `tools/ci/displaced.json` entry blames the 11-19 change to `enterRRN`
+(`2f72f5a41`) for displacing `enterChannelVerification`, and prescribes "respell
+`enterRRN` so it keeps its gain without freeing `%eax` at its second const0
+split".  Measured directly (whole-file revert to `2f72f5a41^`, object rebuilt,
+per-symbol grading):
+
+	current (single-exit + `int mmx = mmxMode;`)
+	  enterRRN                 NONMATCH 387/387 delta   0  run 40/90 (44.4%)
+	  enterChannelVerification NONMATCH 116/116 delta   0  run 13/28 (46.4%)
+	pre-11-19 (early `return 0`, `mmxMode` re-read)
+	  enterRRN                 NONMATCH 387/359 delta -28  run 23/90 (25.6%)
+	  enterChannelVerification EXACT    116/116 delta   0  run 28/28 (100.0%)
+
+Four respellings that drop, retype or reuse the local -- `if (mmxMode != 0)`
+instead of `if (mmx != 0)`, `unsigned int mmx`, and `mmx` for the restore test --
+are **byte-identical** to the current form (enterRRN run 40,
+enterChannelVerification run 13).  The `mmx` local is INERT, so the entry's
+"frees `%eax` at its second const0 split" cause is WRONG: the carrier is the
+**single-exit restructure** (`int ret = 0; if (state != RRN) { ... } return ret;`
+replacing `if (state == RRN) return 0; ... return 0/1;`).
+
+The single-exit form is also the CORRECT one: `enterRRN` moves delta -28 -> **0**
+(387/387), run 23 -> 40.  So the native `enterRRN` IS the single-exit body, and
+`enterChannelVerification`'s loss is a peephole2-cursor consequence of
+`enterRRN`'s still-non-native body (run 44%), not of a wrong source form.
+
+Coupled-repair consequence: converge `enterRRN`'s body (bounded, 90
+instructions).  Its divergence starts at row 40, where the object re-materialises
+the `dfeLength + 8` loop bound (`mov 0x38(%r?),%r? ; add $0x8,%r?` with
+`cmp $0x0,%r? ; jbe`) while ours keeps it in a register (`lea 0x8(%r?),%r?` with
+`cmp %r?,%r? ; jae`).  Converging `enterRRN` should restore
+`enterChannelVerification` to EXACT (its 28 instructions are byte-correct -- they
+match the object at the pre-change cursor) and then let the
+`V90Equalizer::process` BLL-state `if`/`else` (F12293) land with
+`hamming<float>` preserved: three symbols for one body.
