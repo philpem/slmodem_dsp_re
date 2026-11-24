@@ -151243,3 +151243,37 @@ a call merge.
 
 Scope: a supported partial (delta still -207, the rest of the body); no grade
 change.
+
+## F12294. `v34handshak`'s missing `dftupdate` call is located: blob 0x6756c, right after our `goto micro_txblock_fresh /* 0x67546 -> 0x62af1 */`
+
+The call-edge census reports `v34handshak` one `dftupdate` short.  All ten blob
+calls belong to `v34handshak` (0x628f0..0x71960); mapping the sites:
+
+	blob 0x6756d   single         <- THE MISSING ONE
+	blob 0x686e1   single         <- our source line 6991 (annotated 0x686ba)
+	blob 0x68dfe / 0x68e24        <- t72_update_both (src lines 5473/5479)
+	blob 0x699c0 / 0x699e6        <- an inlined t72_update_both
+	blob 0x69ca6 / 0x69cd3        <- an inlined t72_update_both (site line 6995)
+	blob 0x6a699 / 0x6a6c4        <- an inlined t72_update_both
+
+`t72_update_both` (defined src line 5464) holds the two-call pair and is called
+four times (6995, 7087, 7090, 7190) -- 8 relocations -- plus our one standalone at
+line 6991, giving 9.  The blob has 10.
+
+The extra call is the blob's FIRST, at **0x6756c**:
+
+	6755a: add $0xa81c,%ebx
+	67560: mov $0x4,%edx
+	67565: mov %edx,0xc(%esp)      ; 4th argument = 4
+	67569: mov %ebx,(%esp)         ; 1st argument = obj + 0xa81c
+	6756c: call dftupdate
+	67571: mov 0xc0(%esp),%ecx
+	67578: mov 0xa24c(%ecx),%eax
+
+It sits immediately after the address our source annotates as
+`goto micro_txblock_fresh; /* 0x67546 -> 0x62af1 */` (src line 8156, the
+`rxst == V34HS_WAIT` arm), so our source takes the early exit where the blob
+performs a 4-sample `dftupdate` first -- either that goto/annotation is off, or a
+statement is missing there.  NOT attempted: `v34handshak` is 61,541 bytes at a
+4.0% run, so it cannot close and its control flow is heavily reconstructed.
+Recorded as a bounded lead with exact addresses.
