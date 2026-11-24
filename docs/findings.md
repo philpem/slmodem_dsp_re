@@ -151373,3 +151373,27 @@ the `dfeLength + 8` loop bound (`mov 0x38(%r?),%r? ; add $0x8,%r?` with
 match the object at the pre-change cursor) and then let the
 `V90Equalizer::process` BLL-state `if`/`else` (F12293) land with
 `hamming<float>` preserved: three symbols for one body.
+
+## F12298. The coupled repair is BLOCKED: `enterRRN`'s residual is source-form-INSENSITIVE, so the peephole2 cursor cannot be restored from source
+
+Continuing F12297: six source forms of `enterRRN`'s second clearing loop are
+**byte-identical** to the current object (`for (i = 0; i < n; i++)`, `i != n`,
+and the inline `for (i = 0; i < dfeLength + 8; i++)`), exactly as the `mmx` local
+was inert.  The residual is 3 small regions (align ratio 0.95, ours 89 vs the
+object's 90 instructions), all in that loop:
+
+	R40 mov 0x38(%r?),%r?  O40 lea 0x8(%r?),%r?      ; object RE-materialises the
+	R42 add $0x8,%r?                                 ;   bound, ours keeps it in
+	R43 cmp $0x0,%r? ; jbe                           ;   a register (one insn
+	O42 cmp %r?,%r? ; jae                            ;   fewer) and tests reg-reg
+
+i.e. a register-allocation and loop-rotation artifact, not a source form -- the
+same allocation wall as F12267/F12272/F12274.  Since `enterRRN`'s peephole2
+scratch-search contribution cannot be changed from source, `enterChannelVerification`'s
+EXACT cannot be restored by respelling either.
+
+Therefore the verified-correct `V90Equalizer::process` BLL-state `if`/`else`
+(F12293, delta -250 -> -207, TU `setBllState` 9 -> 10 = the blob) has **no
+in-source coupled repair in this TU**: its only landing path is a reviewed
+`tools/ci/displaced.json` entry (metric `exact`, phase `neighbour-codegen`,
+upstream `enterRRN`), which is the mechanism F12296 already recorded as the plan.
