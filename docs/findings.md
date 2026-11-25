@@ -151482,3 +151482,76 @@ an over-declaration -- for x87-heavy files and `-O2` files it is spilling, and f
 `v34handshak` (+32) it is a 61 KB body.  The tractable frame-size subset is
 therefore the small, INTEGER-only functions, and it must be screened further before
 being worked.
+
+## F12302. Astra on the five allocation-residue mechanisms: two source forms reproduce native decisions, no promotions -- and the cursor-only repair for `hamming` is EXCLUDED (corrects F12298)
+
+Escalation run (2026-11-25) on the DIRECT `openai` provider
+(`openai/gpt-6.2-astra#high`, per the owner's rule that OpenRouter must not be
+used for OpenAI models; two OpenRouter attempts had failed on credits).  Report:
+`scratch/astra-allocation-residue/report.md`; HEAD `68f248a4b`; blob sha256
+`1f3e56d0...`; all five baseline objects reproduced `build/tc_out` byte for byte;
+no source or header edited, no commit.
+
+- **A -- `getMetric` x87.**  Making the arithmetic graph single precision
+  (`float` working state/coefficients, `long double` return) reproduces the
+  native FOUR SF spills and a 16-byte frame (baseline spills four XF with a
+  72-byte frame), but still spills 4 where native keeps 2 lanes, and reproduces
+  none of the three exchange corridors (inner 3,4,5,3; outer 1,2,3,1 and
+  1,3,2,1).  Measured 167/167/165/176 bytes for baseline/coeff-only/all-SF/
+  member-SF against native 172, runs 2/2/3/4 of 75, all NONMATCH.  The movable
+  input is the arithmetic WIDTH, not the declaration.
+
+- **B -- peephole2 cursor.**  Composing the observed `process` cursor transfer
+  over ALL 53 incoming `search_ofs` slots gives the same exit for 53/53 starts
+  (both builds coalesce by search 12 inside `process`).  TU searches 138
+  (current) / 134 (ternary); `process` alone 68/64; `process` exit cursor 2/16;
+  `hamming<float>`'s single search then picks CX (current) vs AX (ternary).
+  **Therefore no predecessor-only cursor change can repair `hamming`** -- this
+  EXCLUDES F12298's carrier claim (that the `enterRRN` single-exit restructure is
+  what displaces it) for this symbol: the difference lies INSIDE `process`'s own
+  search sequence.  The F12298 evidence (reverting the whole file) moved a
+  DIFFERENT symbol (`enterChannelVerification`); the `hamming` extrapolation from
+  it is withdrawn.  A repair must change `process`'s RTL, emission order or
+  eligibility, not the inherited cursor.
+
+- **C -- reload load-fold.**  The signed load folds in `.20.combine`; GDB at
+  `find_reloads` scores the tied-AX alternative (1 loser, reject 2, cost 8)
+  against `rm` (0,0, immediate win) and shows `reload_inherited[0]=0` /
+  `rld[0].reg_rtx=NULL` on exit, so reload does not undo the fold.  Three source
+  controls (branch + single `return sym`; a captured `short result`; a `short`
+  ABI in both definitions) all fail; `joined` shortens the CPu run 88/95 -> 43/95
+  without splitting the load.  No supported declaration found.
+
+- **D -- FDSP: FIRST ADMISSION, not final size.**  `cgraphunit.c:1115-1129` never
+  inserts an initially-oversized helper into the heap, so a later shrinkage
+  cannot admit it: the INITIAL estimate must be >= 100.  A same-TU source form
+  that calls two small `static inline` accessors at the four
+  `zFLTUTL_FloatMemSet` sites raises `FDSP_Kernel_InitObj`'s initial estimate
+  78 -> **120** -> not inlined.  **INDEPENDENTLY VALIDATED here:**
+  `TC_OUT=scratch/astra-allocation-residue/study/D/both byteident --why
+  bValidateEnergyValue` = ref 296 / candidate **316, delta +20** (was +300),
+  94 vs 85 insns -- the same partial the DECLINED `--param` profile would give,
+  with NO flag change, and `FDSP_Kernel_InitObj` keeps its bytes.  Five of six
+  bodies keep their sizes; `FDSP_Kernel_Loop` changes eight displacement bytes.
+  The accessor names/existence are NOT findings (the report says so); what is
+  established is the mechanism and that the decisive increase is >= 22 from the
+  initial 78.
+
+- **E -- `V90CP::evaluateInfo` case 7.**  Four explicit `nof_58[k] = 0;` stores
+  reproduce the native nine-instruction interleaving at the dispatch site
+  (native 0x51a14-0x51a3b vs candidate .text+0x6e4-0x70b); whole-function run
+  16 -> 17/510, 473 -> 468 insns, 1,770 bytes both (native 1,986/510).  The bulk
+  of the -216 is elsewhere: native publishes `word_cb4` FIVE times in this arm
+  (0x51a42, 0x51a67, 0x51a93, 0x51abf, 0x51ae8) against ONCE in ours, and the
+  `.08.gcse` dump records the four missing stores under `STORE_MOTION delete insn`
+  (BB 59/49/53/61; UIDs 328/374/420/466).  Checked here: the E study cells'
+  `.08.gcse` dumps carry the same `STORE_MOTION` delete set (110 in base, 106 in
+  the cursor/direct cells) with the same tuple shapes.  Next discriminator: the
+  MEM pairs' alias sets and `pre_delete_map` bits (`gcse.c:7382-7388,7404-7414`,
+  `:7971-7999`), and the source property that keeps the cursor observable across
+  the four bit-reading loops.
+
+No EXACT/REGALLOC promotion; none of the five is adoptable as-is.  What the run
+adds: the D mechanism is now demonstrated under the DEFAULT profile (so the FDSP
+family has a source route, not only the declined flag), and the B measurement
+removes the cursor-only hypothesis I had recorded.
