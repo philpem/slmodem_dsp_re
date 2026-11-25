@@ -151560,3 +151560,24 @@ Subsequent correction to the ledger: the `_Z7hammingIfEvPT_j` displacement entry
 `upstream` is now `_ZN12V90Equalizer7processEPfjPsS0_Rj` (not `enterRRN`) and its
 cause/recovery name `process`'s own peephole2 search sequence, per F12302-B;
 `byteident --ratchet` still exits 0 and both entries validate.
+
+## F12303. `V90CP::evaluateInfo` case 7: the member-RMW variant is INERT -- the store-motion difference is not the loop init
+
+Following F12302-E.  Our source already carries all five `word_cb4 = p;` publishes
+(lines 465/470/475/480/485), and our compiler emits ONE store while the object
+emits all five (0x51a42/0x51a67/0x51a93/0x51abf/0x51ae8).  The object re-materialises
+the cursor each loop (`lea 0x1a(%ecx),%eax ; mov %eax,0xcb4(%esi)`), so the
+candidate source shape was a read-modify-write on the member
+(`q = word_cb4` instead of `q = p` in each loop init).
+
+TESTED (`tools/toolchain/variant_run.py`, spec
+scratch/residual-analysis/v90cp/spec_rmw.json; control reproduced): V1 gives
+**byte-identical** output to baseline (md5 7a069853, delta -216, 473 insns, run
+16/510, symdiff 125) -- GCC forwards the stored value to the read, so the variant
+is INERT and does not keep the stores.
+
+So the source property that keeps the object's four intermediate stores alive is
+NOT the loop init.  The mechanism (`STORE_MOTION delete insn in BB 59/49/53/61`,
+gcse.c) stands, but the discriminator is the alias sets / deletion bits at each
+store-read pair (F12302-E), which needs an alias-set instrument rather than more
+source variants.  Parked.
