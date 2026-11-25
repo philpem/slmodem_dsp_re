@@ -14220,3 +14220,22 @@ per-arm form loses the store on the 4800/default paths and `t_v34ec` caught it
 (`make phase` 403/1).  So: check whether the reference's repeated stores write the
 SAME value; if they do, the deficit is replication and there is NO source change
 -- and a byte-narrowing with no correctness argument is an unattributed change.
+
+#### Addendum to Lever 64: filter the deficit queue by the STORED VALUE -- same immediate = replication; differing immediates = real
+
+`scratch/cd/pubcount.py` now reads the SOURCE operand of every reference store at
+each deficit displacement:
+
+	=REPL       every reference store writes the SAME immediate -- the compiler
+	            REPLICATED one source statement across the dispatch layout (the
+	            0xc8c case, F12305).  NOT a removed store; no source change.
+	=vals:...   DIFFERENT immediates at one displacement -- real per-arm stores
+	            we are missing.  THE STRONGEST SIGNAL (e.g. `probeselect` +0x10
+	            10->1 at values $0x708/$0x7a7/$0x690; +0x24 8->0).
+	=reg?:...   all values are registers (a materialised constant or a computed
+	            cursor) -- INCONCLUSIVE; read the arm structure by hand.
+
+`--removals` drops rows whose deficits are all REPL.  The reg? class is the
+caution from F12305: `V34SetupModulator`'s 0xc8c stores ARE registers and are
+still unconditional, so a register-valued deficit cannot be acted on without the
+arm-structure read.
