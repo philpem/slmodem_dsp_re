@@ -151426,3 +151426,36 @@ one; the two other copies stay EXACT).  The entry's recovery note names the real
 repair: converge `V90Equalizer::enterRRN` (387/387 size-correct but only 40/90
 run) so the TU's peephole2 cursor matches and this copy returns to EXACT, or
 converge `process` (delta -207); then remove the entry.
+
+## F12300. `V90CP::evaluateInfo` (`rxState` 7): the four-element clear is a LOOP in ours and UNROLLED in the object, but unrolling does not match -- scheduling-bound
+
+`V90CP::evaluateInfo` is the largest same-frame "genuine candidate" (F12288): ref
+1986 / ours 1770 bytes (delta -216), 510 vs 473 instructions, run 16/510.  Its
+switch reaches the fall-through (jump table entry 4 = `rxState` 7, table at
+`.rodata` 0xe50) at the only structural difference found so far:
+
+	ref (0x51a14)                       ours (0x6e4)
+	movl $0x0,0x48(%esi)                xor %edx,%edx
+	mov  0xcb4(%esi),%ebp               .L: mov %edx,0x48(%esi,%eax,4)
+	xor  %edi,%edi                          inc %eax
+	movl $0x0,0x4c(%esi)                    cmp $0x3,%eax
+	mov  $0x8,%ebx                          jbe .L
+	movl $0x0,0x50(%esi)  (interleaved)
+	movl $0x0,0x54(%esi)
+
+so the object UNROLLS the `for (k = 0; k <= 3; k++) nof_58[k] = 0;` (F12300's
+source site, src/pump/v90/V90CP.cpp:460) while ours keeps the four-iteration loop,
+and the stores are scheduled among the `word_cb4 += 0xa` setup.  Both zero the
+same four dwords at +0x48..+0x54.
+
+TESTED (tools/toolchain/variant_run.py, spec scratch/residual-analysis/v90cp/spec.json,
+symbol `_ZN5V90CP12evaluateInfoEv`; control reproduced):
+
+	V0 loop (current)     NONMATCH -216  473 insns  run 16/510  symdiff 125
+	V1 four explicit stores -216         468 insns  run 17/510  symdiff 130
+
+so the unrolled form is 5 instructions SMALLER and slightly worse by symdiff --
+the object's extra 42 instructions (and its 0x48..0x54 store scheduling) are NOT
+this loop.  The reference's interleaved store order is a scheduler output, so the
+region is scheduling-bound; the bulk of the -216 lies elsewhere in the case 7 body
+and the other cases.  NOT retained; PARKED.
