@@ -151459,3 +151459,26 @@ the object's extra 42 instructions (and its 0x48..0x54 store scheduling) are NOT
 this loop.  The reference's interleaved store order is a scheduler output, so the
 region is scheduling-bound; the bulk of the -216 lies elsewhere in the case 7 body
 and the other cases.  NOT retained; PARKED.
+
+## F12301. The frame-size lane's "our frame BIGGER" family is thin: `getMetric` is the already-parked F12267 x87 case, `dcr_process` is allocation-bound
+
+Two probes of the +frame suspects (F12300's lane) found no new source lever:
+
+- `V90SpectralShapingFilter::getMetric` (+64; ref frame 0x8 with 2 pushes vs ours
+  0x48 with 1).  This is the F12267 case: ref 172 / ours 167, delta -5, longest
+  run **2/75 (2.7%)**, and its divergence is the x87 top-exchange stack correction
+  at edge 5->6, whose only movable input is the live-value set at that edge
+  (F12246's three variants of the diagnostic arguments were byte-identical).  It
+  is ALREADY parked; the `framesize` screen simply re-nominates it.  The larger
+  reconstructed frame here is x87 spilling, not a declaration.
+- `src/service/dcr.c:103` `dcr_process` (+48; ref frame 0x2c vs ours 0x5c): ref 568
+  / ours 567, delta -1, run 19/161 (11.8%), first differing row `$0x2c,%esp` vs
+  `$0x5c,%esp`.  The source's locals are five `int`s (20 bytes), so the extra 48
+  bytes are spills, not declarations; the file also carries its own profile
+  (`TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop`).  Allocation-bound; PARKED.
+
+Consequence for the lane: a larger reconstructed frame is NOT a reliable marker of
+an over-declaration -- for x87-heavy files and `-O2` files it is spilling, and for
+`v34handshak` (+32) it is a 61 KB body.  The tractable frame-size subset is
+therefore the small, INTEGER-only functions, and it must be screened further before
+being worked.
