@@ -18,10 +18,10 @@
    "metric": "exact",
    "from": "EXACT",
    "to": "REGALLOC",
-   "upstream": "_ZN12V90Equalizer8enterRRNEv",
+   "upstream": "_ZN12V90Equalizer7processEPfjPsS0_Rj",
    "phase": "neighbour-codegen",
-   "cause": "Per-TU peephole2 emission-order cascade from the upstream V90Equalizer::process change (the BLL-state ternary rewritten as the original's `if`/`else`, F12293). The two-call form performs one more peephole2 scratch search than the ternary, which shifts the register the weak-template COMDAT copy uses for its final `pop` (blob `pop %eax`, ours `pop %ecx`); the other two copies -- src_dsp_psd.cpp.o and src_pump_v90_Resampler.cpp.o -- stay EXACT. Proven a cursor effect: with -fno-peephole2 the baseline and the change emit byte-identical hamming<float>. The TU's cursor is ALREADY displaced upstream (see the enterChannelVerificationEv cascade entry), and no two-call source form avoids it (F12296).",
-   "recovery": "Land the coupled repair: converge V90Equalizer::enterRRN so the TU's peephole2 cursor matches and this COMDAT copy returns to EXACT, or converge V90Equalizer::process (delta -207); then remove this entry.",
+   "cause": "Per-TU peephole2 emission-order cascade from the V90Equalizer::process BLL-state change (the ternary rewritten as the original's `if`/`else`). The `if`/`else` performs four fewer peephole2 scratch searches inside `process`, and the cursor transfer coalesces WITHIN `process` by search 12, so `process`'s exit cursor moves (2 vs 16) and this COMDAT copy's final `pop` takes CX instead of AX. F12302-B measured TU searches 138/134 and process 68/64. The inherited cursor is NOT the carrier -- 53/53 incoming slots give the same exit -- so no predecessor respell of enterRRN can repair it (F12298's carrier claim is withdrawn for this symbol).",
+   "recovery": "Converge V90Equalizer::process (currently delta -207) so its own peephole2 search sequence and exit cursor match the object, then remove this entry. A predecessor-only cursor change cannot work (F12302-B).",
    "evidence": "docs/findings.md",
    "body_sha256": "b5ea2fcfc79c830044c683c87ede21f8f35ff1d445a8f14384a1b1b23afed1f3"
   }

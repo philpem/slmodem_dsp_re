@@ -151555,3 +151555,8 @@ No EXACT/REGALLOC promotion; none of the five is adoptable as-is.  What the run
 adds: the D mechanism is now demonstrated under the DEFAULT profile (so the FDSP
 family has a source route, not only the declined flag), and the B measurement
 removes the cursor-only hypothesis I had recorded.
+
+Subsequent correction to the ledger: the `_Z7hammingIfEvPT_j` displacement entry's
+`upstream` is now `_ZN12V90Equalizer7processEPfjPsS0_Rj` (not `enterRRN`) and its
+cause/recovery name `process`'s own peephole2 search sequence, per F12302-B;
+`byteident --ratchet` still exits 0 and both entries validate.
