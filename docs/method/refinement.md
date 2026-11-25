@@ -14196,3 +14196,15 @@ converge (both builds coalesce by search 12 inside `process`; process alone 68 v
 repaired by respelling the earlier `enterRRN` -- it needs a change to `process`
 itself.  This excluded the predecessor-carrier hypothesis for that symbol and
 corrected F12298.
+
+SCREEN: `python3 scratch/cd/pubcount.py <census.json>` counts store instructions
+per (base-masked) displacement for every non-EXACT function and ranks the
+displacements where the reference stores MORE often than we do.  A deficit of N at
+one displacement is the observable of a removed store (store motion, redundant-store
+deletion) or of missing source; `ours -> 0` at a displacement the reference hits
+repeatedly is usually a missing statement or loop.  Validated on F12302-E
+(`V90CP::evaluateInfo` 0xcb4 34 -> 12) and independently on `DialerProgress` (ref
+0xbc/0xb8/0xc8/0xd0 = 17/8/7/5 vs ours 0) and `V34SetupModulator` (ref 0xc7c/0xc8c
+= 11/7 vs ours 0).  False positive to watch: a function whose FRAME differs can
+move the displacement to `%esp` (masked out), so cross-check with
+`scratch/cd/framesize.py` before reading a deficit as missing code.

@@ -151592,3 +151592,36 @@ is the GCSE/DSE alias decision for the `word_cb4` store against the intervening
 `bits[q]` character loads (`bits` is at +0xcb8, `word_cb4` at +0xcb4), which needs
 a GCC-side instrument (alias sets / `insn_dead_p` inputs), not further source
 variants.
+
+## F12304. New screen: `scratch/cd/pubcount.py` -- store-count deficits by displacement (Lever 64's observable, corpus-wide)
+
+`scratch/cd/pubcount.py <census.json>` disassembles every non-EXACT function in
+both objects, counts STORE instructions per (base-masked) displacement, and ranks
+the displacements where the reference stores more often than we do.  It is the
+corpus-wide generalisation of F12302-E's PUBLISH-count observable, and it is
+read-only (no compilation).
+
+Result: **143 of 589** non-exact functions have a store-count deficit >= 2 at one
+displacement.  Heads:
+
+	v34handshak      0x28 51->28  (whole-function)
+	DialerProgress   0xbc 17->0  0xb8 8->0  0xc8 7->0  0xd0 5->0
+	FPM_SRE_recover  0x66 5->0   0x86 4->0  0x7a 4->0
+	V22_SRE_recover  0x2e 5->0   0x28 4->0
+	CALLPROG_Progress 0x38 11->0 0x3c 12->0
+	probeselect      0x10 8->1
+	dtmf_modem       0x330 7->0  0x32e 6->0
+	V90CP::evaluateInfo 0xcb4 34->12
+	V34SetupModulator 0xc7c 11->0 0xc8c 7->0
+
+VALIDATED against the row disassembly (byteident.insns) on two independent
+functions besides the known `evaluateInfo` case: `DialerProgress` stores 17x to
+0xbc, 8x to 0xb8, 7x to 0xc8, 5x to 0xd0 in the object, and ZERO to each of those
+in ours; `V34SetupModulator` 11x to 0xc7c and 7x to 0xc8c, zero in ours.
+
+`ours -> 0` at a displacement the object hits repeatedly is the signature of a
+MISSING statement or loop rather than of a removed store; a nonzero-but-smaller
+count (e.g. `evaluateInfo` 34->12) is the removed-store signature of Lever 64.
+Caveat: a function whose FRAME differs can move the displacement to `%esp`
+(masked out of the histogram), so cross-check `framesize.py` before treating a
+deficit as missing code.
