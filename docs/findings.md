@@ -151581,3 +151581,14 @@ NOT the loop init.  The mechanism (`STORE_MOTION delete insn in BB 59/49/53/61`,
 gcse.c) stands, but the discriminator is the alias sets / deletion bits at each
 store-read pair (F12302-E), which needs an alias-set instrument rather than more
 source variants.  Parked.
+
+Addendum to F12303: rebuilding the TU with `-fno-strict-aliasing` is
+BYTE-IDENTICAL to the retained object, so strict aliasing is NOT what removes the
+four intermediate stores (they are absent with or without it).  Note also that
+the LATER arms of the same switch DO keep member read-modify-writes
+(`addl $0x11,0xcb4(%esi)`), so the member RMW form is preserved elsewhere -- the
+deletion is specific to case 7's inter-loop stores.  The remaining discriminator
+is the GCSE/DSE alias decision for the `word_cb4` store against the intervening
+`bits[q]` character loads (`bits` is at +0xcb8, `word_cb4` at +0xcb4), which needs
+a GCC-side instrument (alias sets / `insn_dead_p` inputs), not further source
+variants.
