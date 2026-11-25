@@ -14203,8 +14203,9 @@ displacements where the reference stores MORE often than we do.  A deficit of N 
 one displacement is the observable of a removed store (store motion, redundant-store
 deletion) or of missing source; `ours -> 0` at a displacement the reference hits
 repeatedly is usually a missing statement or loop.  Validated on F12302-E
-(`V90CP::evaluateInfo` 0xcb4 34 -> 12) and independently on `DialerProgress` (ref
-0xbc/0xb8/0xc8/0xd0 = 17/8/7/5 vs ours 0) and `V34SetupModulator` (ref 0xc7c/0xc8c
-= 11/7 vs ours 0).  False positive to watch: a function whose FRAME differs can
-move the displacement to `%esp` (masked out), so cross-check with
-`scratch/cd/framesize.py` before reading a deficit as missing code.
+(`V90CP::evaluateInfo` 0xcb4 34 -> 12) and `V34SetupModulator` (0xc7c 11 -> 1,
+0xc8c 7 -> 2).  FALSE POSITIVE to guard against: `%esp` is the stack, but under
+`-fomit-frame-pointer` `%ebp` is an ordinary register -- masking BOTH produced a
+false `DialerProgress 0xbc 17 -> 0` (ours stores it via `%ebp`; the real deficit is
+17 -> 14).  Mask only `%esp`, and cross-check `scratch/cd/framesize.py` before
+reading a deficit as missing code.

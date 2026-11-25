@@ -151625,3 +151625,28 @@ count (e.g. `evaluateInfo` 34->12) is the removed-store signature of Lever 64.
 Caveat: a function whose FRAME differs can move the displacement to `%esp`
 (masked out of the histogram), so cross-check `framesize.py` before treating a
 deficit as missing code.
+
+CORRECTION to F12304: the first run masked BOTH `%esp` and `%ebp`, but under
+`-fomit-frame-pointer` `%ebp` is an ORDINARY register, so every store through it
+(many) was masked and several rows were false positives -- `DialerProgress`
+0xbc/0xb8/0xc8/0xd0 "17/8/7/5 -> 0" was wrong (ours stores all four; the real
+0xbc deficit is 17 -> 14), and `CALLPROG_Progress 0x3c 12->0`, `FPM_SRE_recover`,
+`V22_SRE_recover`, `dtmf_modem`, `CALLPROG_Progress` heads were the same artifact.
+Fixed to mask ONLY `%esp` (scratch/cd/pubcount.py:53).  Corrected result: **111**
+non-exact functions (not 143) with a deficit >= 2, heads
+
+	v34handshak      267  (stk 23; 0x28 53->32; 0x1a 62->42; 0x3b4 19->1)
+	probeselect       39  (0x10 10->1; 0x24 8->0; 0x6 10->5)
+	modulatevector    39  (stk 13; 0xa 3->0; 0x8 3->0)
+	V90CP::evaluateInfo 22 (0xcb4 34->12)
+	demapFrame        20  (stk 11; 0x0 13->4)
+	v8handshak        19  (0xc38 4->0; 0xc3a 3->0)
+	fskdetect         17  (stk 12; 0x0 9->4)
+	DialerProgress    17  (stk 14; 0xbc 17->14)
+	V34SetupModulator 15  (0xc7c 11->1; 0xc8c 7->2)
+	cadence_create    12  (0x284 7->1; 0x280 7->1)
+
+Validated heads: `V90CP::evaluateInfo` 0xcb4 (the F12302-E case) and
+`V34SetupModulator` 0xc7c/0xc8c.  Instrument lesson: mask only the real stack
+pointer; a callee-saved register used as a general register (here `%ebp` under
+`-fomit-frame-pointer`) must NOT be masked.
