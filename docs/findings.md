@@ -151650,3 +151650,35 @@ Validated heads: `V90CP::evaluateInfo` 0xcb4 (the F12302-E case) and
 `V34SetupModulator` 0xc7c/0xc8c.  Instrument lesson: mask only the real stack
 pointer; a callee-saved register used as a general register (here `%ebp` under
 `-fomit-frame-pointer`) must NOT be masked.
+
+## F12305. REVERSAL: `V34SetupModulator`'s `fc8c` store is UNCONDITIONAL -- the seven blob sites are a compiler REPLICATION, and the per-arm form (a byte-narrowing -152 -> -97) is semantically WRONG
+
+The store-deficit screen (F12304) flagged `0xc8c` 7 -> 2 and `0xc7c` (`ec_prem`)
+11 -> 1 in `V34SetupModulator` (src/pump/v34/v34filters.c:1755), delta -152.
+
+The blob's seven `mov ..,0xc8c(..)` sites are NOT one per switch arm: disassembling
+the region shows they sit in the switch's RANGE-CHECK chain (`cmp $0x960,%ebx` =
+2400, `cmp $0x12c0,%ebx` = 4800), and SIX store the SAME `0xf` (the seventh,
+0x73322, stores `0xe` -- the 3200-V.90 arm).  So the object stores `fc8c = 0xf`
+UNCONDITIONALLY (one source statement, replicated by the compiler across the
+dispatch layout) plus the V.90 arm's `0xe` -- exactly what our hoisted
+`m->fc8c = 0xf;` before the switch already produces.
+
+A per-arm reconstruction (moving the store into each `src = ...` arm) is
+tempting -- it is 55 bytes and 11 instructions CLOSER (-152 -> -97, 296 -> 307
+insns, symdiff 178 -> 167; measured out of tree and reproduced in tree) -- but it
+is WRONG: the 4800 and default/1234 paths lose the store.  The period fixture
+`t_v34ec`, which sweeps bauds {600,2400,2800,3000,3200,3429,4800,1234} and
+compares `fc8c` against the reference implementation, FAILS (`make phase`:
+403 passed, 1 failed).  Reverted (`git checkout src/pump/v34/v34filters.c`);
+the fixture passes and the grade returns to delta -152.
+
+Two lessons:
+- A byte-narrowing with no correctness argument is an unattributed change: here
+  the narrowing was our hand imitating the compiler's replication of one store.
+- The F12304 reading "nonzero-but-smaller count = the removed-store signature
+  (Lever 64)" is NOT safe.  This row (7 -> 2) is the OPPOSITE: we under-store
+  because the object replicated one store, not because ours deleted one.  Read a
+  deficit row against the ARM STRUCTURE (do the reference's stores write the SAME
+  value?) before calling it a removal.  The `ec_prem` (`0xc7c`) half must be
+  checked the same way before any reconstruction.

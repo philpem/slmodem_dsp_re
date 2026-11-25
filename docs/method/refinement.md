@@ -14203,9 +14203,20 @@ displacements where the reference stores MORE often than we do.  A deficit of N 
 one displacement is the observable of a removed store (store motion, redundant-store
 deletion) or of missing source; `ours -> 0` at a displacement the reference hits
 repeatedly is usually a missing statement or loop.  Validated on F12302-E
-(`V90CP::evaluateInfo` 0xcb4 34 -> 12) and `V34SetupModulator` (0xc7c 11 -> 1,
-0xc8c 7 -> 2).  FALSE POSITIVE to guard against: `%esp` is the stack, but under
-`-fomit-frame-pointer` `%ebp` is an ordinary register -- masking BOTH produced a
-false `DialerProgress 0xbc 17 -> 0` (ours stores it via `%ebp`; the real deficit is
-17 -> 14).  Mask only `%esp`, and cross-check `scratch/cd/framesize.py` before
-reading a deficit as missing code.
+(`V90CP::evaluateInfo` 0xcb4 34 -> 12, a genuine removal).  FALSE POSITIVE to
+guard against: `%esp` is the stack, but under `-fomit-frame-pointer` `%ebp` is an
+ordinary register -- masking BOTH produced a false `DialerProgress 0xbc 17 -> 0`
+(ours stores it via `%ebp`; the real deficit is 17 -> 14).  Mask only `%esp`, and
+cross-check `scratch/cd/framesize.py` before reading a deficit as missing code.
+
+**AND read the ARM STRUCTURE before calling a deficit a removal (F12305).**  A
+lower count can be the compiler REPLICATING one unconditional store, not a store
+the object keeps and ours deletes.  `V34SetupModulator`'s `0xc8c` read 7 -> 2 and
+looked like the Lever-64 signature; reconstructing it per-arm was 55 bytes and 11
+instructions CLOSER (-152 -> -97) -- and WRONG: the object's seven sites are six
+`mov $0xf,0xc8c(..)` in the switch's RANGE-CHECK chain plus one `mov $0xe` on the
+V.90 arm, i.e. one unconditional source store the compiler replicated.  The
+per-arm form loses the store on the 4800/default paths and `t_v34ec` caught it
+(`make phase` 403/1).  So: check whether the reference's repeated stores write the
+SAME value; if they do, the deficit is replication and there is NO source change
+-- and a byte-narrowing with no correctness argument is an unattributed change.
