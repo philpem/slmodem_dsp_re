@@ -14146,3 +14146,53 @@ cannot.  Screening signal: a relocation-count shortfall of one per
 `f(cond ? A : B)` site.  This is the mirror of Lever 62 (there a ternary had to
 become default+override to stop an if-conversion; here it had to become `if`/`else`
 to stop a call merge).
+
+#### Addendum to Lever 61 -- the INITIAL estimate is the gate: an oversized helper is never inserted into the inline heap
+
+`cgraphunit.c:1115-1129` inserts a node into the inline heap only while it is
+inlineable and under the limit; a node whose INITIAL `global.insns` is already
+>= `max-inline-insns-auto` is never inserted, so no later change (shrinking it, or
+growing the caller) can admit it.  The estimate is therefore frozen at its initial
+value: to move a callee from inlineable to not, the callee's initial
+`estimate_num_insns` must cross 100 (or it must lose `DECL_SAVED_TREE` / become
+`DECL_UNINLINABLE`).
+
+Worked case (F12302-D): `FDSP_Kernel_InitObj` (initial estimate 78) is inlined at
+the default 100.  Calling two small `static inline` accessors at the four
+`zFLTUTL_FloatMemSet` sites raises the INITIAL estimate 78 -> 120 -> not inlined,
+and `bValidateEnergyValue` drops **+300 -> +20** with NO flag change -- the same
+partial the declined `--param` gave.  The weight arithmetic (10 per CALL, 10 per
+div/mod, ~4 per `int` assignment, 1 otherwise; `c-common.c:5663-5788`) states the
+requirement in CALLs (>= 22 units ~ 2 calls plus the rest), not in emitted
+instructions.  This is the flag-free path Lever 61's per-TU profile stands in for:
+prefer it when a same-TU source form can carry the extra estimate (F12223).
+
+### Lever 64. GCSE STORE MOTION can delete a store the object keeps: read the PUBLISH count and the `.08.gcse` STORE_MOTION rows
+
+`gcse.c:7382-7388,7404-7414` (anti/true dependence) and `:7971-7999` (the
+pre-delete map) let GCSE move a store out of a loop to the one place the loop's
+iterations agree on.  When the object writes a field inside a loop body N times
+and ours once, the missing writes are store motion, and the `.08.gcse` dump names
+them (`STORE_MOTION delete insn in BB <n>`).
+
+Worked case (F12302-E): `V90CP::evaluateInfo` case 7 publishes `word_cb4` FIVE
+times (0x51a42, 0x51a67, 0x51a93, 0x51abf, 0x51ae8); ours publishes ONCE, and the
+four missing stores appear as `STORE_MOTION delete insn in BB 59/49/53/61` (UIDs
+328/374/420/466).  The measurable observable is the PUBLISH count per arm; the
+discriminator is the MEM pairs' alias sets/deletion bits -- i.e. what source
+property keeps the field observable (not provably redundant) across the loop.
+
+#### Addendum to Lever 59 -- if every incoming cursor slot CONVERGES, the victim's difference is INSIDE the function
+
+Composing the observed `peep2_find_free_register` cursor transfer over ALL
+incoming `search_ofs` values tells you whether a predecessor can matter.  If every
+incoming slot gives the same exit cursor, NO predecessor-only source change can
+repair the victim -- the difference is in the function's own search sequence,
+emission order or eligibility, and the work must go there.
+
+Worked case (F12302-B): for `V90Equalizer::process` all 53 incoming cursor slots
+converge (both builds coalesce by search 12 inside `process`; process alone 68 vs
+64 searches, exit cursor 2 vs 16), so `hamming<float>`'s CX-vs-AX pick cannot be
+repaired by respelling the earlier `enterRRN` -- it needs a change to `process`
+itself.  This excluded the predecessor-carrier hypothesis for that symbol and
+corrected F12298.
