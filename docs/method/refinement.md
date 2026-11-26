@@ -14239,3 +14239,18 @@ each deficit displacement:
 caution from F12305: `V34SetupModulator`'s 0xc8c stores ARE registers and are
 still unconditional, so a register-valued deficit cannot be acted on without the
 arm-structure read.
+
+#### Addendum to Lever 64: a displacement SHIFT is not a removal -- read the histogram
+
+`pubcount.py` counts stores per (base-masked) displacement, so a function whose
+stores all move to a different displacement registers a deficit at the reference's
+displacement while the surplus sits elsewhere.  Before calling a deficit a removal,
+print the store-displacement HISTOGRAM for both objects: if ours carries a
+compensating SURPLUS at 0x0 (each field address materialised into a register, the
+store at displacement 0), the difference is an addressing form, not missing source.
+Worked case (F12306): `probeselect`'s twelve field pointers
+(`short *tx_baud = &obj->ratecfg.baud;`) put our stores at 0x0 (119) where the
+reference caches the struct base and stores at +0x10/+0x12/+0x24 (11/8/5); removing
+the locals moves them to absolute obj displacements (0xaaa8/0xaab0) and is WORSE
+(1272 vs 1309 insns against the reference's 1341).  A genuine removal (Lever 64)
+loses values and shows no compensating surplus.

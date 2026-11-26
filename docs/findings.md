@@ -151682,3 +151682,38 @@ Two lessons:
   deficit row against the ARM STRUCTURE (do the reference's stores write the SAME
   value?) before calling it a removal.  The `ec_prem` (`0xc7c`) half must be
   checked the same way before any reconstruction.
+
+## F12306. `probeselect`'s "missing store" deficit is an ADDRESSING-FORM difference, not missing stores -- and removing the field pointers makes it worse
+
+The value-filtered store screen (F12304) flagged `probeselect` with three
+*differing-immediate* deficits (+0x10 10->1, +0x24 8->0, +0x12 5->0) -- the
+strongest "real removal" signal the filter produces.  Disassembly shows why it is
+not: the reference's 22 `movw $imm` stores at +0x10/+0x12/+0x24 use a cached
+STRUCT base, while ours materialises each FIELD address into a register and stores
+at displacement 0:
+
+	ref   movw $0x7a7,0x10(%ebp)      ours  movw $0x7a7,(%eax)
+	ref   movw $0xd65,0x12(%ebp)      ours  movw $0xd65,(%ecx)
+
+Every value IS present.  Our source caches twelve field pointers
+(`short *tx_baud = &obj->ratecfg.baud;` etc.); the object caches the struct base.
+
+Tested by removing all twelve field-pointer locals and writing the members
+directly (direct compile -- `variant_run` cannot do a global rename: it replaces
+only the FIRST occurrence of each edit and corrupts any `old` string that also
+appears inside a declaration):
+
+	ref  1341 insns  276 mov-to-mem (0x0:74  0x4:68  0x10:11 ...)
+	cur  1309 insns  270 mov-to-mem (0x0:119 0x4:63 ...)
+	v1   1272 insns  257 mov-to-mem (0x0:64  0x4:63  0xaab0:8 0xaaa8:8 ...)
+
+v1 shifts the stores to ABSOLUTE obj displacements (0xaaa8/0xaab0), LOSES 13 stores,
+and moves 37 instructions further from the reference.  So neither the field-pointer
+form nor its absence is the defect: the base/register choice is allocation.
+PARKED (`probeselect` is 1309 vs 1341 insns, delta +7, run 54/1341 = 4.0%; the
+relocation-order reading of F12292 already agreed the body differs throughout).
+
+Lesson for Lever 64 (addendum to follow): a displacement SHIFT registers as a
+deficit at the reference's displacement while the surplus sits at another
+displacement -- read the store-displacement HISTOGRAM before calling a deficit a
+removal; a compensating surplus at 0x0 is the tell.
