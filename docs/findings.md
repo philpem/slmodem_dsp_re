@@ -151822,3 +151822,30 @@ Hypothesis (named, untested): the intervening `nof_58[k]` stores -- which our bu
 may sink or coalesce while accumulating in a register -- are what block the motion
 in the object.  Next discriminator: compare the INTERVENING STORE COUNT between
 publishes in the two objects (ours vs the object's per-loop store).  PARKED.
+
+## F12310. `V90CP::evaluateInfo` is missing STORES outright, not only losing them to gcse: the object has 34 `+0xcb4` stores to our 12, and TWO `nof_58[]` store sets to our one
+
+A per-displacement store histogram over the whole symbol sharpens F12308/F12309:
+
+	displacement   object stores   ours (-O3)
+	+0x48 nof_58[0]      2              1
+	+0x4c nof_58[1]      2              1
+	+0x50 nof_58[2]      2              1
+	+0x54 nof_58[3]      2              1
+	+0xcb4 word_cb4     34             12
+
+So the gap is not only gcse store motion (which takes 17 of our sites, F12308):
+with `-fno-gcse` we reach ~55 references to `+0xcb4` against the object's 62, i.e.
+the hoisting explains 17 and roughly FIVE stores are simply ABSENT from our source.
+The object's extra `nof_58[]` stores (two per field) are in a second arm we do not
+write.
+
+Object layout: the case-7 arm publishes at 0x51a42/51a67/51a93/51abf/51ae8 with one
+`nof_58[k]` store after each loop (0x51a5e/51a8a/51ab6/51ae2); a second cluster of
+`+0xcb4` stores sits at 0x51b94/51bf4/51c54/51cb4/51d14 -- exactly 0x60 apart, the
+body of one small loop -- and further groups run to 0x521a7.
+
+NEXT DISCRIMINATOR (named, bounded): locate the object's SECOND `nof_58[]` store set
+and the 0x60-spaced `+0xcb4` run, and identify the source arm that produces them
+(candidate: case 8's "four counted lists" at src/pump/v90/V90CP.cpp:488, where our
+source READS `nof_58` and may need to WRITE it).  PARKED with that named.
