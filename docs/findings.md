@@ -151747,3 +151747,41 @@ sits inside a loop whose edge the pass can move it to.  That is a CFG question
 (`.11.loop` / `.12.loop` dumps), the bounded next instrument; PARKED with that
 named.  No source change; `V90CP::evaluateInfo` stays ref 1986 / ours 1770
 (delta -216), 510 vs 473 insns, run 16/510.
+
+## F12308. `V90CP::evaluateInfo`: gcse store motion is confirmed as the mechanism, but `-fno-gcse` is a NET LOSS for the TU -- so the object's arm must contain a store or call our source lacks
+
+Two instruments, one decisive control.
+
+INSTRUMENT: `scratch/cd/motionprov.py` reads a GCC 3.4 `.08.gcse` dump and maps
+every `STORE_MOTION delete insn in BB <n>` to its SOURCE LINE, memory
+displacement and re-insertion point.  For our `V90CP.cpp` build it names **17**
+`word_cb4` (+0xcb4) stores the pass hoists -- source lines 444/450,
+465/470/475/480, 498/510/522/534, 548/552/559/562/568/575/581 -- i.e. every
+`word_cb4 = p;` site in the file, not only case 7's four.
+
+CONTROL (the decisive one): the object's case-7 arm keeps its five publishes as
+PLAIN STRAIGHT-LINE STORES, each followed by its nine-iteration bit loop
+(0x51a42/51a67/51a93/51abf/51ae8, object 62 references to 0xcb4 against our 37).
+Rebuilding the TU with `-fno-gcse` moves us most of the way --
+
+	ref           510 insns   62 refs to 0xcb4
+	ours  -O3     473 insns   37
+	ours  -fno-gcse 488 insns  55
+
+-- but grading the WHOLE TU shows it is a NET LOSS:
+
+	symbol                      ref  ours  -fno-gcse   delta now / with flag
+	V90CP::evaluateInfo         510   473      488       -37  ->  -22   improves
+	V90CP::bitsToInfo           529   524      447        -5  ->  -82   worse
+	V90CP::infoToBits           691   692      636        +1  ->  -55   worse
+	V90CP::evaluateCRC          153   155       88        +2  ->  -65   worse
+	V90CP::calcCRC              129   133       63        +4  ->  -66   worse
+
+so the original TU had gcse ON and the flag is not the difference.
+
+CONCLUSION: with gcse on and the source form identical across the arms, the
+object's stores SURVIVE store motion, so something in the arm's RTL must set
+`ae_kill`/block the motion -- i.e. the object's arm contains an intervening memory
+WRITE or CALL that our source lacks.  That is the next discriminator and it is a
+SOURCE one (find the missing statement), not a flag.  PARKED with that named;
+`V90CP::evaluateInfo` stays ref 1986 / ours 1770 (delta -216), run 16/510.
