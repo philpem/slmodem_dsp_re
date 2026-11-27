@@ -151849,3 +151849,33 @@ NEXT DISCRIMINATOR (named, bounded): locate the object's SECOND `nof_58[]` store
 and the 0x60-spaced `+0xcb4` run, and identify the source arm that produces them
 (candidate: case 8's "four counted lists" at src/pump/v90/V90CP.cpp:488, where our
 source READS `nof_58` and may need to WRITE it).  PARKED with that named.
+
+## F12311. `V90CP::evaluateInfo`: the RMW count MATCHES (12 = 12 `addl $0x11/0x10,0xcb4`), but the object has 34 plain `mov ..,0xcb4` stores to our 12 -- 22 stores are missing or shaped differently
+
+Counting memory WRITES to `+0xcb4` by instruction class over the whole symbol:
+
+	                    object   ours
+	mov %e?,0xcb4(%e)     34      12
+	addl $0x11/0x10,0xcb4 12      12
+
+so the read-modify-write form is already correct in both (`word_cb4 += 0x11;` /
+`+= 0x10;`) -- the 12/12 match rules out the compound-assignment hypothesis -- and
+the whole gap is 22 plain stores.
+
+The object's rxState 11 arm (0x51af8) shows the shape: an OUTER loop over the
+buffers (`mov 0xc58(%esi),%edx` count, `mov 0xc88(%esi),%edi` destination,
+`ja` back-edge) whose body does `addl $0x11,0xcb4` then a SIXTEEN-iteration inner
+loop that loads `p = word_cb4`, reads `bits[p]`, and STORES `word_cb4 = p-1` on
+every iteration (`dec %edx ; mov %edx,0xcb4(%esi)`), then `addl $0x10,0xcb4`.
+Its store addresses 0x51b94/51bf4/51c54/51cb4/51d14 (0x60 apart) are the outer
+iterations, and a further run 0x51ddd..0x521a7 (~0x34 apart, 14 stores) is the
+rxState 8 arm.
+
+Our source's case 11 (src/pump/v90/V90CP.cpp:588) does use `word_cb4 += 0x11` /
+`word_cb4--` / `word_cb4 += 0x10` (hence the 12 RMW match), and case 8 (:488) uses
+`p = word_cb4 + 0x11; word_cb4 = p;` four times plus `word_cb4 = q + 0x10;` --
+eight stores where the object's arm carries ~14.
+
+NEXT DISCRIMINATOR (named): reconcile the 22 -- determine whether the object's
+loops store `word_cb4` on EVERY ITERATION (a per-iteration store our source hoists
+out of the loop) or whether our loops are missing a store.  PARKED with that named.
