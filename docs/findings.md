@@ -151717,3 +151717,33 @@ Lesson for Lever 64 (addendum to follow): a displacement SHIFT registers as a
 deficit at the reference's displacement while the surplus sits at another
 displacement -- read the store-displacement HISTOGRAM before calling a deficit a
 removal; a compensating surplus at 0x0 is the tell.
+
+## F12307. The `V90CP::evaluateInfo` deletes are gcse STORE MOTION (hoisting a loop-invariant store to the loop edge), not redundant-store elimination -- the object's build simply did not hoist
+
+Reading the `.08.gcse` dump for the TU (`scratch/astra-allocation-residue/study/E/base/V90CP.cpp.08.gcse`)
+sharpens F12302-E.  The pass records the full action, not just the delete:
+
+	STORE_MOTION  delete insn in BB 47:
+	      (insn 971 ... V90CP.cpp:548 (set (mem/s:SI (plus:SI (reg/v/u/f:SI 58 [ this ])
+	                            (const_int 3252 [0xcb4])) [4 <variable>.word_cb4+0 S4 A32])
+	                    (reg:SI 169)) 36 {*movsi_1} (nil)
+	                (expr_list:REG_EQUAL (plus:SI (reg:SI 168 [ <variable>.word_cb4 ])
+	                        (const_int 1 [0x1])) (nil)))
+	STORE MOTION  replaced with insn:
+	      (insn 2542 ... (set (reg:SI 310) (reg:SI 169)) -1 ...)
+	STORE MOTION  insert insn on edge (3, 4) / at start of BB 62
+
+so the store is REPLACED by a register copy and RE-INSERTED on the loop edge --
+that is gcse's store MOTION (hoisting a store whose value is loop-invariant out of
+the loop), not DSE.  The `word_cb4` (+0xcb4) stores are moved in NINE blocks --
+BB 11, 19, 23, 29, 37, 47, 51, 55, 60 -- far more than the four the PUBLISH-count
+diff shows; the pass is routine across the function's arms.
+
+The consequence is the opposite of a source spelling: the object KEEPS its stores,
+so its build did NOT hoist them.  Since the source form is identical across the
+arms (F12306's earlier read: every `word_cb4` site uses `p = word_cb4 + K; word_cb4 = p;`),
+the discriminator is the LOOP SHAPE at the store sites -- whether the arm's store
+sits inside a loop whose edge the pass can move it to.  That is a CFG question
+(`.11.loop` / `.12.loop` dumps), the bounded next instrument; PARKED with that
+named.  No source change; `V90CP::evaluateInfo` stays ref 1986 / ours 1770
+(delta -216), 510 vs 473 insns, run 16/510.
