@@ -151785,3 +151785,40 @@ object's stores SURVIVE store motion, so something in the arm's RTL must set
 WRITE or CALL that our source lacks.  That is the next discriminator and it is a
 SOURCE one (find the missing statement), not a flag.  PARKED with that named;
 `V90CP::evaluateInfo` stays ref 1986 / ours 1770 (delta -216), run 16/510.
+
+## F12309. The object's `V90CP` case-7 arm has NO calls -- and re-derives the `word_cb4` pointer from the LOOP TAIL, not from a live `p`
+
+Disassembling the object's whole arm (ref 0x51a14..0x51b40) narrows F12308's
+"a store or call" to a STORE: the arm contains **zero call instructions**, so the
+store-motion blocker is a memory write, not a call.
+
+The object's shape (case 7, first two of five publishes):
+
+	movl $0x0,0x48(%esi)            nof_58[0] = 0
+	mov  0xcb4(%esi),%ebp           p = word_cb4
+	xor  %edi,%edi                  (accumulator = 0 -- the compiler knows the
+	movl $0x0,0x4c(%esi)             just-zeroed nof_58[0] is 0, so it seeds the
+	mov  $0x8,%ebx                   accumulator with the constant)
+	movl $0x0,0x50(%esi)
+	add  $0xa,%ebp                  p += 0xa
+	mov  %ebp,%ecx                  q = p
+	movl $0x0,0x54(%esi)
+	mov  %ebp,0xcb4(%esi)           word_cb4 = p          <-- publish 1
+	lea  (%edi,%edi,1),%edx
+	movzbl 0xcb8(%ecx,%esi,1),%edi  bits[q]
+	dec %ecx ; and $0x1,%edi ; or %edi,%edx ; dec %ebx ; mov %edx,%edi ; jns
+	mov  %edx,0x48(%esi)            nof_58[0] = acc       <-- intervening STORE
+	mov  0x4c(%esi),%ebx
+	lea  0x1a(%ecx),%eax            p_next = q + 0x1a  (q = p-9, so = p+0x11)
+	mov  %eax,0xcb4(%esi)           word_cb4 = p_next     <-- publish 2
+
+Two facts matter.  (1) Each publish is separated from the next by a STORE to
+`nof_58[k]` (+0x48..+0x54) -- the memory write gcse's `ae_kill` sees.  (2) The
+object does NOT keep `p` live across the bit loop: it re-derives the next pointer
+from the loop tail `q` (`lea 0x1a(%ecx)`), whereas our source carries a separate
+`p` (`p += 0x11; word_cb4 = p;`) that stays live across the loop.
+
+Hypothesis (named, untested): the intervening `nof_58[k]` stores -- which our build
+may sink or coalesce while accumulating in a register -- are what block the motion
+in the object.  Next discriminator: compare the INTERVENING STORE COUNT between
+publishes in the two objects (ours vs the object's per-loop store).  PARKED.
