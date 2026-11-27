@@ -491,50 +491,38 @@ V90CP::evaluateInfo()
 		 * the signed destination receives the result after the frame. */
 		n = nof_58[0];
 		for (j = 0; j < n; j++) {
-			unsigned short value = 0;
-
 			short_58[0][j] = 0;
 			p = word_cb4 + 0x11;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 0xf; i++, q--)
-				value = (unsigned short)((value << 1) | (bits[q] & 1));
-			short_58[0][j] = (short)value;
+				short_58[0][j] = (short)(((unsigned short)short_58[0][j] << 1) | (bits[q] & 1));
 			word_cb4 = q + 0x10;
 		}
 		n = nof_58[1];
 		for (j = 0; j < n; j++) {
-			unsigned short value = 0;
-
 			short_58[1][j] = 0;
 			p = word_cb4 + 0x11;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 0xf; i++, q--)
-				value = (unsigned short)((value << 1) | (bits[q] & 1));
-			short_58[1][j] = (short)value;
+				short_58[1][j] = (short)(((unsigned short)short_58[1][j] << 1) | (bits[q] & 1));
 			word_cb4 = q + 0x10;
 		}
 		n = nof_58[2];
 		for (j = 0; j < n; j++) {
-			unsigned short value = 0;
-
 			short_58[2][j] = 0;
 			p = word_cb4 + 0x11;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 0xf; i++, q--)
-				value = (unsigned short)((value << 1) | (bits[q] & 1));
-			short_58[2][j] = (short)value;
+				short_58[2][j] = (short)(((unsigned short)short_58[2][j] << 1) | (bits[q] & 1));
 			word_cb4 = q + 0x10;
 		}
 		n = nof_58[3];
 		for (j = 0; j < n; j++) {
-			unsigned short value = 0;
-
 			short_58[3][j] = 0;
 			p = word_cb4 + 0x11;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 0xf; i++, q--)
-				value = (unsigned short)((value << 1) | (bits[q] & 1));
-			short_58[3][j] = (short)value;
+				short_58[3][j] = (short)(((unsigned short)short_58[3][j] << 1) | (bits[q] & 1));
 			word_cb4 = q + 0x10;
 		}
 		break;

@@ -151879,3 +151879,51 @@ eight stores where the object's arm carries ~14.
 NEXT DISCRIMINATOR (named): reconcile the 22 -- determine whether the object's
 loops store `word_cb4` on EVERY ITERATION (a per-iteration store our source hoists
 out of the loop) or whether our loops are missing a store.  PARKED with that named.
+
+## F12312. `V90CP::evaluateInfo` (`rxState` 8): the bit accumulator lives in the DESTINATION member, not a local temp -- and case 11 already emits all six native per-bit stores
+
+Agent investigation (report `scratch/v90cp-loop/report.md`, patch `member_acc.patch`),
+independently validated.  The object's rxState-8 arm accumulates each 16-bit value
+by writing the destination EVERY iteration; our source used a local
+`unsigned short value` and stored once at the end.  Splitting that back:
+
+	-  unsigned short value = 0;
+	   short_58[k][j] = 0; ... word_cb4 = p; ...
+	-  value = (unsigned short)((value << 1) | (bits[q] & 1));
+	-  short_58[k][j] = (short)value;
+	+  short_58[k][j] = (short)(((unsigned short)short_58[k][j] << 1) | (bits[q] & 1));
+
+restores the four destination clears and the native 16-bit accumulator shape
+(four blocks, k = 0..3).  RESULT: `_ZN5V90CP12evaluateInfoEv` ref 1986 / candidate
+**1834, delta -152** (from -216), 485 instructions, longest run 17/510;
+`make phase` **404 passed, 0 failed**; whole-corpus census UNCHANGED at
+1,262 EXACT / 34 REGALLOC / 555 NONMATCH (no EXACT loss).  Semantically ties to
+the prior form (same accumulated value; the member is written each iteration).
+
+ALSO SETTLED: the rxState-11 arm ALREADY emits all six native per-bit `word_cb4`
+stores, and the remaining 18 sites of the whole-function store gap lie OUTSIDE
+arms 8 and 11, so no further source change in those two arms is indicated
+(case 8's four entry stores are gcse store motion, F12308).
+
+## F12313. `VTB_decoder`: the ACS minimum is a SECOND compare, not the same `if` as the winner update
+
+Agent investigation (report `scratch/vtb-decoder/report.md`, patch
+`M_split_min.patch`), independently validated.  At `ab69f` and seven sibling ACS
+sites, and again at the tail `abaac`, the object guards the WINNER with one signed
+HI `cmp/jge` and then selects the MINIMUM with a SECOND HI compare; our source
+coupled both updates in one `if`.  Splitting them:
+
+	if (d < m) { best = <i>; m = d; }        ->
+	if (d < m) best = <i>;
+	m = m <= d ? m : d;
+
+(with `m`/`d` narrowed to `short`), in `vtb_acs` and in `VTB_decoder`.
+
+RESULT: `VTB_decoder` (src/dsp/fpm_vtb.c:113, sole emitted function in the TU)
+ref 1773 / candidate **1701, delta -72** (from -175), 494 instructions; the object
+genuinely carries NINE native comparison pairs, which is what the split form
+emits.  `make phase` **404 passed, 0 failed**; whole-corpus census UNCHANGED at
+1,262 EXACT / 34 REGALLOC / 555 NONMATCH (no EXACT loss).  Tie-safe: `m = min(m,d)`
+keeps the same strict-winner rule, so the selected index is identical.  The
+competing "repeated windows" shape was FALSIFIED (all eight ACS backedges still
+compare SI -- `.01.rtl` insn 1193 already does -- and it moves the frame to 0x9c).

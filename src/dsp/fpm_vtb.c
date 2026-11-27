@@ -72,15 +72,15 @@ vtb_acs(struct vtb *state, struct vtb_path *node, int s, int p0, int x,
 	const short *old, const short *bm, const short *pt)
 {
 	int best = p0;
-	int m = (short)(old[p0] + bm[x]);
-	int k, d;
+	short m = (short)(old[p0] + bm[x]);
+	int k;
+	short d;
 
 	for (k = 1; k <= 3; k++) {
 		d = (short)(old[p0 + k] + bm[k ^ x]);
-		if (d < m) {
+		if (d < m)
 			best = p0 + k;
-			m = d;
-		}
+		m = m <= d ? m : d;
 	}
 
 	state->metric[s] = (short)m;
@@ -117,7 +117,9 @@ VTB_decoder(struct vtb *state, short i, short q, short *out)
 	short sym16[8];			/* what the slot held: 16 old     */
 	short pt[4], bm[4];		/* this group's points and metrics*/
 	int slot, ri, rq, ci, cq, lim, grid, idx, base;
-	int j, best, m, d, sym, sh;
+	int j;
+	int best, sym, sh;
+	short m, d;
 	int sel, quad;
 
 	slot = (state->ring + 1) & 0xf;
@@ -196,10 +198,9 @@ VTB_decoder(struct vtb *state, short i, short q, short *out)
 	m = state->metric[0];
 	for (j = 1; (short)j <= 7; j++) {
 		d = (short)state->metric[j];
-		if (d < m) {
+		if (d < m)
 			best = j;
-			m = d;
-		}
+		m = d <= m ? d : m;
 	}
 
 	/*
