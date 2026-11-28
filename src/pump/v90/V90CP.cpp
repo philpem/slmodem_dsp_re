@@ -438,9 +438,8 @@ V90CP::evaluateInfo()
 		for (i = 0; i <= 0xb; i++)
 			word_18[i] = 0;
 
-		p = word_cb4;
 		for (k = 0; k <= 5; k++) {
-			p += 9;
+			p = word_cb4 + 9;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 7; i++, q--)
 				word_18[2 * k] =
@@ -534,9 +533,8 @@ V90CP::evaluateInfo()
 			word_c70[i] = 0;
 
 		word_cb4++;
-		p = word_cb4;
 		for (k = 0; k <= 3; k++) {
-			p += 4;
+			p = word_cb4 + 4;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 3; i++, q--)
 				word_c70[k] =
@@ -546,7 +544,7 @@ V90CP::evaluateInfo()
 		p++;
 		word_cb4 = p;
 		for (k = 4; k <= 5; k++) {
-			p += 4;
+			p = word_cb4 + 4;
 			word_cb4 = p;
 			for (i = 0, q = p; i <= 3; i++, q--)
 				word_c70[k] =

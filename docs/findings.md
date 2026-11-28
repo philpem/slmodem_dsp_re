@@ -151927,3 +151927,102 @@ emits.  `make phase` **404 passed, 0 failed**; whole-corpus census UNCHANGED at
 keeps the same strict-winner rule, so the selected index is identical.  The
 competing "repeated windows" shape was FALSIFIED (all eight ACS backedges still
 compare SI -- `.01.rtl` insn 1193 already does -- and it moves the frame to 0x9c).
+
+## F12314. `V90CP::evaluateInfo`: the CP read cursor is reread from `word_cb4` at each outer loop head (cases 6, 10)
+
+Delegated lane (report `scratch/v90cp-store/report.md`, patch `reload.patch`),
+independently validated and landed.
+
+MECHANISM (quoted).  gcse store motion: `store_motion()` (`gcse.c:7956`), reached
+from `gcse_main` (`gcse.c:869-870`, `if (!optimize_size && flag_gcse_sm)
+store_motion ();`).  A store enters the table only if `find_moveable_store`
+(`gcse.c:7138-7156`) accepts it (`single_set`, dest `MEM`, `!MEM_VOLATILE_P`,
+mode `!= BLKmode`, `!side_effects_p`).  It is keyed on its **address only** --
+`ptr = ldst_entry (dest)` (`gcse.c:7164`) hashes `(mem (plus (reg this)
+(const_int 3252)))`; the stored **value register is never consulted**.
+Availability is killed only by an intervening access that may alias the location
+(`store_killed_in_insn`, `gcse.c:7434` -> `find_loads`/`load_kills_store`
+(`gcse.c:7382`) or `output_dependence` (`gcse.c:7472-7488`)).  So two
+`word_cb4 = <anything>` stores in sequence make the later look redundant unless
+the location is READ between them -- which is why a `p` carried in a register
+(no reread) loses the stores, while a member reread keeps them.
+
+NATIVE EVIDENCE.  `V90CP.cpp.08.gcse` carries **17** `STORE_MOTION delete insn in
+BB n` records writing `(const_int 3252 [0xcb4])` (source lines 444/450,
+465/470/475/480, 498/510/522/534, 548/552/559/562/568/575/581) plus ONE `insert
+store at start of BB 63` -- exactly the 42 -> 26 static-store drop between
+`V90CP.cpp.07.addressof` and `V90CP.cpp.09.loop`.  Diagnostic control: the
+UNCHANGED source with `-fno-gcse` yields 30 plain stores (baseline 13, reference
+34).  `-fno-gcse` stays rejected (F12308, TU net loss).
+
+ANSWER.  The object does NOT store `word_cb4` on every inner-loop iteration
+(case 11 already matches, including its per-bit stores).  Our front-end RTL
+already carries all 42 statements; the deficit is the gcse pass, not a missing
+statement.  The GENUINE source difference is the CURSOR REREAD: in cases 6 and 10
+our source hoisted `p = word_cb4` out of the outer loop, while the object rereads
+`word_cb4` at the loop head (native witness: case 10 `52042: incl 0xcb4` +
+`5204a: mov 0xcb4(%esi),%edi`; case 6 `51dfe: mov 0xcb4(%esi),%edi`).
+
+FIX.  Carry the cursor in the member, re-derived each iteration:
+case 6 `p = word_cb4; for (k...) { p += 9; word_cb4 = p; ... }` ->
+`for (k...) { p = word_cb4 + 9; word_cb4 = p; ... }`; case 10
+`p = word_cb4; for (k...) { p += 4; ... }` -> `for (k...) { p = word_cb4 + 4; ... }`
+(both k-loops).  Semantically equivalent: the member is written last in each
+iteration and the inner loops read only `bits[q]`, so `word_cb4 + k` re-derives
+the previous `p + k`.
+
+MEASURED.  `_ZN5V90CP12evaluateInfoEv` ref 1986 / candidate 1882, delta **-152 ->
+-104** (493 vs 510 insns), longest run 17 -> **23/510**.  Whole-corpus census
+UNCHANGED (1,262 EXACT / 34 REGALLOC / 555 NONMATCH / 1 UNRESOLVED; zero grade
+changes).  `make phase` 404 passed / 0 failed.
+
+TYPED NEGATIVES.  case 7/case 8 residual (8 stores) EXCLUDED-BY-DERIVED-PREDICATE:
+the object keeps dead stores; our source has the same statements; a source edit
+cannot restore them without an aliasing access the object lacks (its bit loops
+index a register, `%ecx`, not memory) -- reopen only with a native witness of an
+in-loop `word_cb4` read in those arms.  case 7 reread SAMPLED-AND-INERT: the
+`word_cb4 = p + 0x11; p = word_cb4` form is byte-identical (cse forwards it).
+
+## F12315. Frame-size genuine-candidate screen: the residual is artefact classes, not missing statements; the cleanest row (`v17rx_create`/`v17tx_create`) is a cross-jumping typed negative
+
+Delegated lane (report `scratch/framescreen/report.md`); NO source retained.
+Measurements below are the lane's; I confirmed the GCC citations against
+/tmp/opencode/gccsrc/gcc-3.4.2/gcc/cfgcleanup.c and left the tree untouched.
+
+METHOD.  Re-derived the split from the fresh census (the checked-in
+`scratch/residual-analysis/framesize.out` is stale, Nov 23, when VTB_decoder was
+at -175) -> 101 suspects / 170 genuine.  Screened the genuine half with
+`missrank`/`longrank`/`maskalign`/`setcc`/`pubcount` plus two new cleanliness
+screens (`scratch/cd/genclean.py`, `cleanrank.py`).
+
+FINDING.  The genuine half is dominated by three ARTEFACT CLASSES -- tail-merge /
+cross-jumping, x87 / allocation coupling, and scattered scheduling -- not single
+missing statements.  The cleanest structural signal on the whole list is the
+2-function family `v17rx_create` / `v17tx_create` (`src/fax/Vmi_v17.c`), one hunk
+each: a contiguous four-instruction reference-only block.
+
+MECHANISM (quoted).  CFG tail-merging / cross-jumping: `flow_find_cross_jump`
+(cfgcleanup.c:1060), `try_crossjump_to_edge` (cfgcleanup.c:1443),
+`try_crossjump_bb` (cfgcleanup.c:1627) -- no minimum length.  Both arms end in
+`ret` and share the suffix `movw $0x0,0xe; add; pop; ret`, so our build merges
+the 12000 arm into a `jmp` (75 insns) where the reference duplicates it (78).
+The merge is already present at the first CFG dump; stock GCC 3.4.2 behaves the
+same.
+
+TESTS (7 variants, baseline md5 reproduced).  Reordering the 12000 arm's stores
+suppresses the merge and reaches delta 0 / 78 insns, but the emitted pair then
+flips to pack-first -- the OPPOSITE of the reference -- so it is an EQUAL-SIZE
+NONMATCH with a WORSE longest run (53 vs 54), not a grade.  Explicit `return;`,
+nested-if, arm-order, switch and asymmetric forms all fail; `-fno-crossjumping`
+restores an unmerged 79-insn body.
+
+VERDICT.  Typed negative, excluded by derived predicate -- the same class already
+recorded for `V90Phase3Modulator::exitJd` (docs/findings.md, "free either way").
+No natural C under this compiler yields the reference's unmerged + unpack-first
+shape.  Reopen condition: a natural form emitting the right order WITHOUT a
+shared tail, or evidence that the reference TU was built with cross-jumping off.
+Collateral: none (the experiment changed exactly one symbol, `v17rx_create`).
+
+NEXT DISCRIMINATOR (lane): `V34GiveINFO0dBits` -- its canonical multiset has
+`only-ours 0` (a strict subset) and the four-term `ok` conjunction is tested
+32/16/16-bit by the reference against our widths.
